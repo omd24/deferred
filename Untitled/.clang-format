@@ -1,0 +1,27 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ConstructorInitializerIndentWidth: 4
+BreakBeforeBraces: Custom
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+BraceWrapping:
+  AfterClass:      true
+  AfterCaseLabel:  true
+  AfterControlStatement: true
+  AfterEnum:       true
+  AfterFunction:   true
+  AfterNamespace:  true
+  AfterObjCDeclaration: true
+  AfterStruct:     true
+  AfterUnion:      true
+  BeforeCatch:     true
+  BeforeElse:      true
+  IndentBraces:    false
+SortIncludes: false
+PointerAlignment: Left
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+NamespaceIndentation: None
+AlignAfterOpenBracket: AlwaysBreak
+BinPackArguments: false
+BinPackParameters: false
+FixNamespaceComments: true

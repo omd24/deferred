@@ -28,8 +28,6 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="Shaders\TriangleDraw.hlsl">
-      <Filter>Shaders</Filter>
-    </CustomBuild>
+    <FxCompile Include="Shaders\TriangleDraw.hlsl" />
   </ItemGroup>
 </Project>

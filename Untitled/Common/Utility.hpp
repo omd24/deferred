@@ -12,10 +12,11 @@
 //---------------------------------------------------------------------------//
 //
 #pragma warning(disable : 28182) // pointer might be null
-#pragma warning(disable : 6387) // pointer might be 0
-#pragma warning(disable : 6001) // uninitialized memory
+#pragma warning(disable : 6387)  // pointer might be 0
+#pragma warning(disable : 6001)  // uninitialized memory
 #pragma warning(disable : 26439) // noexcept function
 #pragma warning(disable : 26812) // unscoped enum
+#pragma warning(disable : 26495) // not initializing struct members
 
 //---------------------------------------------------------------------------//
 // Includes:
@@ -82,7 +83,9 @@ using U64 = uint64_t;
 //
 //---------------------------------------------------------------------------//
 #define WIN32_MSG_BOX(x)                                                       \
-  { MessageBoxA(g_WinHandle, x, "Error", MB_OK); }
+  {                                                                            \
+    MessageBoxA(g_WinHandle, x, "Error", MB_OK);                               \
+  }
 
 #define D3D_SAFE_RELEASE(p)                                                    \
   {                                                                            \
@@ -91,19 +94,23 @@ using U64 = uint64_t;
   }
 
 #define D3D_ASSERT_HRESULT(x)                                                  \
-  { assert(SUCCEEDED(x) && "HRESULT != SUCCEEDED"); }
+  {                                                                            \
+    assert(SUCCEEDED(x) && "HRESULT != SUCCEEDED");                            \
+  }
 
 #define D3D_EXEC_CHECKED(x)                                                    \
   {                                                                            \
     HRESULT hr_ = x;                                                           \
-    if (FAILED(hr_)) {                                                         \
+    if (FAILED(hr_))                                                           \
+    {                                                                          \
       traceHr(#x, hr_);                                                        \
       DEBUG_BREAK(0);                                                          \
     }                                                                          \
   }
 
 #define DEBUG_BREAK(expr)                                                      \
-  if (!(expr)) {                                                               \
+  if (!(expr))                                                                 \
+  {                                                                            \
     __debugbreak();                                                            \
   }
 
@@ -124,67 +131,74 @@ struct CallBackRegistery;
 
 inline DemoInfo* g_DemoInfo = nullptr;
 inline HWND g_WinHandle = nullptr;
-//inline CallBackRegistery* g_CallbackReg = nullptr;
+// inline CallBackRegistery* g_CallbackReg = nullptr;
 
 //---------------------------------------------------------------------------//
 // Helper functions:
 //---------------------------------------------------------------------------//
 // Aligns p_Val to the next multiple of p_Alignment
-template <typename T>
-inline T alignUp(T p_Val, T p_Alignment) {
+template <typename T> inline T alignUp(T p_Val, T p_Alignment)
+{
   return (p_Val + p_Alignment - (T)1) & ~(p_Alignment - (T)1);
 }
 //---------------------------------------------------------------------------//
 // Aligns p_Val to the previous multiple of p_Alignment
-template <typename T>
-inline T alignDown(T p_Val, T p_Alignment) {
+template <typename T> inline T alignDown(T p_Val, T p_Alignment)
+{
   return p_Val & ~(p_Alignment - (T)1);
 }
 //---------------------------------------------------------------------------//
-inline UINT calculateConstantBufferByteSize(UINT p_ByteSize) {
+inline UINT calculateConstantBufferByteSize(UINT p_ByteSize)
+{
   // Constant buffer size is required to be aligned:
   return alignUp<UINT>(
       p_ByteSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 }
 //---------------------------------------------------------------------------//
-template <typename T>
-inline T divideRoundingUp(T p_Value1, T p_Value2) {
+template <typename T> inline T divideRoundingUp(T p_Value1, T p_Value2)
+{
   return (p_Value1 + p_Value2 - (T)1) / p_Value2;
 }
 //---------------------------------------------------------------------------//
 template <typename T>
-inline T lerp(const T& p_Begin, const T& p_End, float p_InterpolationValue) {
-  return (
-      T)(p_Begin * (1 - p_InterpolationValue) + p_End * p_InterpolationValue);
+inline T lerp(const T& p_Begin, const T& p_End, float p_InterpolationValue)
+{
+  return (T)(
+      p_Begin * (1 - p_InterpolationValue) + p_End * p_InterpolationValue);
 }
 //---------------------------------------------------------------------------//
-template <typename T>
-inline T clamp(T p_Value, T p_Min, T p_Max) {
-  if (p_Value < p_Min) {
+template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
+{
+  if (p_Value < p_Min)
+  {
     return p_Min;
-  } else if (p_Value > p_Max) {
+  }
+  else if (p_Value > p_Max)
+  {
     return p_Max;
   }
   return p_Value;
 }
 //---------------------------------------------------------------------------//
 // Converts a string to a wide-string
-inline std::wstring strToWideStr(const std::string& p_Str) {
+inline std::wstring strToWideStr(const std::string& p_Str)
+{
   std::wstring_convert<std::codecvt_utf8<WCHAR>> cvt;
   std::wstring wStr = cvt.from_bytes(p_Str);
   return wStr;
 }
 //---------------------------------------------------------------------------//
 // Converts a wide-string to a string
-inline std::string WideStrToStr(const std::wstring& p_WideStr) {
+inline std::string WideStrToStr(const std::wstring& p_WideStr)
+{
   std::wstring_convert<std::codecvt_utf8<wchar_t>> cvt;
   std::string str = cvt.to_bytes(p_WideStr);
   return str;
 }
 //---------------------------------------------------------------------------//
 // Converts a blob to a string
-template <typename BlobType>
-std::string convertBlobToString(BlobType* p_Blob) {
+template <typename BlobType> std::string convertBlobToString(BlobType* p_Blob)
+{
   std::vector<char> infoLog(p_Blob->GetBufferSize() + 1);
   memcpy(infoLog.data(), p_Blob->GetBufferPointer(), p_Blob->GetBufferSize());
   infoLog[p_Blob->GetBufferSize()] = 0;
@@ -192,23 +206,24 @@ std::string convertBlobToString(BlobType* p_Blob) {
 }
 //---------------------------------------------------------------------------//
 // Counts the elements of an array:
-template <typename T, size_t N>
-constexpr size_t arrayCount(T (&)[N]) {
+template <typename T, size_t N> constexpr size_t arrayCount(T (&)[N])
+{
   return N;
 }
 //---------------------------------------------------------------------------//
-template <typename T, U32 N>
-constexpr U32 arrayCount32(T (&)[N]) {
+template <typename T, U32 N> constexpr U32 arrayCount32(T (&)[N])
+{
   return N;
 }
 //---------------------------------------------------------------------------//
-template <typename T, U32 N>
-constexpr void setArrayToZero(T (&p_Array)[N]) {
+template <typename T, U32 N> constexpr void setArrayToZero(T (&p_Array)[N])
+{
   ::memset(p_Array, 0, N * sizeof(p_Array[0]));
 }
 //---------------------------------------------------------------------------//
 // Traces an error and convert the msg to a human-readable string
-inline void traceHr(const std::string& p_Msg, HRESULT p_Hr) {
+inline void traceHr(const std::string& p_Msg, HRESULT p_Hr)
+{
   char hrMsg[512];
   FormatMessageA(
       FORMAT_MESSAGE_FROM_SYSTEM,
@@ -223,20 +238,27 @@ inline void traceHr(const std::string& p_Msg, HRESULT p_Hr) {
 }
 //---------------------------------------------------------------------------//
 inline void
-getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize) {
+getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
+{
   DEBUG_BREAK(p_Path);
 
   DWORD size = GetModuleFileName(nullptr, p_Path, p_PathSize);
   DEBUG_BREAK(0 != size || size != p_PathSize);
 
   WCHAR* lastSlash = wcsrchr(p_Path, L'\\');
-  if (lastSlash) {
+  if (lastSlash)
+  {
     *(lastSlash + 1) = L'\0';
   }
 }
-//---------------------------------------------------------------------------//
-inline HRESULT
-readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size) {
+inline void getShadersPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
+{
+    getAssetsPath(p_Path, p_PathSize);
+    wcscat_s(p_Path, 512, L"Shaders\\");
+}
+    //---------------------------------------------------------------------------//
+inline HRESULT readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size)
+{
   using namespace Microsoft::WRL;
 
 #if WINVER >= _WIN32_WINNT_WIN8
@@ -265,7 +287,8 @@ readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size) {
           SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS,
       nullptr));
 #endif
-  if (file.Get() == INVALID_HANDLE_VALUE) {
+  if (file.Get() == INVALID_HANDLE_VALUE)
+  {
     throw std::exception();
   }
 
@@ -285,17 +308,20 @@ readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size) {
 }
 //---------------------------------------------------------------------------//
 inline HRESULT readDataFromDDSFile(
-    LPCWSTR p_Filename, byte** p_Data, UINT* p_Offset, UINT* p_Size) {
+    LPCWSTR p_Filename, byte** p_Data, UINT* p_Offset, UINT* p_Size)
+{
   D3D_ASSERT_HRESULT(readDataFromFile(p_Filename, p_Data, p_Size));
 
   // DDS files always start with the same magic number.
   static const UINT DDS_MAGIC = 0x20534444;
   UINT magicNumber = *reinterpret_cast<const UINT*>(*p_Data);
-  if (magicNumber != DDS_MAGIC) {
+  if (magicNumber != DDS_MAGIC)
+  {
     return E_FAIL;
   }
 
-  struct DDS_PIXELFORMAT {
+  struct DDS_PIXELFORMAT
+  {
     UINT size;
     UINT flags;
     UINT fourCC;
@@ -306,7 +332,8 @@ inline HRESULT readDataFromDDSFile(
     UINT aBitMask;
   };
 
-  struct DDS_HEADER {
+  struct DDS_HEADER
+  {
     UINT size;
     UINT flags;
     UINT height;
@@ -325,7 +352,8 @@ inline HRESULT readDataFromDDSFile(
 
   auto ddsHeader = reinterpret_cast<const DDS_HEADER*>(*p_Data + sizeof(UINT));
   if (ddsHeader->size != sizeof(DDS_HEADER) ||
-      ddsHeader->ddsPixelFormat.size != sizeof(DDS_PIXELFORMAT)) {
+      ddsHeader->ddsPixelFormat.size != sizeof(DDS_PIXELFORMAT))
+  {
     return E_FAIL;
   }
 
@@ -338,18 +366,25 @@ inline HRESULT readDataFromDDSFile(
 //---------------------------------------------------------------------------//
 // Assigns a name to the object to aid with debugging.
 #if defined(_DEBUG) || defined(DBG)
-inline void setName(ID3D12Object* p_Object, LPCWSTR p_Name) {
+inline void setName(ID3D12Object* p_Object, LPCWSTR p_Name)
+{
   p_Object->SetName(p_Name);
 }
-inline void setNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index) {
+inline void setNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index)
+{
   WCHAR fullName[50];
-  if (swprintf_s(fullName, L"%s[%u]", name, index) > 0) {
+  if (swprintf_s(fullName, L"%s[%u]", name, index) > 0)
+  {
     pObject->SetName(fullName);
   }
 }
 #else
-inline void setName(ID3D12Object*, LPCWSTR) {}
-inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT) {}
+inline void setName(ID3D12Object*, LPCWSTR)
+{
+}
+inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT)
+{
+}
 #endif
 //---------------------------------------------------------------------------//
 #ifdef D3D_COMPILE_STANDARD_FILE_INCLUDE
@@ -357,7 +392,8 @@ inline ID3DBlobPtr compileShader(
     const std::wstring& p_Filename,
     const D3D_SHADER_MACRO* p_Defines,
     const std::string& p_Entrypoint,
-    const std::string& p_Target) {
+    const std::string& p_Target)
+{
   UINT compileFlags = 0;
 #if defined(_DEBUG) || defined(DBG)
   compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -377,7 +413,8 @@ inline ID3DBlobPtr compileShader(
       &byteCode,
       &errors);
 
-  if (errors != nullptr) {
+  if (errors != nullptr)
+  {
     OutputDebugStringA((char*)errors->GetBufferPointer());
   }
   D3D_ASSERT_HRESULT(hr);
@@ -387,17 +424,19 @@ inline ID3DBlobPtr compileShader(
 #endif
 //---------------------------------------------------------------------------//
 // Resets all elements in a ComPtr array
-template <typename T>
-inline void resetComPtrArray(T* p_ComPtrArray) {
-  for (auto& i : *p_ComPtrArray) {
+template <typename T> inline void resetComPtrArray(T* p_ComPtrArray)
+{
+  for (auto& i : *p_ComPtrArray)
+  {
     i = nullptr;
   }
 }
 //---------------------------------------------------------------------------//
 // Resets all elements in a unique_ptr array
-template <typename T>
-inline void resetUniquePtrArray(T* p_UniquePtrArray) {
-  for (auto& i : *p_UniquePtrArray) {
+template <typename T> inline void resetUniquePtrArray(T* p_UniquePtrArray)
+{
+  for (auto& i : *p_UniquePtrArray)
+  {
     i = nullptr;
   }
 }
@@ -405,24 +444,28 @@ inline void resetUniquePtrArray(T* p_UniquePtrArray) {
 inline void getHardwareAdapter(
     _In_ IDXGIFactory1* p_Factory,
     _Outptr_result_maybenull_ IDXGIAdapter1** p_Adapter,
-    bool p_RequestHighPerformanceAdapter = false) {
+    bool p_RequestHighPerformanceAdapter = false)
+{
   *p_Adapter = nullptr;
 
   IDXGIAdapter1Ptr adapter;
 
   IDXGIFactory6Ptr factory6;
-  if (SUCCEEDED(p_Factory->QueryInterface(IID_PPV_ARGS(&factory6)))) {
+  if (SUCCEEDED(p_Factory->QueryInterface(IID_PPV_ARGS(&factory6))))
+  {
     for (UINT adapterIndex = 0; SUCCEEDED(factory6->EnumAdapterByGpuPreference(
              adapterIndex,
              p_RequestHighPerformanceAdapter == true
                  ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
                  : DXGI_GPU_PREFERENCE_UNSPECIFIED,
              IID_PPV_ARGS(&adapter)));
-         ++adapterIndex) {
+         ++adapterIndex)
+    {
       DXGI_ADAPTER_DESC1 desc;
       adapter->GetDesc1(&desc);
 
-      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+      {
         // Don't select the Basic Render Driver adapter.
         // If you want a software adapter, pass in "/warp" on the command line.
         continue;
@@ -434,20 +477,24 @@ inline void getHardwareAdapter(
               adapter.GetInterfacePtr(),
               D3D_FEATURE_LEVEL_11_0,
               _uuidof(ID3D12Device),
-              nullptr))) {
+              nullptr)))
+      {
         break;
       }
     }
   }
 
-  if (adapter.GetInterfacePtr() == nullptr) {
+  if (adapter.GetInterfacePtr() == nullptr)
+  {
     for (UINT adapterIndex = 0;
          SUCCEEDED(p_Factory->EnumAdapters1(adapterIndex, &adapter));
-         ++adapterIndex) {
+         ++adapterIndex)
+    {
       DXGI_ADAPTER_DESC1 desc;
       adapter->GetDesc1(&desc);
 
-      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+      if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+      {
         // Don't select the Basic Render Driver adapter.
         // If you want a software adapter, pass in "/warp" on the command line.
         continue;
@@ -459,7 +506,8 @@ inline void getHardwareAdapter(
               adapter.GetInterfacePtr(),
               D3D_FEATURE_LEVEL_11_0,
               _uuidof(ID3D12Device),
-              nullptr))) {
+              nullptr)))
+      {
         break;
       }
     }
@@ -471,27 +519,35 @@ inline void getHardwareAdapter(
 //---------------------------------------------------------------------------//
 // Defer helpers:
 //---------------------------------------------------------------------------//
-template <typename F>
-struct Deferrer {
-  Deferrer(F&& p_Func) : m_Func(std::move(p_Func)) {}
-  ~Deferrer() noexcept {
+template <typename F> struct Deferrer
+{
+  Deferrer(F&& p_Func) : m_Func(std::move(p_Func))
+  {
+  }
+  ~Deferrer() noexcept
+  {
     if (!m_Canceled)
       m_Func();
   }
-  void cancel() noexcept { m_Canceled = true; }
+  void cancel() noexcept
+  {
+    m_Canceled = true;
+  }
 
 private:
   bool m_Canceled = false;
   F m_Func;
 };
 //---------------------------------------------------------------------------//
-template <typename F>
-Deferrer<F> makeDeferrer(F&& p_Func) {
+template <typename F> Deferrer<F> makeDeferrer(F&& p_Func)
+{
   return Deferrer<F>(std::move(p_Func));
 }
-struct DeferHelper {
+struct DeferHelper
+{
   template <typename F>
-  friend Deferrer<F> operator+(DeferHelper const&, F&& p_Func) {
+  friend Deferrer<F> operator+(DeferHelper const&, F&& p_Func)
+  {
     return makeDeferrer(std::move(p_Func));
   }
 };
@@ -500,20 +556,27 @@ struct DeferHelper {
 //---------------------------------------------------------------------------//
 inline std::string HrToString(HRESULT hr)
 {
-    char s_str[64] = {};
-    sprintf_s(s_str, "HRESULT of 0x%08X", static_cast<UINT>(hr));
-    return std::string(s_str);
+  char s_str[64] = {};
+  sprintf_s(s_str, "HRESULT of 0x%08X", static_cast<UINT>(hr));
+  return std::string(s_str);
 }
-class HrException : public std::runtime_error {
+class HrException : public std::runtime_error
+{
 public:
-  HrException(HRESULT hr) : std::runtime_error(HrToString(hr)), m_hr(hr) {}
-  HRESULT Error() const { return m_hr; }
+  HrException(HRESULT hr) : std::runtime_error(HrToString(hr)), m_hr(hr)
+  {
+  }
+  HRESULT Error() const
+  {
+    return m_hr;
+  }
 
 private:
   const HRESULT m_hr;
 };
 //---------------------------------------------------------------------------//
-inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title) {
+inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title)
+{
   std::wstring windowText = p_Title + L": " + p_Text;
   SetWindowText(g_WinHandle, windowText.c_str());
 }

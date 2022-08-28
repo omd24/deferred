@@ -1,10 +1,17 @@
 #include "Renderer.hpp"
 #include <pix3.h>
+#include <mutex>
+
+// a global instance of std::mutex for shader hotreload
+std::mutex g_Mutex;
 
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
-
+std::wstring Renderer::_getShaderPath(LPCWSTR p_ShaderName)
+{
+  return m_Info.m_AssetsPath + L"Shaders\\" + p_ShaderName;
+}
 std::wstring Renderer::_getAssetPath(LPCWSTR p_AssetName)
 {
   return m_Info.m_AssetsPath + p_AssetName;
@@ -135,7 +142,8 @@ void Renderer::_createVertexBuffer()
   Vertex vertices[] = {
       {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
       {{0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-      {{-0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}};
+      {{-0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
+       {0.0f, 0.0f, 1.0f, 1.0f}}};
 
   const UINT bufferSize = 3 * sizeof(Vertex);
 
@@ -180,6 +188,110 @@ void Renderer::_createVertexBuffer()
   m_VtxBufferView.BufferLocation = m_VtxBuffer->GetGPUVirtualAddress();
   m_VtxBufferView.SizeInBytes = static_cast<UINT>(bufferSize);
   m_VtxBufferView.StrideInBytes = sizeof(Vertex);
+}
+//---------------------------------------------------------------------------//
+bool Renderer::_createPSOs()
+{
+  // Create the pipeline states, which includes compiling and loading shaders.
+  {
+    ID3DBlobPtr vertexShader;
+    ID3DBlobPtr pixelShader;
+
+    ID3DBlobPtr errorBlob;
+
+#if defined(_DEBUG)
+    // Enable better shader debugging with the graphics debugging tools.
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+
+    // Load and compile shaders.
+    HRESULT hr = D3DCompileFromFile(
+        _getShaderPath(L"TriangleDraw.hlsl").c_str(),
+        nullptr,
+        nullptr,
+        "VSTriangleDraw",
+        "vs_5_0",
+        compileFlags,
+        0,
+        &vertexShader,
+        &errorBlob);
+    if (nullptr == vertexShader)
+    {
+      if (errorBlob != nullptr)
+        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+      return false;
+    }
+    errorBlob = nullptr;
+    D3DCompileFromFile(
+        _getShaderPath(L"TriangleDraw.hlsl").c_str(),
+        nullptr,
+        nullptr,
+        "PSTriangleDraw",
+        "ps_5_0",
+        compileFlags,
+        0,
+        &pixelShader,
+        &errorBlob);
+    if (nullptr == pixelShader)
+    {
+      if (errorBlob != nullptr)
+        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+      return false;
+    }
+
+    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+        {"POSITION",
+         0,
+         DXGI_FORMAT_R32G32B32_FLOAT,
+         0,
+         0,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+         0},
+        {"COLOR",
+         0,
+         DXGI_FORMAT_R32G32B32A32_FLOAT,
+         0,
+         12,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+         0},
+    };
+
+    // Describe the blend and depth states.
+    CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
+    blendDesc.RenderTarget[0].BlendEnable = FALSE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+
+    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc(D3D12_DEFAULT);
+    depthStencilDesc.DepthEnable = FALSE;
+    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    // Describe and create the graphics pipeline state object (PSO).
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.InputLayout = {inputElementDescs, arrayCount32(inputElementDescs)};
+    psoDesc.pRootSignature = m_RootSig.GetInterfacePtr();
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.GetInterfacePtr());
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.GetInterfacePtr());
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.BlendState = blendDesc;
+    psoDesc.DepthStencilState = depthStencilDesc;
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    psoDesc.SampleDesc.Count = 1;
+
+    D3D_EXEC_CHECKED(
+        m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_Pso)));
+    D3D_NAME_OBJECT(m_Pso);
+  }
+
+  return true;
 }
 //---------------------------------------------------------------------------//
 void Renderer::_loadAssets()
@@ -237,89 +349,7 @@ void Renderer::_loadAssets()
     }
   }
 
-  // Create the pipeline states, which includes compiling and loading shaders.
-  {
-    ID3DBlobPtr vertexShader;
-    ID3DBlobPtr pixelShader;
-
-#if defined(_DEBUG)
-    // Enable better shader debugging with the graphics debugging tools.
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-
-    // Load and compile shaders.
-    D3D_EXEC_CHECKED(D3DCompileFromFile(
-        _getAssetPath(L"TriangleDraw.hlsl").c_str(),
-        nullptr,
-        nullptr,
-        "VSTriangleDraw",
-        "vs_5_0",
-        compileFlags,
-        0,
-        &vertexShader,
-        nullptr));
-    D3D_EXEC_CHECKED(D3DCompileFromFile(
-        _getAssetPath(L"TriangleDraw.hlsl").c_str(),
-        nullptr,
-        nullptr,
-        "PSTriangleDraw",
-        "ps_5_0",
-        compileFlags,
-        0,
-        &pixelShader,
-        nullptr));
-
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        {"POSITION",
-         0,
-         DXGI_FORMAT_R32G32B32_FLOAT,
-         0,
-         0,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-        {"COLOR",
-         0,
-         DXGI_FORMAT_R32G32B32A32_FLOAT,
-         0,
-         12,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-    };
-
-    // Describe the blend and depth states.
-    CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
-    blendDesc.RenderTarget[0].BlendEnable = FALSE;
-    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
-    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-
-    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc(D3D12_DEFAULT);
-    depthStencilDesc.DepthEnable = FALSE;
-    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-
-    // Describe and create the graphics pipeline state object (PSO).
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.InputLayout = {inputElementDescs, arrayCount32(inputElementDescs)};
-    psoDesc.pRootSignature = m_RootSig.GetInterfacePtr();
-    psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.GetInterfacePtr());
-    psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.GetInterfacePtr());
-    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    psoDesc.BlendState = blendDesc;
-    psoDesc.DepthStencilState = depthStencilDesc;
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    psoDesc.SampleDesc.Count = 1;
-
-    D3D_EXEC_CHECKED(
-        m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_Pso)));
-    D3D_NAME_OBJECT(m_Pso);
-  }
+  _createPSOs();
 
   // Create the command list.
   D3D_EXEC_CHECKED(m_Dev->CreateCommandList(
@@ -454,8 +484,8 @@ void Renderer::_populateCommandList()
       m_FrameUniforms->GetGPUVirtualAddress() +
           m_FrameIndex * sizeof(FrameParams));
 
-  //ID3D12DescriptorHeap* ppHeaps[] = {/*m_SrvUavHeap.GetInterfacePtr()*/};
-  //m_CmdList->SetDescriptorHeaps(arrayCount32(ppHeaps), ppHeaps);
+  // ID3D12DescriptorHeap* ppHeaps[] = {/*m_SrvUavHeap.GetInterfacePtr()*/};
+  // m_CmdList->SetDescriptorHeaps(arrayCount32(ppHeaps), ppHeaps);
 
   m_CmdList->IASetVertexBuffers(0, 1, &m_VtxBufferView);
   m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -588,6 +618,7 @@ void Renderer::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
       static_cast<float>(p_Width) / static_cast<float>(p_Height);
 
   m_Info.m_IsInitialized = true;
+  m_Reloading = false;
 }
 //---------------------------------------------------------------------------//
 void Renderer::onLoad()
@@ -651,7 +682,7 @@ void Renderer::onUpdate()
 //---------------------------------------------------------------------------//
 void Renderer::onRender()
 {
-  if (m_Info.m_IsInitialized)
+  if (m_Info.m_IsInitialized && !m_Reloading)
   {
     try
     {
@@ -708,5 +739,17 @@ void Renderer::onCodeChange()
 //---------------------------------------------------------------------------//
 void Renderer::onShaderChange()
 {
+  //std::lock_guard<std::mutex> guard(g_Mutex);
+  m_Reloading = true;
+  OutputDebugStringA("Starting shader reload...\n");
+  _waitForGpu();
+  // Dirty hack to force a successful shader reload :L
+  while (false == _createPSOs())
+  {
+    OutputDebugStringA("Failed to reload the shaders\n");
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  OutputDebugStringA("Shaders loaded\n");
+  m_Reloading = false;
 }
 //---------------------------------------------------------------------------//

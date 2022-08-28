@@ -160,8 +160,10 @@ private:
   };
 
   std::wstring _getAssetPath(LPCWSTR p_AssetName);
-  void _loadPipeline();
+  std::wstring _getShaderPath(LPCWSTR p_ShaderName);
   void _createVertexBuffer();
+  bool _createPSOs();
+  void _loadPipeline();
   void _loadAssets();
   void _populateCommandList();
   void _waitForRenderContext();

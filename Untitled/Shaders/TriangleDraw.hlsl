@@ -16,5 +16,5 @@ PSInput VSTriangleDraw(float4 position : POSITION, float4 color : COLOR)
 
 float4 PSTriangleDraw(PSInput input) : SV_TARGET
 {
-    return input.color * 2.0f;
+    return input.color * 1.0f;
 }

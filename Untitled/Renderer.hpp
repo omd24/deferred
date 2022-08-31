@@ -47,7 +47,6 @@ struct Renderer
     // Just to release ComPtrs
   }
 
-  bool m_Reloading;
   RendererSettings m_Info;
 
   //---------------------------------------------------------------------------//

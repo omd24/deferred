@@ -11,6 +11,9 @@
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="Common\FileWatcher.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Renderer.hpp" />
@@ -21,6 +24,12 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\Utility.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\FileWatcher.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Thread.hpp">
       <Filter>Common</Filter>
     </ClInclude>
   </ItemGroup>

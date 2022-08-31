@@ -40,6 +40,11 @@
 #include <locale>
 #include <codecvt>
 #include <shellapi.h>
+#include <vector>
+#include <array>
+#include <deque>
+#include <thread>
+#include <mutex>
 
 //---------------------------------------------------------------------------//
 // Smart COM ptr definitions:
@@ -196,6 +201,25 @@ inline std::string WideStrToStr(const std::wstring& p_WideStr)
   return str;
 }
 //---------------------------------------------------------------------------//
+// Alternative methods for string conversion
+template <typename CharSource, typename CharDest>
+inline size_t
+StringConvert(const CharSource* p_Src, CharDest* p_Dst, int p_DstSize);
+template <>
+inline size_t StringConvert(const wchar_t* p_Src, char* p_Dst, int p_DstSize)
+{
+  size_t converted = 0;
+  wcstombs_s(&converted, p_Dst, p_DstSize, p_Src, p_DstSize);
+  return converted;
+}
+template <>
+inline size_t StringConvert(const char* p_Src, wchar_t* p_Dst, int p_DstSize)
+{
+  size_t converted = 0;
+  mbstowcs_s(&converted, p_Dst, p_DstSize, p_Src, p_DstSize);
+  return converted;
+}
+//---------------------------------------------------------------------------//
 // Converts a blob to a string
 template <typename BlobType> std::string convertBlobToString(BlobType* p_Blob)
 {
@@ -251,12 +275,13 @@ getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
     *(lastSlash + 1) = L'\0';
   }
 }
-inline void getShadersPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
+inline void
+getShadersPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
 {
-    getAssetsPath(p_Path, p_PathSize);
-    wcscat_s(p_Path, 512, L"Shaders\\");
+  getAssetsPath(p_Path, p_PathSize);
+  wcscat_s(p_Path, 512, L"Shaders\\");
 }
-    //---------------------------------------------------------------------------//
+//---------------------------------------------------------------------------//
 inline HRESULT readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size)
 {
   using namespace Microsoft::WRL;

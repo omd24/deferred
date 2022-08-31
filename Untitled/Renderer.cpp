@@ -1,9 +1,8 @@
 #include "Renderer.hpp"
 #include <pix3.h>
-#include <mutex>
+#include <FileWatcher.hpp>
 
-// a global instance of std::mutex for shader hotreload
-std::mutex g_Mutex;
+std::unique_ptr<FileWatcher> g_FileWatcher;
 
 //---------------------------------------------------------------------------//
 // Internal private methods
@@ -618,7 +617,19 @@ void Renderer::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
       static_cast<float>(p_Width) / static_cast<float>(p_Height);
 
   m_Info.m_IsInitialized = true;
-  m_Reloading = false;
+
+  g_FileWatcher = std::make_unique<FileWatcher>();
+
+  UINT pathSize = 512;
+  WCHAR* shadersPath = static_cast<WCHAR*>(::calloc(pathSize, sizeof(WCHAR)));
+  DEFER(free_path_mem)
+  {
+    ::free(shadersPath);
+  };
+  getShadersPath(shadersPath, pathSize);
+  const std::wstring& p_WideStr = std::wstring(shadersPath);
+  std::string str = WideStrToStr(p_WideStr);
+  g_FileWatcher->startWatching(str.c_str(), true);
 }
 //---------------------------------------------------------------------------//
 void Renderer::onLoad()
@@ -678,11 +689,31 @@ void Renderer::onUpdate()
   UINT8* destination =
       m_FrameUniformsDataPtr + sizeof(FrameParams) * m_FrameIndex;
   memcpy(destination, &frameUniforms, sizeof(FrameParams));
+
+  // Shader Reload:
+  if (g_FileWatcher)
+  {
+    FileEvent fileEvent;
+    while (g_FileWatcher->getNextChange(fileEvent))
+    {
+      switch (fileEvent.EventType)
+      {
+      case FileEvent::Type::Modified:
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        onShaderChange();
+        break;
+      case FileEvent::Type::Added:
+        break;
+      case FileEvent::Type::Removed:
+        break;
+      }
+    }
+  }
 }
 //---------------------------------------------------------------------------//
 void Renderer::onRender()
 {
-  if (m_Info.m_IsInitialized && !m_Reloading)
+  if (m_Info.m_IsInitialized)
   {
     try
     {
@@ -739,17 +770,15 @@ void Renderer::onCodeChange()
 //---------------------------------------------------------------------------//
 void Renderer::onShaderChange()
 {
-  //std::lock_guard<std::mutex> guard(g_Mutex);
-  m_Reloading = true;
   OutputDebugStringA("Starting shader reload...\n");
-  _waitForGpu();
-  // Dirty hack to force a successful shader reload :L
-  while (false == _createPSOs())
+  if (_createPSOs())
+  {
+    OutputDebugStringA("Shaders loaded\n");
+    return;
+  }
+  else
   {
     OutputDebugStringA("Failed to reload the shaders\n");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
-  OutputDebugStringA("Shaders loaded\n");
-  m_Reloading = false;
 }
 //---------------------------------------------------------------------------//

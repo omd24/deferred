@@ -98,7 +98,8 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
 
   ShowWindow(g_WinHandle, p_CmdShow);
 
-  // Hot-Reloading Thread:
+// Hot-Reloading Thread:
+#if 0
   std::thread([=] {
     // Get current path
     UINT pathSize = 512;
@@ -186,6 +187,7 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
       }
     }
   }).detach();
+#endif
 
   // Main sample loop.
   MSG msg = {};

@@ -185,15 +185,19 @@
   <ItemGroup>
     <ClCompile Include="Common\FileWatcher.cpp" />
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="MeshRenderer.cpp" />
+    <ClCompile Include="RenderManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common\Camera.hpp" />
+    <ClInclude Include="Common\D3D12Wrapper.hpp" />
     <ClInclude Include="Common\FileWatcher.hpp" />
+    <ClInclude Include="Common\Model.hpp" />
     <ClInclude Include="Common\Thread.hpp" />
     <ClInclude Include="Common\Timer.hpp" />
     <ClInclude Include="Common\Utility.hpp" />
-    <ClInclude Include="Renderer.hpp" />
+    <ClInclude Include="MeshRenderer.hpp" />
+    <ClInclude Include="RenderManager.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -128,6 +128,9 @@ using U64 = uint64_t;
 #define D3D_NAME_OBJECT_INDEXED(x, n)                                          \
   setNameIndexed((x)[n].GetInterfacePtr(), L#x, n)
 
+// For aligning to float4 boundaries
+#define Float4Align __declspec(align(16))
+
 //---------------------------------------------------------------------------//
 // Global variables
 //---------------------------------------------------------------------------//
@@ -606,3 +609,6 @@ inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title)
   SetWindowText(g_WinHandle, windowText.c_str());
 }
 //---------------------------------------------------------------------------//
+
+
+

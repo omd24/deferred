@@ -1,22 +1,19 @@
-#include "Renderer.hpp"
+#include "RenderManager.hpp"
 #include <pix3.h>
-#include <FileWatcher.hpp>
-
-std::unique_ptr<FileWatcher> g_FileWatcher;
 
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
-std::wstring Renderer::_getShaderPath(LPCWSTR p_ShaderName)
+std::wstring RenderManager::_getShaderPath(LPCWSTR p_ShaderName)
 {
   return m_Info.m_AssetsPath + L"Shaders\\" + p_ShaderName;
 }
-std::wstring Renderer::_getAssetPath(LPCWSTR p_AssetName)
+std::wstring RenderManager::_getAssetPath(LPCWSTR p_AssetName)
 {
   return m_Info.m_AssetsPath + p_AssetName;
 }
 //---------------------------------------------------------------------------//
-void Renderer::_loadPipeline()
+void RenderManager::_loadD3D12Pipeline()
 {
   UINT dxgiFactoryFlags = 0;
 
@@ -136,7 +133,7 @@ void Renderer::_loadPipeline()
   }
 }
 //---------------------------------------------------------------------------//
-void Renderer::_createVertexBuffer()
+void RenderManager::_createVertexBuffer()
 {
   Vertex vertices[] = {
       {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
@@ -189,7 +186,7 @@ void Renderer::_createVertexBuffer()
   m_VtxBufferView.StrideInBytes = sizeof(Vertex);
 }
 //---------------------------------------------------------------------------//
-bool Renderer::_createPSOs()
+bool RenderManager::_createPSOs()
 {
   // Create the pipeline states, which includes compiling and loading shaders.
   {
@@ -293,7 +290,7 @@ bool Renderer::_createPSOs()
   return true;
 }
 //---------------------------------------------------------------------------//
-void Renderer::_loadAssets()
+void RenderManager::_loadAssets()
 {
   // Create the root signatures.
   {
@@ -461,7 +458,7 @@ void Renderer::_loadAssets()
   }
 }
 //---------------------------------------------------------------------------//
-void Renderer::_populateCommandList()
+void RenderManager::_populateCommandList()
 {
   // Command list allocators can only be reset when the associated
   // command lists have finished execution on the GPU; apps should use
@@ -523,7 +520,7 @@ void Renderer::_populateCommandList()
   D3D_EXEC_CHECKED(m_CmdList->Close());
 }
 //---------------------------------------------------------------------------//
-void Renderer::_waitForRenderContext()
+void RenderManager::_waitForRenderContext()
 {
   // Add a signal command to the queue.
   D3D_EXEC_CHECKED(m_CmdQue->Signal(
@@ -537,7 +534,7 @@ void Renderer::_waitForRenderContext()
   // Wait until the signal command has been processed.
   WaitForSingleObject(m_RenderContextFenceEvent, INFINITE);
 }
-void Renderer::_waitForGpu()
+void RenderManager::_waitForGpu()
 {
   // Schedule a Signal command in the queue.
   D3D_EXEC_CHECKED(m_CmdQue->Signal(
@@ -553,7 +550,7 @@ void Renderer::_waitForGpu()
   m_RenderContextFenceValues[m_FrameIndex]++;
 }
 //---------------------------------------------------------------------------//
-void Renderer::_moveToNextFrame()
+void RenderManager::_moveToNextFrame()
 {
   // Assign the current fence value to the current frame.
   m_FrameFenceValues[m_FrameIndex] = m_RenderContextFenceValue;
@@ -576,7 +573,7 @@ void Renderer::_moveToNextFrame()
   }
 }
 //---------------------------------------------------------------------------//
-void Renderer::_restoreD3DResources()
+void RenderManager::_restoreD3DResources()
 {
   // Give GPU a chance to finish its execution in progress.
   try
@@ -591,7 +588,7 @@ void Renderer::_restoreD3DResources()
   onLoad();
 }
 //---------------------------------------------------------------------------//
-void Renderer::_releaseD3DResources()
+void RenderManager::_releaseD3DResources()
 {
   m_RenderContextFence = nullptr;
   resetComPtrArray(&m_RenderTargets);
@@ -602,7 +599,7 @@ void Renderer::_releaseD3DResources()
 //---------------------------------------------------------------------------//
 // Main public methods
 //---------------------------------------------------------------------------//
-void Renderer::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
+void RenderManager::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
 {
   m_Info.m_Width = p_Width;
   m_Info.m_Height = p_Height;
@@ -617,22 +614,9 @@ void Renderer::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
       static_cast<float>(p_Width) / static_cast<float>(p_Height);
 
   m_Info.m_IsInitialized = true;
-
-  g_FileWatcher = std::make_unique<FileWatcher>();
-
-  UINT pathSize = 512;
-  WCHAR* shadersPath = static_cast<WCHAR*>(::calloc(pathSize, sizeof(WCHAR)));
-  DEFER(free_path_mem)
-  {
-    ::free(shadersPath);
-  };
-  getShadersPath(shadersPath, pathSize);
-  const std::wstring& p_WideStr = std::wstring(shadersPath);
-  std::string str = WideStrToStr(p_WideStr);
-  g_FileWatcher->startWatching(str.c_str(), true);
 }
 //---------------------------------------------------------------------------//
-void Renderer::onLoad()
+void RenderManager::onLoad()
 {
   DEBUG_BREAK(m_Info.m_IsInitialized);
 
@@ -655,13 +639,13 @@ void Renderer::onLoad()
   timerInit(&m_Timer);
 
   // Load pipeline
-  _loadPipeline();
+  _loadD3D12Pipeline();
 
   // Load assets
   _loadAssets();
 }
 //---------------------------------------------------------------------------//
-void Renderer::onDestroy()
+void RenderManager::onDestroy()
 {
   // Ensure that the GPU is no longer referencing resources that are about to be
   // cleaned up by the destructor.
@@ -671,7 +655,7 @@ void Renderer::onDestroy()
   CloseHandle(m_RenderContextFenceEvent);
 }
 //---------------------------------------------------------------------------//
-void Renderer::onUpdate()
+void RenderManager::onUpdate()
 {
   // Wait for the previous Present to complete.
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
@@ -690,28 +674,10 @@ void Renderer::onUpdate()
       m_FrameUniformsDataPtr + sizeof(FrameParams) * m_FrameIndex;
   memcpy(destination, &frameUniforms, sizeof(FrameParams));
 
-  // Shader Reload:
-  if (g_FileWatcher)
-  {
-    FileEvent fileEvent;
-    while (g_FileWatcher->getNextChange(fileEvent))
-    {
-      switch (fileEvent.EventType)
-      {
-      case FileEvent::Type::Modified:
-        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        onShaderChange();
-        break;
-      case FileEvent::Type::Added:
-        break;
-      case FileEvent::Type::Removed:
-        break;
-      }
-    }
-  }
+
 }
 //---------------------------------------------------------------------------//
-void Renderer::onRender()
+void RenderManager::onRender()
 {
   if (m_Info.m_IsInitialized)
   {
@@ -750,35 +716,35 @@ void Renderer::onRender()
   }
 }
 //---------------------------------------------------------------------------//
-void Renderer::onKeyDown(UINT8 p_Key)
+void RenderManager::onKeyDown(UINT8 p_Key)
 {
   cameraOnKeyDown(&m_Camera, p_Key);
 }
 //---------------------------------------------------------------------------//
-void Renderer::onKeyUp(UINT8 p_Key)
+void RenderManager::onKeyUp(UINT8 p_Key)
 {
   cameraOnKeyUp(&m_Camera, p_Key);
 }
 //---------------------------------------------------------------------------//
-void Renderer::onResize()
+void RenderManager::onResize()
 {
 }
 //---------------------------------------------------------------------------//
-void Renderer::onCodeChange()
+void RenderManager::onCodeChange()
 {
 }
 //---------------------------------------------------------------------------//
-void Renderer::onShaderChange()
+void RenderManager::onShaderChange()
 {
-  OutputDebugStringA("Starting shader reload...\n");
+  OutputDebugStringA("[RenderManager] Starting shader reload...\n");
   if (_createPSOs())
   {
-    OutputDebugStringA("Shaders loaded\n");
+    OutputDebugStringA("[RenderManager] Shaders loaded\n");
     return;
   }
   else
   {
-    OutputDebugStringA("Failed to reload the shaders\n");
+    OutputDebugStringA("[RenderManager] Failed to reload the shaders\n");
   }
 }
 //---------------------------------------------------------------------------//

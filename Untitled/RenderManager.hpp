@@ -34,15 +34,15 @@ struct RendererSettings
   //
 };
 //---------------------------------------------------------------------------//
-// Renderer Manager:
+// RenderManager Manager:
 //---------------------------------------------------------------------------//
-struct Renderer
+struct RenderManager
 {
-  Renderer()
+  RenderManager()
   {
     // Do nothing
   }
-  ~Renderer()
+  ~RenderManager()
   {
     // Just to release ComPtrs
   }
@@ -162,7 +162,7 @@ private:
   std::wstring _getShaderPath(LPCWSTR p_ShaderName);
   void _createVertexBuffer();
   bool _createPSOs();
-  void _loadPipeline();
+  void _loadD3D12Pipeline();
   void _loadAssets();
   void _populateCommandList();
   void _waitForRenderContext();

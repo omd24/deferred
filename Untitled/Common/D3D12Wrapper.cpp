@@ -1591,3 +1591,151 @@ void StructuredBuffer::updateDynamicSRV() const
 //---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
+
+void RenderTexture::init(const RenderTextureInit& p_Init)
+{
+  deinit();
+
+  D3D12_RESOURCE_DESC textureDesc = {};
+  textureDesc.MipLevels = 1;
+  textureDesc.Format = p_Init.Format;
+  textureDesc.Width = uint32_t(p_Init.Width);
+  textureDesc.Height = uint32_t(p_Init.Height);
+  textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+  if (p_Init.CreateUAV)
+    textureDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  textureDesc.DepthOrArraySize = uint16_t(p_Init.ArraySize);
+  textureDesc.SampleDesc.Count = uint32_t(p_Init.MSAASamples);
+  textureDesc.SampleDesc.Quality = 0; // TODO
+  textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+  textureDesc.Alignment = 0;
+
+  D3D12_CLEAR_VALUE clearValue = {};
+  clearValue.Format = p_Init.Format;
+  D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
+      GetDefaultHeapProps(),
+      D3D12_HEAP_FLAG_NONE,
+      &textureDesc,
+      p_Init.InitialState,
+      &clearValue,
+      IID_PPV_ARGS(&m_Texture.Resource)));
+
+  if (p_Init.Name != nullptr)
+    m_Texture.Resource->SetName(p_Init.Name);
+
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  m_Texture.SRV = srvAlloc.Index;
+  for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
+    g_Device->CreateShaderResourceView(
+        m_Texture.Resource, nullptr, srvAlloc.Handles[i]);
+
+  m_Texture.Width = uint32_t(p_Init.Width);
+  m_Texture.Height = uint32_t(p_Init.Height);
+  m_Texture.Depth = 1;
+  m_Texture.NumMips = 1;
+  m_Texture.ArraySize = uint32_t(p_Init.ArraySize);
+  m_Texture.Format = p_Init.Format;
+  m_Texture.Cubemap = false;
+  m_MSAASamples = uint32_t(p_Init.MSAASamples);
+  m_MSAAQuality = uint32_t(textureDesc.SampleDesc.Quality);
+
+  m_RTV = RTVDescriptorHeap.AllocatePersistent().Handles[0];
+  g_Device->CreateRenderTargetView(m_Texture.Resource, nullptr, m_RTV);
+
+  if (p_Init.ArraySize > 1)
+  {
+    m_ArrayRTVs.resize(p_Init.ArraySize);
+
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+    rtvDesc.Format = p_Init.Format;
+    if (p_Init.MSAASamples > 1)
+      rtvDesc.Texture2DMSArray.ArraySize = 1;
+    else
+      rtvDesc.Texture2DArray.ArraySize = 1;
+
+    for (uint64_t i = 0; i < p_Init.ArraySize; ++i)
+    {
+      if (p_Init.MSAASamples > 1)
+        rtvDesc.Texture2DMSArray.FirstArraySlice = uint32_t(i);
+      else
+        rtvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
+
+      m_ArrayRTVs[i] = RTVDescriptorHeap.AllocatePersistent().Handles[0];
+      g_Device->CreateRenderTargetView(
+          m_Texture.Resource, &rtvDesc, m_ArrayRTVs[i]);
+    }
+  }
+
+  if (p_Init.CreateUAV)
+  {
+    m_UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
+    g_Device->CreateUnorderedAccessView(
+        m_Texture.Resource, nullptr, nullptr, m_UAV);
+  }
+}
+void RenderTexture::deinit()
+{
+  RTVDescriptorHeap.FreePersistent(m_RTV);
+  UAVDescriptorHeap.FreePersistent(m_UAV);
+  for (uint64_t i = 0; i < m_ArrayRTVs.size(); ++i)
+    RTVDescriptorHeap.FreePersistent(m_ArrayRTVs[i]);
+  m_ArrayRTVs.clear();
+  m_Texture.deinit();
+}
+
+void RenderTexture::transition(
+    ID3D12GraphicsCommandList* cmdList,
+    D3D12_RESOURCE_STATES before,
+    D3D12_RESOURCE_STATES after,
+    uint64_t mipLevel,
+    uint64_t arraySlice) const
+{
+  uint32_t subResourceIdx =
+      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+          : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  transitionResource(cmdList, m_Texture.Resource, before, after, subResourceIdx);
+}
+void RenderTexture::makeReadable(
+    ID3D12GraphicsCommandList* cmdList,
+    uint64_t mipLevel,
+    uint64_t arraySlice) const
+{
+  uint32_t subResourceIdx =
+      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+          : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  transitionResource(
+      cmdList,
+      m_Texture.Resource,
+      D3D12_RESOURCE_STATE_RENDER_TARGET,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      subResourceIdx);
+}
+void RenderTexture::makeWritable(
+    ID3D12GraphicsCommandList* cmdList,
+    uint64_t mipLevel,
+    uint64_t arraySlice) const
+{
+  uint32_t subResourceIdx =
+      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+          : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  transitionResource(
+      cmdList,
+      m_Texture.Resource,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_RENDER_TARGET,
+      subResourceIdx);
+}
+void RenderTexture::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
+{
+
+    D3D12_RESOURCE_BARRIER barrier = { };
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.UAV.pResource = m_Texture.Resource;
+    cmdList->ResourceBarrier(1, &barrier);
+}

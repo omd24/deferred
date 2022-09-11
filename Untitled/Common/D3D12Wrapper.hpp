@@ -197,10 +197,10 @@ void EndFrame_Helpers();
 
 // Resource Barriers
 void TransitionResource(
-    ID3D12GraphicsCommandList* cmdList,
+    ID3D12GraphicsCommandList* p_CmdList,
     ID3D12Resource* resource,
-    D3D12_RESOURCE_STATES before,
-    D3D12_RESOURCE_STATES after,
+    D3D12_RESOURCE_STATES p_Before,
+    D3D12_RESOURCE_STATES p_After,
     uint32_t subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
 // Resource management
@@ -236,7 +236,7 @@ D3D12_STATIC_SAMPLER_DESC ConvertToStaticSampler(
 
 // Convenience functions
 void SetViewport(
-    ID3D12GraphicsCommandList* cmdList,
+    ID3D12GraphicsCommandList* p_CmdList,
     uint64_t width,
     uint64_t height,
     float zMin = 0.0f,
@@ -247,15 +247,15 @@ void CreateRootSignature(
 uint32_t DispatchSize(uint64_t numElements, uint64_t groupSize);
 
 // Resource binding
-void SetDescriptorHeaps(ID3D12GraphicsCommandList* cmdList);
+void SetDescriptorHeaps(ID3D12GraphicsCommandList* p_CmdList);
 D3D12_GPU_DESCRIPTOR_HANDLE
 TempDescriptorTable(const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint64_t count);
 void BindTempDescriptorTable(
-    ID3D12GraphicsCommandList* cmdList,
+    ID3D12GraphicsCommandList* p_CmdList,
     const D3D12_CPU_DESCRIPTOR_HANDLE* handles,
     uint64_t count,
     uint32_t rootParameter,
-    CmdListMode cmdListMode);
+    CmdListMode p_CmdListMode);
 
 // Helpers for buffer types that use temporary buffer memory from the upload
 // helper
@@ -266,14 +266,14 @@ const D3D12_DESCRIPTOR_RANGE1* StandardDescriptorRanges();
 void InsertStandardDescriptorRanges(D3D12_DESCRIPTOR_RANGE1* ranges);
 
 void BindAsDescriptorTable(
-    ID3D12GraphicsCommandList* cmdList,
+    ID3D12GraphicsCommandList* p_CmdList,
     uint32_t descriptorIdx,
     uint32_t rootParameter,
-    CmdListMode cmdListMode);
+    CmdListMode p_CmdListMode);
 void BindStandardDescriptorTable(
-    ID3D12GraphicsCommandList* cmdList,
+    ID3D12GraphicsCommandList* p_CmdList,
     uint32_t rootParameter,
-    CmdListMode cmdListMode);
+    CmdListMode p_CmdListMode);
 
 struct PersistentDescriptorAlloc
 {
@@ -502,13 +502,107 @@ private:
 //---------------------------------------------------------------------------//
 struct TextureBase
 {
+  uint32_t SRV = uint32_t(-1);
+  ID3D12Resource* Resource = nullptr;
+  uint32_t Width = 0;
+  uint32_t Height = 0;
+  uint32_t Depth = 0;
+  uint32_t NumMips = 0;
+  uint32_t ArraySize = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  bool Cubemap = false;
+
+  TextureBase()
+  {
+  }
+  ~TextureBase()
+  {
+  }
+
+  bool Valid() const
+  {
+    return Resource != nullptr;
+  }
+
+  void deinit()
+  {
+    SRVDescriptorHeap.FreePersistent(SRV);
+    Resource->Release();
+  }
 };
-struct TextureInit
+struct RenderTextureInit
 {
+  uint64_t Width = 0;
+  uint64_t Height = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  uint64_t MSAASamples = 1;
+  uint64_t ArraySize = 1;
+  bool CreateUAV = false;
+  D3D12_RESOURCE_STATES InitialState =
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+  const wchar_t* Name = nullptr;
 };
-struct Texture
+struct RenderTexture
 {
+  TextureBase m_Texture;
+  D3D12_CPU_DESCRIPTOR_HANDLE m_RTV = {};
+  D3D12_CPU_DESCRIPTOR_HANDLE m_UAV = {};
+  std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_ArrayRTVs;
+  uint32_t m_MSAASamples = 0;
+  uint32_t m_MSAAQuality = 0;
+
+  RenderTexture()
+  {
+  }
+  ~RenderTexture()
+  {
+  }
+
+  void init(const RenderTextureInit& p_Init);
+  void deinit();
+
+  void transition(
+      ID3D12GraphicsCommandList* p_CmdList,
+      D3D12_RESOURCE_STATES p_Before,
+      D3D12_RESOURCE_STATES p_After,
+      uint64_t p_MipLevel = uint64_t(-1),
+      uint64_t p_ArraySlice = uint64_t(-1)) const;
+  void makeReadable(
+      ID3D12GraphicsCommandList* p_CmdList,
+      uint64_t p_MipLevel = uint64_t(-1),
+      uint64_t p_ArraySlice = uint64_t(-1)) const;
+  void makeWritable(
+      ID3D12GraphicsCommandList* p_CmdList,
+      uint64_t p_MipLevel = uint64_t(-1),
+      uint64_t p_ArraySlice = uint64_t(-1)) const;
+  void uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const;
+
+  uint32_t srv() const
+  {
+    return m_Texture.SRV;
+  }
+  uint64_t width() const
+  {
+    return m_Texture.Width;
+  }
+  uint64_t height() const
+  {
+    return m_Texture.Height;
+  }
+  DXGI_FORMAT format() const
+  {
+    return m_Texture.Format;
+  }
+  ID3D12Resource* resource() const
+  {
+    return m_Texture.Resource;
+  }
+  uint64_t subResourceIndex(uint64_t p_MipLevel, uint64_t p_ArraySlice) const
+  {
+    return p_ArraySlice * m_Texture.NumMips + p_MipLevel;
+  }
 };
 struct VolumeTexture
 {
+  // TODO
 };

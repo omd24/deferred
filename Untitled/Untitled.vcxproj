@@ -183,6 +183,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Common\D3D12Wrapper.cpp" />
     <ClCompile Include="Common\FileWatcher.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MeshRenderer.cpp" />

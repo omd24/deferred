@@ -5,12 +5,18 @@
 //---------------------------------------------------------------------------//
 // D3D12 Globals:
 //---------------------------------------------------------------------------//
-ID3D12Device2* g_Device = nullptr;
+static ID3D12Device* g_Device = nullptr;
 static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
 
+// Total number of CPU frames completed (completed means all command buffers
+// submitted to the GPU):
+extern uint64_t g_CurrentCPUFrame;
 //---------------------------------------------------------------------------//
 // Direct3D 12 helper functions
 //---------------------------------------------------------------------------//
+void initializeUpload(ID3D12Device* p_Dev);
+void shutdownUpload();
+
 inline void setViewport(
     ID3D12GraphicsCommandList* p_CmdList,
     uint64_t p_Width,
@@ -91,23 +97,6 @@ struct UploadContext
   ID3D12Resource* Resource = nullptr;
   void* Submission = nullptr;
 };
-struct UploadSubmission
-{
-  ID3D12CommandAllocator* CmdAllocator = nullptr;
-  ID3D12GraphicsCommandList1* CmdList = nullptr;
-  uint64_t Offset = 0;
-  uint64_t Size = 0;
-  uint64_t FenceValue = 0;
-  uint64_t Padding = 0;
-
-  void reset()
-  {
-    Offset = 0;
-    Size = 0;
-    FenceValue = 0;
-    Padding = 0;
-  }
-};
 //---------------------------------------------------------------------------//
 // Buffers
 //---------------------------------------------------------------------------//
@@ -175,5 +164,23 @@ struct Buffer
   }
 };
 //---------------------------------------------------------------------------//
+// StructuredBuffer
+//---------------------------------------------------------------------------//
+struct StructuredBuffer
+{
+};
+//---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
+struct TextureBase
+{
+};
+struct TextureInit
+{
+};
+struct Texture
+{
+};
+struct VolumeTexture
+{
+};

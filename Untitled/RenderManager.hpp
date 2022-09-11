@@ -38,6 +38,8 @@ struct RendererSettings
 //---------------------------------------------------------------------------//
 struct RenderManager
 {
+  ID3D12DevicePtr m_Dev;
+
   RenderManager()
   {
     // Do nothing
@@ -101,7 +103,6 @@ private:
   CD3DX12_VIEWPORT m_Viewport;
   CD3DX12_RECT m_ScissorRect;
   IDXGISwapChain3Ptr m_Swc;
-  ID3D12DevicePtr m_Dev;
   ID3D12ResourcePtr m_RenderTargets[FRAME_COUNT];
   UINT m_FrameIndex;
   ID3D12CommandAllocatorPtr m_CmdAllocs[FRAME_COUNT];

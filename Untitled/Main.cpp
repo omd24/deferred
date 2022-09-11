@@ -2,6 +2,7 @@
 #include <thread>
 #include "FileWatcher.hpp"
 #include "RenderManager.hpp"
+#include "D3D12Wrapper.hpp"
 
 RenderManager* g_Renderer;
 std::unique_ptr<FileWatcher> g_FileWatcher;
@@ -122,6 +123,9 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
 
   ShowWindow(g_WinHandle, p_CmdShow);
 
+  // Init upload system
+  initializeUpload(g_Renderer->m_Dev);
+
   // Main sample loop.
   MSG msg = {};
   while (msg.message != WM_QUIT)
@@ -133,6 +137,9 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
       DispatchMessage(&msg);
     }
   }
+
+  // Deinit upload system
+  shutdownUpload();
 
   g_Renderer->onDestroy();
 

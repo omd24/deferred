@@ -3,12 +3,167 @@
 #define RENDER_LATENCY 2
 
 //---------------------------------------------------------------------------//
+// global helper variables
+//---------------------------------------------------------------------------//
+uint64_t g_CurrentCPUFrame = 0;
+
+//---------------------------------------------------------------------------//
+// internal helper structs
+//---------------------------------------------------------------------------//
+struct UploadSubmission
+{
+  ID3D12CommandAllocator* CmdAllocator = nullptr;
+  ID3D12GraphicsCommandList1* CmdList = nullptr;
+  uint64_t Offset = 0;
+  uint64_t Size = 0;
+  uint64_t FenceValue = 0;
+  uint64_t Padding = 0;
+
+  void reset()
+  {
+    Offset = 0;
+    Size = 0;
+    FenceValue = 0;
+    Padding = 0;
+  }
+};
+struct Fence
+{
+  ID3D12Fence* m_D3DFence = nullptr;
+  HANDLE m_FenceEvent = INVALID_HANDLE_VALUE;
+
+  ~Fence()
+  {
+    if (m_D3DFence)
+      m_D3DFence->Release();
+  }
+
+  void init(uint64_t p_InitialValue = 0)
+  {
+    D3D_EXEC_CHECKED(g_Device->CreateFence(
+        p_InitialValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_D3DFence)));
+    m_FenceEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
+    DEBUG_BREAK(m_FenceEvent != 0);
+  }
+
+  void signal(ID3D12CommandQueue* p_Queue, uint64_t p_FenceValue)
+  {
+    p_Queue->Signal(m_D3DFence, p_FenceValue);
+  }
+  void wait(uint64_t p_FenceValue)
+  {
+    if (m_D3DFence->GetCompletedValue() < p_FenceValue)
+    {
+      D3D_EXEC_CHECKED(
+          m_D3DFence->SetEventOnCompletion(p_FenceValue, m_FenceEvent));
+      WaitForSingleObject(m_FenceEvent, INFINITE);
+    }
+  }
+  bool signaled(uint64_t p_FenceValue)
+  {
+    return m_D3DFence->GetCompletedValue() >= p_FenceValue;
+  }
+  void clear(uint64_t p_FenceValue)
+  {
+    m_D3DFence->Signal(p_FenceValue);
+  }
+};
+//---------------------------------------------------------------------------//
+// static/internal variables
+//---------------------------------------------------------------------------//
+static const uint64_t s_UploadBufferSize = 32 * 1024 * 1024;
+static ID3D12Resource* s_UploadBuffer = nullptr;
+static uint8_t* s_UploadBufferCPUAddr = nullptr;
+
+static UploadSubmission s_UploadSubmission; // TODO: make an array of this
+static SRWLOCK s_UploadSubmissionLock = SRWLOCK_INIT;
+static SRWLOCK s_UploadQueueLock = SRWLOCK_INIT;
+
+// These are protected by UploadQueueLock
+static ID3D12CommandQueue* s_UploadCmdQueue = nullptr;
+static Fence s_UploadFence;
+static uint64_t s_UploadFenceValue = 0;
+//---------------------------------------------------------------------------//
 // internal local functions
 //---------------------------------------------------------------------------//
-void _initializeUpload()
+
+static void _clearFinishedUploads()
 {
-  // TODO
-  // create upload submissions
+  UploadSubmission& submission = s_UploadSubmission;
+  if (s_UploadFence.signaled(submission.FenceValue))
+    submission.reset();
+}
+static UploadSubmission* _allocUploadSubmission(uint64_t p_Size)
+{
+  // TODO: Properly allocate the submission
+
+  UploadSubmission* submission = &s_UploadSubmission;
+  submission->Offset = 0;
+  submission->Size = p_Size;
+  submission->FenceValue = uint64_t(-1);
+  submission->Padding = 0;
+
+  return submission;
+}
+void initializeUpload(ID3D12Device* dev)
+{
+  g_Device = dev;
+  DEBUG_BREAK(g_Device != nullptr);
+
+  UploadSubmission& submission = s_UploadSubmission;
+  D3D_EXEC_CHECKED(g_Device->CreateCommandAllocator(
+      D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&submission.CmdAllocator)));
+  D3D_EXEC_CHECKED(g_Device->CreateCommandList(
+      0,
+      D3D12_COMMAND_LIST_TYPE_COPY,
+      submission.CmdAllocator,
+      nullptr,
+      IID_PPV_ARGS(&submission.CmdList)));
+  D3D_EXEC_CHECKED(submission.CmdList->Close());
+
+  D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+  queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+  queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+  D3D_EXEC_CHECKED(g_Device->CreateCommandQueue(
+      &queueDesc, IID_PPV_ARGS(&s_UploadCmdQueue)));
+
+  s_UploadFence.init(0);
+
+  D3D12_RESOURCE_DESC resourceDesc = {};
+  resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  resourceDesc.Width = uint32_t(s_UploadBufferSize);
+  resourceDesc.Height = 1;
+  resourceDesc.DepthOrArraySize = 1;
+  resourceDesc.MipLevels = 1;
+  resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+  resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+  resourceDesc.SampleDesc.Count = 1;
+  resourceDesc.SampleDesc.Quality = 0;
+  resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  resourceDesc.Alignment = 0;
+
+  D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
+      getUploadHeapProps(),
+      D3D12_HEAP_FLAG_NONE,
+      &resourceDesc,
+      D3D12_RESOURCE_STATE_GENERIC_READ,
+      nullptr,
+      IID_PPV_ARGS(&s_UploadBuffer)));
+
+  D3D12_RANGE readRange = {};
+  D3D_EXEC_CHECKED(s_UploadBuffer->Map(
+      0, &readRange, reinterpret_cast<void**>(&s_UploadBufferCPUAddr)));
+
+  // TODO: temporary buffer memory that swaps every frame
+
+  // TODO: readback resources
+}
+void shutdownUpload()
+{
+  s_UploadBuffer->Release();
+  s_UploadCmdQueue->Release();
+  s_UploadSubmission.CmdAllocator->Release();
+  s_UploadSubmission.CmdList->Release();
 }
 UploadContext _resourceUploadBegin(uint64_t p_Size)
 {
@@ -19,16 +174,25 @@ UploadContext _resourceUploadBegin(uint64_t p_Size)
   DEBUG_BREAK(p_Size > 0);
 
   UploadSubmission* submission = nullptr;
-
   {
-    // TODO
-    // Sync with other upload submissions
+    AcquireSRWLockExclusive(&s_UploadSubmissionLock);
+
+    _clearFinishedUploads();
+    submission = _allocUploadSubmission(p_Size);
+
+    ReleaseSRWLockExclusive(&s_UploadSubmissionLock);
   }
 
-  UploadContext context;
+  D3D_EXEC_CHECKED(submission->CmdAllocator->Reset());
+  D3D_EXEC_CHECKED(
+      submission->CmdList->Reset(submission->CmdAllocator, nullptr));
 
-  // TODO
-  //
+  UploadContext context;
+  context.CmdList = submission->CmdList;
+  context.Resource = s_UploadBuffer;
+  context.CpuAddress = s_UploadBufferCPUAddr + submission->Offset;
+  context.ResourceOffset = submission->Offset;
+  context.Submission = submission;
 
   return context;
 }
@@ -41,8 +205,18 @@ void _resourceUploadEnd(UploadContext& context)
       reinterpret_cast<UploadSubmission*>(context.Submission);
 
   {
-    // TODO
-    // Sync with other upload submissions
+    AcquireSRWLockExclusive(&s_UploadQueueLock);
+
+    // Finish off and execute the command list
+    D3D_EXEC_CHECKED(submission->CmdList->Close());
+    ID3D12CommandList* cmdLists[1] = {submission->CmdList};
+    s_UploadCmdQueue->ExecuteCommandLists(1, cmdLists);
+
+    ++s_UploadFenceValue;
+    s_UploadFence.signal(s_UploadCmdQueue, s_UploadFenceValue);
+    submission->FenceValue = s_UploadFenceValue;
+
+    ReleaseSRWLockExclusive(&s_UploadQueueLock);
   }
 
   context = UploadContext();
@@ -143,10 +317,6 @@ void Buffer::init(
   {
     UploadContext uploadContext = _resourceUploadBegin(resourceDesc.Width);
 
-    // TODO
-    // implement submission setup
-    DEBUG_BREAK(false);
-
     memcpy(uploadContext.CpuAddress, p_InitData, p_Size);
     if (p_Dynamic)
       memcpy((uint8_t*)uploadContext.CpuAddress + p_Size, p_InitData, p_Size);
@@ -166,24 +336,37 @@ void Buffer::deinit()
   // release the buffer resource:
   m_Resource->Release();
 }
+MapResult Buffer::map()
+{
+  DEBUG_BREAK(initialized());
+  DEBUG_BREAK(m_Dynamic);
+  DEBUG_BREAK(m_CpuAccessible);
+
+  // Make sure that we do this at most once per-frame
+  DEBUG_BREAK(m_UploadFrame != g_CurrentCPUFrame);
+  m_UploadFrame = g_CurrentCPUFrame;
+
+  // Cycle to the next buffer
+  m_CurrBuffer = (g_CurrentCPUFrame + 1) % RENDER_LATENCY;
+
+  MapResult result;
+  result.ResourceOffset = m_CurrBuffer * m_Size;
+  result.CpuAddress = m_CpuAddress + m_CurrBuffer * m_Size;
+  result.GpuAddress = m_GpuAddress + m_CurrBuffer * m_Size;
+  result.Resource = m_Resource;
+  return result;
+}
 MapResult Buffer::mapAndSetData(const void* p_Data, uint64_t p_DataSize)
 {
   DEBUG_BREAK(p_DataSize <= m_Size);
-  MapResult result;
-
-  // TODO
-  // do the actual map
-  DEBUG_BREAK(false);
-
+  MapResult result = map();
   memcpy(result.CpuAddress, p_Data, p_DataSize);
   return result;
 }
 uint64_t Buffer::updateData(
     const void* p_SrcData, uint64_t p_SrcSize, uint64_t p_DstOffset)
 {
-  // TODO
-  // do the actual updating
-  DEBUG_BREAK(false);
+  return multiUpdateData(&p_SrcData, &p_SrcSize, &p_DstOffset, 1);
 }
 uint64_t Buffer::multiUpdateData(
     const void* p_SrcData[],
@@ -191,9 +374,47 @@ uint64_t Buffer::multiUpdateData(
     uint64_t p_DstOffset[],
     uint64_t p_NumUpdates)
 {
-  // TODO
-  // do the actual updating
-  DEBUG_BREAK(false);
+  DEBUG_BREAK(m_Dynamic);
+  DEBUG_BREAK(m_CpuAccessible == false);
+  DEBUG_BREAK(p_NumUpdates > 0);
+
+  // Make sure that we do this at most once per-frame
+  DEBUG_BREAK(m_UploadFrame != g_CurrentCPUFrame);
+  m_UploadFrame = g_CurrentCPUFrame;
+
+  // Cycle to the next buffer
+  m_CurrBuffer = (g_CurrentCPUFrame + 1) % RENDER_LATENCY;
+
+  uint64_t currOffset = m_CurrBuffer * m_Size;
+
+  uint64_t totalUpdateSize = 0;
+  for (uint64_t i = 0; i < p_NumUpdates; ++i)
+    totalUpdateSize += p_SrcSize[i];
+
+  UploadContext uploadContext = _resourceUploadBegin(totalUpdateSize);
+
+  uint64_t uploadOffset = 0;
+  for (uint64_t i = 0; i < p_NumUpdates; ++i)
+  {
+    DEBUG_BREAK(p_DstOffset[i] + p_SrcSize[i] <= m_Size);
+    DEBUG_BREAK(uploadOffset + p_SrcSize[i] <= totalUpdateSize);
+    memcpy(
+        reinterpret_cast<uint8_t*>(uploadContext.CpuAddress) + uploadOffset,
+        p_SrcData[i],
+        p_SrcSize[i]);
+    uploadContext.CmdList->CopyBufferRegion(
+        m_Resource,
+        currOffset + p_DstOffset[i],
+        uploadContext.Resource,
+        uploadContext.ResourceOffset + uploadOffset,
+        p_SrcSize[i]);
+
+    uploadOffset += p_SrcSize[i];
+  }
+
+  _resourceUploadEnd(uploadContext);
+
+  return m_GpuAddress + currOffset;
 }
 
 void Buffer::transition(
@@ -232,6 +453,9 @@ void Buffer::uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const
   p_CmdList->ResourceBarrier(1, &barrier);
 }
 //---------------------------------------------------------------------------//
-// Textures
+// StructuredBuffer
 //---------------------------------------------------------------------------//
 
+//---------------------------------------------------------------------------//
+// Textures
+//---------------------------------------------------------------------------//

@@ -8,6 +8,7 @@
 // global helper variables
 //---------------------------------------------------------------------------//
 uint64_t g_CurrentCPUFrame = 0;
+uint64_t g_CurrentGPUFrame = 0;
 uint64_t g_CurrFrameIdx = 0;
 
 //---------------------------------------------------------------------------//
@@ -820,7 +821,7 @@ void BindStandardDescriptorTable(
 
 DescriptorHeap::~DescriptorHeap()
 {
-  DEBUG_BREAK(Heaps[0] == nullptr);
+  //DEBUG_BREAK(Heaps[0] == nullptr);
 }
 
 void DescriptorHeap::Init(
@@ -871,7 +872,10 @@ void DescriptorHeap::Shutdown()
 {
   DEBUG_BREAK(PersistentAllocated == 0);
   for (uint64_t i = 0; i < arrayCount(Heaps); ++i)
-    Heaps[i]->Release();
+  {
+    if (Heaps[i] != nullptr)
+      Heaps[i]->Release();
+  }
 }
 
 PersistentDescriptorAlloc DescriptorHeap::AllocatePersistent()
@@ -1106,10 +1110,14 @@ void initializeUpload(ID3D12Device* dev)
 }
 void shutdownUpload()
 {
-  s_UploadBuffer->Release();
-  s_UploadCmdQueue->Release();
-  s_UploadSubmission.CmdAllocator->Release();
-  s_UploadSubmission.CmdList->Release();
+  if (s_UploadBuffer != nullptr)
+    s_UploadBuffer->Release();
+  if (s_UploadCmdQueue != nullptr)
+    s_UploadCmdQueue->Release();
+  if (s_UploadSubmission.CmdAllocator != nullptr)
+    s_UploadSubmission.CmdAllocator->Release();
+  if (s_UploadSubmission.CmdList != nullptr)
+    s_UploadSubmission.CmdList->Release();
 }
 UploadContext _resourceUploadBegin(uint64_t p_Size)
 {
@@ -1591,7 +1599,6 @@ void StructuredBuffer::updateDynamicSRV() const
 //---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
-
 void RenderTexture::init(const RenderTextureInit& p_Init)
 {
   deinit();
@@ -1605,7 +1612,7 @@ void RenderTexture::init(const RenderTextureInit& p_Init)
   if (p_Init.CreateUAV)
     textureDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
   textureDesc.DepthOrArraySize = uint16_t(p_Init.ArraySize);
-  textureDesc.SampleDesc.Count = uint32_t(p_Init.MSAASamples);
+  textureDesc.SampleDesc.Count = 1;
   textureDesc.SampleDesc.Quality = 0; // TODO
   textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
   textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -1696,7 +1703,8 @@ void RenderTexture::transition(
       mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
           ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
           : uint32_t(subResourceIndex(mipLevel, arraySlice));
-  transitionResource(cmdList, m_Texture.Resource, before, after, subResourceIdx);
+  transitionResource(
+      cmdList, m_Texture.Resource, before, after, subResourceIdx);
 }
 void RenderTexture::makeReadable(
     ID3D12GraphicsCommandList* cmdList,
@@ -1733,9 +1741,9 @@ void RenderTexture::makeWritable(
 void RenderTexture::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
 {
 
-    D3D12_RESOURCE_BARRIER barrier = { };
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barrier.UAV.pResource = m_Texture.Resource;
-    cmdList->ResourceBarrier(1, &barrier);
+  D3D12_RESOURCE_BARRIER barrier = {};
+  barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+  barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+  barrier.UAV.pResource = m_Texture.Resource;
+  cmdList->ResourceBarrier(1, &barrier);
 }

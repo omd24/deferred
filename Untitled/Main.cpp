@@ -123,9 +123,6 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
 
   ShowWindow(g_WinHandle, p_CmdShow);
 
-  // Init upload system
-  initializeUpload(g_Renderer->m_Dev);
-
   // Main sample loop.
   MSG msg = {};
   while (msg.message != WM_QUIT)
@@ -138,8 +135,8 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
     }
   }
 
-  // Deinit upload system
-  shutdownUpload();
+  //// Deinit upload system
+  //shutdownUpload();
 
   g_Renderer->onDestroy();
 
@@ -156,7 +153,7 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
   DEFER(free_renderer_mem)
   {
     g_Renderer->~RenderManager();
-    ::free(rendererMem);
+    //::free(rendererMem);
   };
   g_Renderer = new (rendererMem) RenderManager;
   g_Renderer->OnInit(1280, 720, L"D3D12 Draw Traingle");

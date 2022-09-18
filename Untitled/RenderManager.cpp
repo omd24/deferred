@@ -131,6 +131,10 @@ void RenderManager::_loadD3D12Pipeline()
           D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocs[n])));
     }
   }
+
+  // Init uploads and other helpers
+  initializeUpload(m_Dev);
+  Initialize_Helpers();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::_createVertexBuffer()
@@ -292,6 +296,20 @@ bool RenderManager::_createPSOs()
 //---------------------------------------------------------------------------//
 void RenderManager::_loadAssets()
 {
+  // Create a gbuffer:
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R8_UINT;
+    rtInit.MSAASamples = 0;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Albedo Target";
+    albedoTarget.init(rtInit);
+  }
+
   // Create the root signatures.
   {
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
@@ -647,12 +665,22 @@ void RenderManager::onLoad()
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
 {
+  _waitForGpu();
+
   // Ensure that the GPU is no longer referencing resources that are about to be
   // cleaned up by the destructor.
   _waitForRenderContext();
 
   // Close handles to fence events and threads.
   CloseHandle(m_RenderContextFenceEvent);
+
+  // Shutdown render target(s):
+  albedoTarget.deinit();
+
+  //_waitForGpu();
+  // Shudown uploads and other helpers
+  Shutdown_Helpers();
+  shutdownUpload();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
@@ -673,8 +701,6 @@ void RenderManager::onUpdate()
   UINT8* destination =
       m_FrameUniformsDataPtr + sizeof(FrameParams) * m_FrameIndex;
   memcpy(destination, &frameUniforms, sizeof(FrameParams));
-
-
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()

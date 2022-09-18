@@ -4,6 +4,7 @@
 #include <Camera.hpp>
 #include <Timer.hpp>
 #include "d3dx12.h"
+#include "D3D12Wrapper.hpp"
 
 #define FRAME_COUNT 3
 #define THREAD_COUNT 1
@@ -80,6 +81,8 @@ struct RenderManager
 
   //---------------------------------------------------------------------------//
 private:
+  // Gbuffer
+  RenderTexture albedoTarget;
 
   // Uniforms
   struct TriangleParams

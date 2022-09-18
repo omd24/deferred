@@ -18,6 +18,8 @@ static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
 // (completed means all command buffers submitted to the GPU):
 extern uint64_t g_CurrentCPUFrame;
 
+extern uint64_t g_CurrentGPUFrame;
+
 extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 //---------------------------------------------------------------------------//
 // Direct3D 12 helper functions
@@ -527,7 +529,8 @@ struct TextureBase
   void deinit()
   {
     SRVDescriptorHeap.FreePersistent(SRV);
-    Resource->Release();
+    if (Resource != nullptr)
+      Resource->Release();
   }
 };
 struct RenderTextureInit

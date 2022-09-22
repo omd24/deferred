@@ -821,7 +821,7 @@ void BindStandardDescriptorTable(
 
 DescriptorHeap::~DescriptorHeap()
 {
-  //DEBUG_BREAK(Heaps[0] == nullptr);
+  DEBUG_BREAK(Heaps[0] == nullptr);
 }
 
 void DescriptorHeap::Init(
@@ -874,7 +874,10 @@ void DescriptorHeap::Shutdown()
   for (uint64_t i = 0; i < arrayCount(Heaps); ++i)
   {
     if (Heaps[i] != nullptr)
+    {
       Heaps[i]->Release();
+      Heaps[i] = nullptr;
+    }
   }
 }
 

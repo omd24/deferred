@@ -81,8 +81,14 @@ struct RenderManager
 
   //---------------------------------------------------------------------------//
 private:
-  // Gbuffer
+  // Gbuffer stuff
   RenderTexture albedoTarget;
+  ID3D12RootSignature* gbufferRootSignature = nullptr;
+  ID3D12PipelineState* gbufferPSO = nullptr;
+
+  // Deferred Stuff
+  RenderTexture deferredTarget;
+  ID3D12RootSignature* deferredRootSig = nullptr;
 
   // Uniforms
   struct TriangleParams

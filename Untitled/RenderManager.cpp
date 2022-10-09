@@ -131,10 +131,6 @@ void RenderManager::_loadD3D12Pipeline()
           D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocs[n])));
     }
   }
-
-  // Init uploads and other helpers
-  initializeUpload(m_Dev);
-  Initialize_Helpers();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::_createVertexBuffer()
@@ -296,13 +292,17 @@ bool RenderManager::_createPSOs()
 //---------------------------------------------------------------------------//
 void RenderManager::_loadAssets()
 {
+  // Init uploads and other helpers
+  initializeUpload(m_Dev);
+  Initialize_Helpers();
+
   // Create a gbuffer:
   {
     RenderTextureInit rtInit;
     rtInit.Width = m_Info.m_Width;
     rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R8_UINT;
-    rtInit.MSAASamples = 0;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = false;
     rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -362,6 +362,124 @@ void RenderManager::_loadAssets()
       D3D_NAME_OBJECT(m_RootSig);
     }
   }
+
+#pragma region Setup Gbuffer Stuff
+  DXGI_FORMAT gbufferFormats[] = {
+      albedoTarget.format(),
+  };
+
+  // TODO: this stuff should be wrapped as mesh renderer initialization
+
+  // 1. Load and compile shaders.
+  ID3DBlobPtr vertexShaderBlob;
+  ID3DBlobPtr pixelShaderBlob;
+
+  ID3DBlobPtr errorBlob;
+
+#if defined(_DEBUG)
+  UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+  UINT compileFlags = 0;
+#endif
+
+  HRESULT hr = D3DCompileFromFile(
+      _getShaderPath(L"Mesh.hlsl").c_str(),
+      nullptr,
+      nullptr,
+      "VS",
+      "vs_5_1",
+      compileFlags,
+      0,
+      &vertexShaderBlob,
+      &errorBlob);
+  if (nullptr == vertexShaderBlob)
+  {
+    if (errorBlob != nullptr)
+      OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+    assert(false && "Shader compilation failed");
+  }
+  errorBlob = nullptr;
+  D3DCompileFromFile(
+      _getShaderPath(L"Mesh.hlsl").c_str(),
+      nullptr,
+      nullptr,
+      "PS",
+      "ps_5_1",
+      compileFlags,
+      0,
+      &pixelShaderBlob,
+      &errorBlob);
+  if (nullptr == pixelShaderBlob)
+  {
+    if (errorBlob != nullptr)
+      OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+    assert(false && "Shader compilation failed");
+  }
+
+  // 2. Create gbuffer Root Sig
+  D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
+
+  // VSCBuffer
+  rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+  rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+  rootParameters[0].Descriptor.RegisterSpace = 0;
+  rootParameters[0].Descriptor.ShaderRegister = 0;
+
+  // MatIndexCBuffer
+  rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+  rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+  rootParameters[1].Constants.Num32BitValues = 1;
+  rootParameters[1].Constants.RegisterSpace = 0;
+  rootParameters[1].Constants.ShaderRegister = 2;
+
+  D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+  rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+  rootSignatureDesc.pParameters = rootParameters;
+  rootSignatureDesc.NumStaticSamplers = 0;
+  rootSignatureDesc.pStaticSamplers = nullptr;
+  rootSignatureDesc.Flags =
+      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+  createRootSignature(m_Dev, &gbufferRootSignature, rootSignatureDesc);
+
+  // 3. Gbuffer PSO
+
+  static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] =
+{
+    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+};
+
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+  psoDesc.pRootSignature = gbufferRootSignature;
+  psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.GetInterfacePtr());
+  psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
+  psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
+  psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+  psoDesc.DepthStencilState = GetDepthState(DepthState::WritesEnabled);
+  psoDesc.SampleMask = UINT_MAX;
+  psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
+  for (uint64_t i = 0; i < arrayCount32(gbufferFormats); ++i)
+    psoDesc.RTVFormats[i] = gbufferFormats[i];
+  psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+  psoDesc.SampleDesc.Count = 1;
+  psoDesc.SampleDesc.Quality = 0;
+  psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
+  psoDesc.InputLayout.pInputElementDescs = standardInputElements;
+
+  m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gbufferPSO));
+
+#pragma endregion
+#pragma region Setup Deferred Stuff
+  // 1. Create deferred root sig
+
+  // 2.
+
+#pragma endregion
 
   _createPSOs();
 
@@ -673,6 +791,10 @@ void RenderManager::onDestroy()
 
   // Close handles to fence events and threads.
   CloseHandle(m_RenderContextFenceEvent);
+
+  // TODO Release these in mesh renderer
+  gbufferRootSignature->Release();
+  gbufferPSO->Release();
 
   // Shutdown render target(s):
   albedoTarget.deinit();

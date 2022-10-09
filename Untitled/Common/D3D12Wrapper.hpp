@@ -89,6 +89,31 @@ inline void transitionResource(
   barrier.Transition.Subresource = p_SubResource;
   p_CmdList->ResourceBarrier(1, &barrier);
 }
+inline void createRootSignature(ID3D12Device *dev,
+    ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
+{
+  D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = {};
+  versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+  versionedDesc.Desc_1_1 = desc;
+
+  ID3DBlobPtr signature;
+  ID3DBlobPtr error;
+  HRESULT hr =
+      D3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
+  if (FAILED(hr))
+  {
+    const char* errString =
+        error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
+
+    assert(false && "Failed to create root signature");
+  }
+
+  dev->CreateRootSignature(
+      0,
+      signature->GetBufferPointer(),
+      signature->GetBufferSize(),
+      IID_PPV_ARGS(rootSignature));
+}
 //---------------------------------------------------------------------------//
 // various d3d helpers
 //---------------------------------------------------------------------------//

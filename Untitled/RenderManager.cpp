@@ -444,14 +444,43 @@ void RenderManager::_loadAssets()
 
   // 3. Gbuffer PSO
 
-  static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] =
-{
-    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-};
+  static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
+      {"POSITION",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       0,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"NORMAL",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       12,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"UV",
+       0,
+       DXGI_FORMAT_R32G32_FLOAT,
+       0,
+       24,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TANGENT",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       32,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"BITANGENT",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       44,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
 
   D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
   psoDesc.pRootSignature = gbufferRootSignature;
@@ -596,6 +625,7 @@ void RenderManager::_loadAssets()
 //---------------------------------------------------------------------------//
 void RenderManager::_populateCommandList()
 {
+#pragma region Forward Render:
   // Command list allocators can only be reset when the associated
   // command lists have finished execution on the GPU; apps should use
   // fences to determine GPU execution progress.
@@ -638,8 +668,8 @@ void RenderManager::_populateCommandList()
   m_CmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
   // Record commands.
-  const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
-  m_CmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+  const float clearValue[] = {0.0f, 0.2f, 0.4f, 1.0f};
+  m_CmdList->ClearRenderTargetView(rtvHandle, clearValue, 0, nullptr);
 
   m_CmdList->RSSetViewports(1, &m_Viewport);
 
@@ -652,6 +682,74 @@ void RenderManager::_populateCommandList()
           m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
           D3D12_RESOURCE_STATE_RENDER_TARGET,
           D3D12_RESOURCE_STATE_PRESENT));
+#pragma endregion
+
+#pragma region Deferred Render
+  {
+    // Transition our G-Buffer targets to a writable state
+    D3D12_RESOURCE_BARRIER barriers[1] = {};
+
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = albedoTarget.resource();
+    barriers[0].Transition.StateBefore =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.Subresource = 0;
+
+    m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
+  }
+
+  // Set the G-Buffer render targets and clear them
+  D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {
+      albedoTarget.m_RTV,
+  };
+  m_CmdList->OMSetRenderTargets(
+      arrayCount32(rtvHandles), rtvHandles, false, nullptr);
+  const float clearColor[] = {0.0f, 0.0f, 0.0f, 0.0f};
+  for (uint64_t i = 0; i < arrayCount(rtvHandles); ++i)
+    m_CmdList->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
+
+  setViewport(m_CmdList, m_Info.m_Width, m_Info.m_Height);
+
+  //
+  // Render Gbuffer!
+  //
+
+  // 1. Bind vertices and indices
+  // set vb and ib
+  //
+  //
+  // 2. Draw geometries
+  // draw call
+  //
+
+  {
+    D3D12_RESOURCE_BARRIER barriers[1] = {};
+
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = albedoTarget.resource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.Subresource = 0;
+
+    m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
+  }
+
+  //
+  // Render fullscreen deferred pass!
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+
+#pragma endregion
 
   D3D_EXEC_CHECKED(m_CmdList->Close());
 }

@@ -31,8 +31,8 @@ inline void setViewport(
     ID3D12GraphicsCommandList* p_CmdList,
     uint64_t p_Width,
     uint64_t p_Height,
-    float p_MinZ,
-    float p_MaxZ)
+    float p_MinZ = 0.0f,
+    float p_MaxZ = 1.0f)
 {
   D3D12_VIEWPORT viewport = {};
   viewport.Width = float(p_Width);

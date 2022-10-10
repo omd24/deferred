@@ -129,6 +129,10 @@ private:
   ID3D12ResourcePtr m_VtxBufferUpload;
   D3D12_VERTEX_BUFFER_VIEW m_VtxBufferView;
 
+  ID3D12ResourcePtr m_VtxBufferModel;
+  ID3D12ResourcePtr m_VtxBufferUploadModel;
+  D3D12_VERTEX_BUFFER_VIEW m_VtxBufferViewModel;
+
   Camera m_Camera;
   Timer m_Timer;
 
@@ -148,6 +152,15 @@ private:
     XMFLOAT3 m_Position;
     XMFLOAT4 m_Color;
   };
+  struct ModelVertex
+  {
+    XMFLOAT3 m_Position;
+    XMFLOAT3 m_Normal;
+    XMFLOAT2 m_UV;
+    XMFLOAT3 m_Tangent;
+    XMFLOAT3 m_Bitangent;
+  };
+  static_assert(sizeof(ModelVertex) == 56);
 
   // Indices of the root signature parameters:
   enum GraphicsRootParameters : UINT32
@@ -171,6 +184,7 @@ private:
   std::wstring _getAssetPath(LPCWSTR p_AssetName);
   std::wstring _getShaderPath(LPCWSTR p_ShaderName);
   void _createVertexBuffer();
+  void _createModelVertexBuffer();
   bool _createPSOs();
   void _loadD3D12Pipeline();
   void _loadAssets();

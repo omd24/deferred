@@ -185,6 +185,72 @@ void RenderManager::_createVertexBuffer()
   m_VtxBufferView.SizeInBytes = static_cast<UINT>(bufferSize);
   m_VtxBufferView.StrideInBytes = sizeof(Vertex);
 }
+//
+void RenderManager::_createModelVertexBuffer()
+{
+  ModelVertex vertices[] = {
+      {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {0.0f, 0.0f},
+       {0.0f, 1.0f, 0.0f},
+       {1.0f, 0.0f, 0.0f}},
+      {{0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {1.0f, 1.0f},
+       {0.0f, 1.0f, 0.0f},
+       {1.0f, 0.0f, 0.0f}},
+      {{-0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {0.0f, 1.0f},
+       {0.0f, 1.0f, 0.0f},
+       {1.0f, 0.0f, 0.0f}}};
+
+  const UINT bufferSize = sizeof(vertices);
+  static_assert(bufferSize == 3 * 56);
+
+  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
+      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+      D3D12_HEAP_FLAG_NONE,
+      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+      D3D12_RESOURCE_STATE_COPY_DEST,
+      nullptr,
+      IID_PPV_ARGS(&m_VtxBufferModel)));
+
+  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
+      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+      D3D12_HEAP_FLAG_NONE,
+      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
+      D3D12_RESOURCE_STATE_GENERIC_READ,
+      nullptr,
+      IID_PPV_ARGS(&m_VtxBufferUploadModel)));
+
+  D3D_NAME_OBJECT(m_VtxBufferModel);
+
+  D3D12_SUBRESOURCE_DATA vertexData = {};
+  vertexData.pData = reinterpret_cast<UINT8*>(&vertices[0]);
+  vertexData.RowPitch = bufferSize;
+  vertexData.SlicePitch = vertexData.RowPitch;
+
+  UpdateSubresources<1>(
+      m_CmdList.GetInterfacePtr(),
+      m_VtxBufferModel.GetInterfacePtr(),
+      m_VtxBufferUploadModel.GetInterfacePtr(),
+      0,
+      0,
+      1,
+      &vertexData);
+  m_CmdList->ResourceBarrier(
+      1,
+      &CD3DX12_RESOURCE_BARRIER::Transition(
+          m_VtxBufferModel.GetInterfacePtr(),
+          D3D12_RESOURCE_STATE_COPY_DEST,
+          D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER));
+
+  m_VtxBufferViewModel.BufferLocation =
+      m_VtxBufferModel->GetGPUVirtualAddress();
+  m_VtxBufferViewModel.SizeInBytes = static_cast<UINT>(bufferSize);
+  m_VtxBufferViewModel.StrideInBytes = sizeof(ModelVertex);
+}
 //---------------------------------------------------------------------------//
 bool RenderManager::_createPSOs()
 {
@@ -488,7 +554,7 @@ void RenderManager::_loadAssets()
   psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
   psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
   psoDesc.BlendState = GetBlendState(BlendState::Disabled);
-  psoDesc.DepthStencilState = GetDepthState(DepthState::WritesEnabled);
+  psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
   psoDesc.SampleMask = UINT_MAX;
   psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
   psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
@@ -522,6 +588,7 @@ void RenderManager::_loadAssets()
   D3D_NAME_OBJECT(m_CmdList);
 
   _createVertexBuffer();
+  _createModelVertexBuffer();
 
   // Note: ComPtr's are CPU objects but this resource needs to stay in scope
   // until the command list that references it has finished executing on the
@@ -716,13 +783,15 @@ void RenderManager::_populateCommandList()
   // Render Gbuffer!
   //
 
-  // 1. Bind vertices and indices
-  // set vb and ib
-  //
+  // 1. Bind vb, ib, pso, root sig and so on
+  m_CmdList->SetGraphicsRootSignature(gbufferRootSignature);
+  m_CmdList->SetPipelineState(gbufferPSO);
+  m_CmdList->IASetVertexBuffers(0, 1, &m_VtxBufferViewModel);
+  m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
   //
   // 2. Draw geometries
-  // draw call
-  //
+  m_CmdList->DrawInstanced(3, 1, 0, 0);
 
   {
     D3D12_RESOURCE_BARRIER barriers[1] = {};

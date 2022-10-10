@@ -63,7 +63,7 @@ VSOutput VS(in VSInput input, in uint VertexID : SV_VertexID)
     // result.position = position;
     // result.color = color;
 
-    result.PositionCS = float4(0, 0, 0, 1);
+    result.PositionCS = float4(input.PositionOS, 1);
     return result;
 }
 
@@ -71,6 +71,6 @@ PSOutputGBuffer PS(in PSInput input)
 {
     PSOutputGBuffer result;
 
-    result.Color = float4(0, 0, 0, 1);
+    result.Color = float4(1, 0, 0, 1);
     return result;
 }

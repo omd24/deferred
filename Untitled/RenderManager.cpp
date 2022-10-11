@@ -376,6 +376,20 @@ void RenderManager::_loadAssets()
     albedoTarget.init(rtInit);
   }
 
+  // Create deferred target:
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = true;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Main Target";
+    deferredTarget.init(rtInit);
+  }
+
   // Create the root signatures.
   {
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
@@ -570,9 +584,50 @@ void RenderManager::_loadAssets()
 
 #pragma endregion
 #pragma region Setup Deferred Stuff
-  // 1. Create deferred root sig
+  ID3DBlobPtr compShaderBlob;
+  // 1. compile shaders
+  {
+    ID3DBlobPtr csErrorBlob;
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
 
-  // 2.
+    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+
+    HRESULT hr = D3DCompileFromFile(
+        _getShaderPath(L"Deferred.hlsl").c_str(),
+        nullptr,
+        nullptr,
+        "CS",
+        "cs_5_1",
+        compileFlags,
+        0,
+        &compShaderBlob,
+        &csErrorBlob);
+    if (nullptr == compShaderBlob)
+    {
+      if (csErrorBlob != nullptr)
+        OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
+      assert(false && "Shader compilation failed");
+    }
+  }
+
+  // 2. Create deferred root sig
+  //
+  //
+  //
+
+
+
+  // 3. Dispatch call
+  //
+  //
+  //
+  //
+
+
 
 #pragma endregion
 
@@ -965,6 +1020,7 @@ void RenderManager::onDestroy()
 
   // Shutdown render target(s):
   albedoTarget.deinit();
+  deferredTarget.deinit();
 
   //_waitForGpu();
   // Shudown uploads and other helpers

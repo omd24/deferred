@@ -89,6 +89,8 @@ private:
   // Deferred Stuff
   RenderTexture deferredTarget;
   ID3D12RootSignature* deferredRootSig = nullptr;
+  ID3D12PipelineState* deferredPSO = nullptr;
+
 
   // Uniforms
   struct TriangleParams

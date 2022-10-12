@@ -35,7 +35,6 @@ StructuredBuffer<MaterialTextureIndices> MaterialIndexBuffers[] : register(t0, s
 Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
 
 SamplerState AnisoSampler : register(s0);
-SamplerComparisonState ShadowMapSampler : register(s1);
 
 //=================================================================================================
 // Compute shader for deferred texturing

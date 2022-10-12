@@ -1,6 +1,16 @@
 #include "RenderManager.hpp"
 #include <pix3.h>
 
+enum DeferredRootParams : uint32_t
+{
+  DeferredParams_StandardDescriptors, // textures
+  DeferredParams_DeferredCBuffer,
+  DeferredParams_SRVIndices,
+  DeferredParams_UAVDescriptors,
+
+  NumDeferredRootParams
+};
+
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
@@ -616,18 +626,82 @@ void RenderManager::_loadAssets()
 
   // 2. Create deferred root sig
   //
-  //
-  //
 
+  // Deferred root signature
+  {
+    D3D12_DESCRIPTOR_RANGE1 descriptorRanges[1] = {};
+    descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    descriptorRanges[0].NumDescriptors = 1;
+    descriptorRanges[0].BaseShaderRegister = 0;
+    descriptorRanges[0].RegisterSpace = 0;
+    descriptorRanges[0].OffsetInDescriptorsFromTableStart = 0;
 
+    D3D12_ROOT_PARAMETER1 rootParameters[NumDeferredRootParams] = {};
 
-  // 3. Dispatch call
-  //
-  //
-  //
-  //
+    rootParameters[DeferredParams_StandardDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[DeferredParams_StandardDescriptors].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_StandardDescriptors]
+        .DescriptorTable.pDescriptorRanges = StandardDescriptorRanges();
+    rootParameters[DeferredParams_StandardDescriptors]
+        .DescriptorTable.NumDescriptorRanges = NumStandardDescriptorRanges;
 
+    // DeferredCBuffer
+    rootParameters[DeferredParams_DeferredCBuffer].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_DeferredCBuffer].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_DeferredCBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_DeferredCBuffer].Descriptor.ShaderRegister =
+        2;
+    rootParameters[DeferredParams_DeferredCBuffer].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 
+    // SRV Indices
+    rootParameters[DeferredParams_SRVIndices].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_SRVIndices].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_SRVIndices].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_SRVIndices].Descriptor.ShaderRegister = 4;
+    rootParameters[DeferredParams_SRVIndices].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // UAV's
+    rootParameters[DeferredParams_UAVDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[DeferredParams_UAVDescriptors].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_UAVDescriptors]
+        .DescriptorTable.pDescriptorRanges = descriptorRanges;
+    rootParameters[DeferredParams_UAVDescriptors]
+        .DescriptorTable.NumDescriptorRanges = arrayCount32(descriptorRanges);
+
+    // AppSettings
+
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    staticSamplers[0] = GetStaticSamplerState(
+        SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = arrayCount32(staticSamplers);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    createRootSignature(m_Dev, &deferredRootSig, rootSignatureDesc);
+  }
+
+  // 3. Deferred PSO
+  //
+  {
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(compShaderBlob.GetInterfacePtr());
+    psoDesc.pRootSignature = deferredRootSig;
+    m_Dev->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&deferredPSO));
+  }
 
 #pragma endregion
 
@@ -1017,6 +1091,8 @@ void RenderManager::onDestroy()
   // TODO Release these in mesh renderer
   gbufferRootSignature->Release();
   gbufferPSO->Release();
+  deferredRootSig->Release();
+  deferredPSO->Release();
 
   // Shutdown render target(s):
   albedoTarget.deinit();

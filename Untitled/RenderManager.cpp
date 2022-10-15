@@ -10,6 +10,13 @@ enum DeferredRootParams : uint32_t
 
   NumDeferredRootParams
 };
+struct DeferredConstants
+{
+  DirectX::XMFLOAT4X4 InvViewProj;
+  DirectX::XMFLOAT4X4 Projection;
+  DirectX::XMFLOAT2 RTSize;
+  uint32_t NumComputeTilesX = 0;
+};
 
 //---------------------------------------------------------------------------//
 // Internal private methods
@@ -821,7 +828,7 @@ void RenderManager::_loadAssets()
 //---------------------------------------------------------------------------//
 void RenderManager::_populateCommandList()
 {
-#pragma region Forward Render:
+
   // Command list allocators can only be reset when the associated
   // command lists have finished execution on the GPU; apps should use
   // fences to determine GPU execution progress.
@@ -833,6 +840,9 @@ void RenderManager::_populateCommandList()
   D3D_EXEC_CHECKED(m_CmdList->Reset(
       m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), m_Pso.GetInterfacePtr()));
 
+  SetDescriptorHeaps(m_CmdList);
+
+#pragma region Forward Render:
   // Set necessary state.
   m_CmdList->SetPipelineState(m_Pso.GetInterfacePtr());
   m_CmdList->SetGraphicsRootSignature(m_RootSig.GetInterfacePtr());
@@ -939,13 +949,51 @@ void RenderManager::_populateCommandList()
   //
   // Render fullscreen deferred pass!
   //
-  //
-  //
-  //
-  //
-  //
-  //
-  //
+  const uint32_t numComputeTilesX =
+      alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
+  const uint32_t numComputeTilesY =
+      alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
+  deferredTarget.transition(
+      m_CmdList,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  m_CmdList->SetComputeRootSignature(deferredRootSig);
+  m_CmdList->SetPipelineState(deferredPSO);
+
+  BindStandardDescriptorTable(
+      m_CmdList, DeferredParams_StandardDescriptors, CmdListMode::Compute);
+
+  // Set constant buffers
+  {
+    DeferredConstants deferredConstants;
+    XMMATRIX view = cameraGetViewMatrix(&m_Camera);
+    CXMMATRIX proj =
+        getProjectionMatrix(0.8f, m_Info.m_AspectRatio, 1.0f, 5000.0f);
+    XMStoreFloat4x4(
+        &deferredConstants.InvViewProj,
+        XMMatrixInverse(nullptr, XMMatrixMultiply(view, proj)));
+    XMStoreFloat4x4(&deferredConstants.Projection, proj);
+    deferredConstants.RTSize =
+        XMFLOAT2(float(deferredTarget.width()), float(deferredTarget.height()));
+    deferredConstants.NumComputeTilesX = numComputeTilesX;
+    BindTempConstantBuffer(
+        m_CmdList,
+        deferredConstants,
+        DeferredParams_DeferredCBuffer,
+        CmdListMode::Compute);
+
+    uint32_t srvIndices[] = {0, 0, 0};
+
+    BindTempConstantBuffer(
+        m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
+  }
+
+  m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
+
+  deferredTarget.transition(
+      m_CmdList,
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 #pragma endregion
 
@@ -1135,6 +1183,8 @@ void RenderManager::onRender()
       // Record all the commands we need to render the scene into the command
       // list.
       _populateCommandList();
+
+      EndFrame_Upload(m_CmdQue);
 
       // Execute the command list.
       ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};

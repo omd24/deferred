@@ -87,6 +87,20 @@ static SRWLOCK s_UploadQueueLock = SRWLOCK_INIT;
 static ID3D12CommandQueue* s_UploadCmdQueue = nullptr;
 static Fence s_UploadFence;
 static uint64_t s_UploadFenceValue = 0;
+
+// These are protected by UploadSubmissionLock
+static constexpr int MaxUploadSubmissions = 1;
+static uint64_t UploadBufferStart = 0;
+static uint64_t UploadBufferUsed = 0;
+static UploadSubmission UploadSubmissions[MaxUploadSubmissions];
+static uint64_t UploadSubmissionStart = 0;
+static uint64_t UploadSubmissionUsed = 0;
+
+static const uint64_t TempBufferSize = 2 * 1024 * 1024;
+static ID3D12Resource* TempFrameBuffers[RENDER_LATENCY] = {};
+static uint8_t* TempFrameCPUMem[RENDER_LATENCY] = {};
+static uint64_t TempFrameGPUMem[RENDER_LATENCY] = {};
+static volatile int64_t TempFrameUsed = 0;
 //---------------------------------------------------------------------------//
 // various d3d helpers
 //---------------------------------------------------------------------------//
@@ -116,6 +130,48 @@ static D3D12_SAMPLER_DESC SamplerStateDescs[NumSamplerStates] = {};
 
 static D3D12_DESCRIPTOR_RANGE1
     StandardDescriptorRangeDescs[NumStandardDescriptorRanges] = {};
+
+static void ClearFinishedUploads(uint64_t flushCount)
+{
+  const uint64_t start = UploadSubmissionStart;
+  const uint64_t used = UploadSubmissionUsed;
+  for (uint64_t i = 0; i < used; ++i)
+  {
+    const uint64_t idx = (start + i) % MaxUploadSubmissions;
+    UploadSubmission& submission = UploadSubmissions[idx];
+    assert(submission.Size > 0);
+    assert(UploadBufferUsed >= submission.Size);
+
+    // If the submission hasn't been sent to the GPU yet we can't wait for it
+    if (submission.FenceValue == uint64_t(-1))
+      return;
+
+    if (i < flushCount)
+      s_UploadFence.wait(submission.FenceValue);
+
+    if (s_UploadFence.signaled(submission.FenceValue))
+    {
+      UploadSubmissionStart =
+          (UploadSubmissionStart + 1) % MaxUploadSubmissions;
+      UploadSubmissionUsed -= 1;
+      UploadBufferStart =
+          (UploadBufferStart + submission.Padding) % s_UploadBufferSize;
+      assert(submission.Offset == UploadBufferStart);
+      assert(UploadBufferStart + submission.Size <= s_UploadBufferSize);
+      UploadBufferStart =
+          (UploadBufferStart + submission.Size) % s_UploadBufferSize;
+      UploadBufferUsed -= (submission.Size + submission.Padding);
+      submission.reset();
+
+      if (UploadBufferUsed == 0)
+        UploadBufferStart = 0;
+    }
+    else
+    {
+      return;
+    }
+  }
+}
 
 void Initialize_Helpers()
 {
@@ -819,6 +875,62 @@ void BindStandardDescriptorTable(
     cmdList->SetGraphicsRootDescriptorTable(rootParameter, handle);
 }
 
+MapResult AcquireTempBufferMem(uint64_t size, uint64_t alignment)
+{
+  uint64_t allocSize = size + alignment;
+  uint64_t offset = InterlockedAdd64(&TempFrameUsed, allocSize) - allocSize;
+  if (alignment > 0)
+    offset = alignUp(offset, alignment);
+  assert(offset + size <= TempBufferSize);
+
+  MapResult result;
+  result.CpuAddress = TempFrameCPUMem[g_CurrFrameIdx] + offset;
+  result.GpuAddress = TempFrameGPUMem[g_CurrFrameIdx] + offset;
+  result.ResourceOffset = offset;
+  result.Resource = TempFrameBuffers[g_CurrFrameIdx];
+
+  return result;
+}
+
+TempBuffer TempConstantBuffer(uint64_t cbSize, bool makeDescriptor)
+{
+  assert(cbSize > 0);
+  MapResult tempMem = AcquireTempBufferMem(cbSize, ConstantBufferAlignment);
+  TempBuffer tempBuffer;
+  tempBuffer.CPUAddress = tempMem.CpuAddress;
+  tempBuffer.GPUAddress = tempMem.GpuAddress;
+  if (makeDescriptor)
+  {
+    TempDescriptorAlloc cbvAlloc = SRVDescriptorHeap.AllocateTemporary(1);
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+    cbvDesc.BufferLocation = tempMem.GpuAddress;
+    cbvDesc.SizeInBytes =
+        alignUp<uint32_t>(uint32_t(cbSize), ConstantBufferAlignment);
+    g_Device->CreateConstantBufferView(&cbvDesc, cbvAlloc.StartCPUHandle);
+    tempBuffer.DescriptorIndex = cbvAlloc.StartIndex;
+  }
+
+  return tempBuffer;
+}
+
+void BindTempConstantBuffer(
+    ID3D12GraphicsCommandList* cmdList,
+    const void* cbData,
+    uint64_t cbSize,
+    uint32_t rootParameter,
+    CmdListMode cmdListMode)
+{
+  TempBuffer tempBuffer = TempConstantBuffer(cbSize, false);
+  memcpy(tempBuffer.CPUAddress, cbData, cbSize);
+
+  if (cmdListMode == CmdListMode::Graphics)
+    cmdList->SetGraphicsRootConstantBufferView(
+        rootParameter, tempBuffer.GPUAddress);
+  else
+    cmdList->SetComputeRootConstantBufferView(
+        rootParameter, tempBuffer.GPUAddress);
+}
+
 DescriptorHeap::~DescriptorHeap()
 {
   DEBUG_BREAK(Heaps[0] == nullptr);
@@ -1040,21 +1152,57 @@ ID3D12DescriptorHeap* DescriptorHeap::CurrentHeap() const
 // internal upload helpers
 //---------------------------------------------------------------------------//
 
-static void _clearFinishedUploads()
-{
-  UploadSubmission& submission = s_UploadSubmission;
-  if (s_UploadFence.signaled(submission.FenceValue))
-    submission.reset();
-}
 static UploadSubmission* _allocUploadSubmission(uint64_t p_Size)
 {
-  // TODO: Properly allocate the submission
+  assert(UploadSubmissionUsed <= MaxUploadSubmissions);
+  if (UploadSubmissionUsed == MaxUploadSubmissions)
+    return nullptr;
 
-  UploadSubmission* submission = &s_UploadSubmission;
-  submission->Offset = 0;
+  const uint64_t submissionIdx =
+      (UploadSubmissionStart + UploadSubmissionUsed) % MaxUploadSubmissions;
+  assert(UploadSubmissions[submissionIdx].Size == 0);
+
+  assert(UploadBufferUsed <= s_UploadBufferSize);
+  if (p_Size > (s_UploadBufferSize - UploadBufferUsed))
+    return nullptr;
+
+  const uint64_t start = UploadBufferStart;
+  const uint64_t end = UploadBufferStart + UploadBufferUsed;
+  uint64_t allocOffset = uint64_t(-1);
+  uint64_t padding = 0;
+  if (end < s_UploadBufferSize)
+  {
+    const uint64_t endAmt = s_UploadBufferSize - end;
+    if (endAmt >= p_Size)
+    {
+      allocOffset = end;
+    }
+    else if (start >= p_Size)
+    {
+      // Wrap around to the beginning
+      allocOffset = 0;
+      UploadBufferUsed += endAmt;
+      padding = endAmt;
+    }
+  }
+  else
+  {
+    const uint64_t wrappedEnd = end % s_UploadBufferSize;
+    if ((start - wrappedEnd) >= p_Size)
+      allocOffset = wrappedEnd;
+  }
+
+  if (allocOffset == uint64_t(-1))
+    return nullptr;
+
+  UploadSubmissionUsed += 1;
+  UploadBufferUsed += p_Size;
+
+  UploadSubmission* submission = &UploadSubmissions[submissionIdx];
+  submission->Offset = allocOffset;
   submission->Size = p_Size;
   submission->FenceValue = uint64_t(-1);
-  submission->Padding = 0;
+  submission->Padding = padding;
 
   return submission;
 }
@@ -1107,12 +1255,31 @@ void initializeUpload(ID3D12Device* dev)
   D3D_EXEC_CHECKED(s_UploadBuffer->Map(
       0, &readRange, reinterpret_cast<void**>(&s_UploadBufferCPUAddr)));
 
-  // TODO: temporary buffer memory that swaps every frame
+  // Temporary buffer memory that swaps every frame
+  resourceDesc.Width = uint32_t(TempBufferSize);
+
+  for (uint64_t i = 0; i < RENDER_LATENCY; ++i)
+  {
+    g_Device->CreateCommittedResource(
+        GetUploadHeapProps(),
+        D3D12_HEAP_FLAG_NONE,
+        &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&TempFrameBuffers[i]));
+
+    TempFrameBuffers[i]->Map(
+        0, &readRange, reinterpret_cast<void**>(&TempFrameCPUMem[i]));
+    TempFrameGPUMem[i] = TempFrameBuffers[i]->GetGPUVirtualAddress();
+  }
 
   // TODO: readback resources
 }
 void shutdownUpload()
 {
+  for (uint64_t i = 0; i < arrayCount(TempFrameBuffers); ++i)
+    TempFrameBuffers[i]->Release();
+
   if (s_UploadBuffer != nullptr)
     s_UploadBuffer->Release();
   if (s_UploadCmdQueue != nullptr)
@@ -1121,6 +1288,28 @@ void shutdownUpload()
     s_UploadSubmission.CmdAllocator->Release();
   if (s_UploadSubmission.CmdList != nullptr)
     s_UploadSubmission.CmdList->Release();
+}
+void EndFrame_Upload(ID3D12CommandQueue* p_GfxQueue)
+{
+  // If we can grab the lock, try to clear out any completed submissions
+  if (TryAcquireSRWLockExclusive(&s_UploadSubmissionLock))
+  {
+    ClearFinishedUploads(0);
+
+    ReleaseSRWLockExclusive(&s_UploadSubmissionLock);
+  }
+
+  {
+    AcquireSRWLockExclusive(&s_UploadQueueLock);
+
+    // Make sure to sync on any pending uploads
+    ClearFinishedUploads(0);
+    p_GfxQueue->Wait(s_UploadFence.m_D3DFence, s_UploadFenceValue);
+
+    ReleaseSRWLockExclusive(&s_UploadQueueLock);
+  }
+
+  TempFrameUsed = 0;
 }
 UploadContext _resourceUploadBegin(uint64_t p_Size)
 {
@@ -1134,8 +1323,14 @@ UploadContext _resourceUploadBegin(uint64_t p_Size)
   {
     AcquireSRWLockExclusive(&s_UploadSubmissionLock);
 
-    _clearFinishedUploads();
+    ClearFinishedUploads(0);
+
     submission = _allocUploadSubmission(p_Size);
+    while (submission == nullptr)
+    {
+      ClearFinishedUploads(1);
+      submission = _allocUploadSubmission(p_Size);
+    }
 
     ReleaseSRWLockExclusive(&s_UploadSubmissionLock);
   }

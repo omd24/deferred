@@ -27,6 +27,8 @@ extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 void initializeUpload(ID3D12Device* p_Dev);
 void shutdownUpload();
 
+void EndFrame_Upload(ID3D12CommandQueue * p_Queue);
+
 inline void setViewport(
     ID3D12GraphicsCommandList* p_CmdList,
     uint64_t p_Width,
@@ -301,6 +303,38 @@ void BindStandardDescriptorTable(
     ID3D12GraphicsCommandList* p_CmdList,
     uint32_t rootParameter,
     CmdListMode p_CmdListMode);
+
+// Helpers for buffer types that use temporary buffer memory from the upload
+// helper
+TempBuffer TempConstantBuffer(uint64_t cbSize, bool makeDescriptor = false);
+void BindTempConstantBuffer(
+    ID3D12GraphicsCommandList* cmdList,
+    const void* cbData,
+    uint64_t cbSize,
+    uint32_t rootParameter,
+    CmdListMode cmdListMode);
+
+template <typename T>
+void BindTempConstantBuffer(
+    ID3D12GraphicsCommandList* cmdList,
+    const T& cbData,
+    uint32_t rootParameter,
+    CmdListMode cmdListMode)
+{
+  BindTempConstantBuffer(
+      cmdList, &cbData, sizeof(T), rootParameter, cmdListMode);
+}
+
+template <uint32_t N>
+void BindTempConstantBuffer(
+    ID3D12GraphicsCommandList* cmdList,
+    const uint32_t (&cbData)[N],
+    uint32_t rootParameter,
+    CmdListMode cmdListMode)
+{
+  BindTempConstantBuffer(
+      cmdList, cbData, N * sizeof(uint32_t), rootParameter, cmdListMode);
+}
 
 struct PersistentDescriptorAlloc
 {

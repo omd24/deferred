@@ -1211,22 +1211,26 @@ void initializeUpload(ID3D12Device* dev)
   g_Device = dev;
   DEBUG_BREAK(g_Device != nullptr);
 
-  UploadSubmission& submission = s_UploadSubmission;
-  D3D_EXEC_CHECKED(g_Device->CreateCommandAllocator(
-      D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&submission.CmdAllocator)));
-  D3D_EXEC_CHECKED(g_Device->CreateCommandList(
-      0,
-      D3D12_COMMAND_LIST_TYPE_COPY,
-      submission.CmdAllocator,
-      nullptr,
-      IID_PPV_ARGS(&submission.CmdList)));
-  D3D_EXEC_CHECKED(submission.CmdList->Close());
+  for (uint64_t i = 0; i < MaxUploadSubmissions; ++i)
+  {
+    UploadSubmission& submission = UploadSubmissions[i];
+    D3D_EXEC_CHECKED(g_Device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&submission.CmdAllocator)));
+    D3D_EXEC_CHECKED(g_Device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_COPY,
+        submission.CmdAllocator,
+        nullptr,
+        IID_PPV_ARGS(&submission.CmdList)));
+    D3D_EXEC_CHECKED(submission.CmdList->Close());
+  }
 
   D3D12_COMMAND_QUEUE_DESC queueDesc = {};
   queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
   queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
   D3D_EXEC_CHECKED(g_Device->CreateCommandQueue(
       &queueDesc, IID_PPV_ARGS(&s_UploadCmdQueue)));
+  s_UploadCmdQueue->SetName(L"Upload Copy Queue");
 
   s_UploadFence.init(0);
 
@@ -1244,7 +1248,7 @@ void initializeUpload(ID3D12Device* dev)
   resourceDesc.Alignment = 0;
 
   D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
-      getUploadHeapProps(),
+      GetUploadHeapProps(),
       D3D12_HEAP_FLAG_NONE,
       &resourceDesc,
       D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -1260,20 +1264,24 @@ void initializeUpload(ID3D12Device* dev)
 
   for (uint64_t i = 0; i < RENDER_LATENCY; ++i)
   {
-    g_Device->CreateCommittedResource(
+    D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
         GetUploadHeapProps(),
         D3D12_HEAP_FLAG_NONE,
         &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&TempFrameBuffers[i]));
+        IID_PPV_ARGS(&TempFrameBuffers[i])));
 
-    TempFrameBuffers[i]->Map(
-        0, &readRange, reinterpret_cast<void**>(&TempFrameCPUMem[i]));
+    D3D_EXEC_CHECKED(TempFrameBuffers[i]->Map(
+        0, &readRange, reinterpret_cast<void**>(&TempFrameCPUMem[i])));
     TempFrameGPUMem[i] = TempFrameBuffers[i]->GetGPUVirtualAddress();
   }
 
-  // TODO: readback resources
+  // Texture conversion resources
+  // TODO:
+
+  // Readback resources
+  // TODO
 }
 void shutdownUpload()
 {
@@ -1288,6 +1296,12 @@ void shutdownUpload()
     s_UploadSubmission.CmdAllocator->Release();
   if (s_UploadSubmission.CmdList != nullptr)
     s_UploadSubmission.CmdList->Release();
+
+  for (uint64_t i = 0; i < MaxUploadSubmissions; ++i)
+  {
+    UploadSubmissions[i].CmdAllocator->Release();
+    UploadSubmissions[i].CmdList->Release();
+  }
 }
 void EndFrame_Upload(ID3D12CommandQueue* p_GfxQueue)
 {
@@ -1486,7 +1500,8 @@ void Buffer::init(
 void Buffer::deinit()
 {
   // release the buffer resource:
-  m_Resource->Release();
+  if (m_Resource != nullptr)
+    m_Resource->Release();
 }
 MapResult Buffer::map()
 {
@@ -1696,7 +1711,8 @@ void StructuredBuffer::deinit()
   UAVDescriptorHeap.FreePersistent(m_Uav);
   UAVDescriptorHeap.FreePersistent(m_CounterUAV);
   m_InternalBuffer.deinit();
-  m_CounterResource->Release();
+  if (m_CounterResource != nullptr)
+    m_CounterResource->Release();
   m_Stride = 0;
   m_NumElements = 0;
 }

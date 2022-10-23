@@ -18,6 +18,12 @@ struct DeferredConstants
   uint32_t NumComputeTilesX = 0;
 };
 
+struct MaterialTextureIndices
+{
+  uint32_t Albedo;
+  uint32_t Normal;
+};
+
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
@@ -379,7 +385,7 @@ void RenderManager::_loadAssets()
   initializeUpload(m_Dev);
   Initialize_Helpers();
 
-  // Create a gbuffer:
+  // Create gbuffers:
   {
     RenderTextureInit rtInit;
     rtInit.Width = m_Info.m_Width;
@@ -391,6 +397,43 @@ void RenderManager::_loadAssets()
     rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     rtInit.Name = L"Albedo Target";
     albedoTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R8_UINT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Material ID Target";
+    materialIDTarget.init(rtInit);
+  }
+
+  // Create a structured buffer containing texture indices per-material
+  {
+    // 1. get the array of materials
+    // 2. loop through that and store the SRV indices (of the material textures)
+    //
+    // assuming two materials
+    constexpr int numMaterials = 2;
+    std::array<MaterialTextureIndices, numMaterials> textureIndices;
+    for (uint64_t i = 0; i < numMaterials; ++i)
+    {
+      MaterialTextureIndices& matIndices = textureIndices[i];
+
+      matIndices.Albedo = 0;
+      matIndices.Normal = 0;
+    }
+
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(MaterialTextureIndices);
+    sbInit.NumElements = numMaterials;
+    sbInit.Dynamic = false;
+    sbInit.InitData = textureIndices.data();
+    materialTextureIndices.init(sbInit);
+    materialTextureIndices.resource()->SetName(L"Material Texture Indices");
   }
 
   // Create deferred target:
@@ -463,6 +506,7 @@ void RenderManager::_loadAssets()
 #pragma region Setup Gbuffer Stuff
   DXGI_FORMAT gbufferFormats[] = {
       albedoTarget.format(),
+      materialIDTarget.format(),
   };
 
   // TODO: this stuff should be wrapped as mesh renderer initialization
@@ -828,6 +872,7 @@ void RenderManager::_loadAssets()
 //---------------------------------------------------------------------------//
 void RenderManager::_populateCommandList()
 {
+  EndFrame_Helpers();
 
   // Command list allocators can only be reset when the associated
   // command lists have finished execution on the GPU; apps should use
@@ -893,7 +938,7 @@ void RenderManager::_populateCommandList()
 #pragma region Deferred Render
   {
     // Transition our G-Buffer targets to a writable state
-    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -903,12 +948,21 @@ void RenderManager::_populateCommandList()
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[0].Transition.Subresource = 0;
 
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = materialIDTarget.resource();
+    barriers[1].Transition.StateBefore =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.Subresource = 0;
+
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
 
   // Set the G-Buffer render targets and clear them
   D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {
       albedoTarget.m_RTV,
+      materialIDTarget.m_RTV,
   };
   m_CmdList->OMSetRenderTargets(
       arrayCount32(rtvHandles), rtvHandles, false, nullptr);
@@ -933,7 +987,7 @@ void RenderManager::_populateCommandList()
   m_CmdList->DrawInstanced(3, 1, 0, 0);
 
   {
-    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -942,6 +996,14 @@ void RenderManager::_populateCommandList()
     barriers[0].Transition.StateAfter =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.Subresource = 0;
+
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = materialIDTarget.resource();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -982,11 +1044,22 @@ void RenderManager::_populateCommandList()
         DeferredParams_DeferredCBuffer,
         CmdListMode::Compute);
 
-    uint32_t srvIndices[] = {0, 0, 0};
-
+    uint32_t srvIndices[] = {
+        materialTextureIndices.m_SrvIndex,
+        materialIDTarget.srv(),
+        0,
+        albedoTarget.srv()};
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
+
+  D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {deferredTarget.m_UAV};
+  BindTempDescriptorTable(
+      m_CmdList,
+      uavs,
+      arrayCount(uavs),
+      DeferredParams_UAVDescriptors,
+      CmdListMode::Compute);
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
@@ -1144,6 +1217,8 @@ void RenderManager::onDestroy()
 
   // Shutdown render target(s):
   albedoTarget.deinit();
+  materialIDTarget.deinit();
+  materialTextureIndices.deinit();
   deferredTarget.deinit();
 
   //_waitForGpu();

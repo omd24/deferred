@@ -86,11 +86,13 @@ private:
   ID3D12RootSignature* gbufferRootSignature = nullptr;
   ID3D12PipelineState* gbufferPSO = nullptr;
 
+  RenderTexture materialIDTarget;
+  StructuredBuffer materialTextureIndices;
+
   // Deferred Stuff
   RenderTexture deferredTarget;
   ID3D12RootSignature* deferredRootSig = nullptr;
   ID3D12PipelineState* deferredPSO = nullptr;
-
 
   // Uniforms
   struct TriangleParams

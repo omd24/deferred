@@ -12,6 +12,7 @@ struct SRVIndexConstants
     uint MaterialIndicesBufferIdx;
     uint MaterialIDMapIdx;
     uint DepthMapIdx;
+    uint AlbedoIndex;
 };
 
 ConstantBuffer<DeferredConstants> DeferredCBuffer : register(b2);
@@ -60,5 +61,8 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
 
     // shadingInput.AlbedoMap = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
 
-    OutputTexture[pixelPos] = float4(0.0f, 1.0f, 0.0f, 1.0f);
+    Texture2D<float4> AlbedoMapTemp = Tex2DTable[NonUniformResourceIndex(SRVIndices.AlbedoIndex)];
+    float4 color = AlbedoMapTemp.SampleLevel(AnisoSampler, screenUV, 0);
+
+    OutputTexture[pixelPos] = float4(0.5 * color.r, color.g, color.b, color.a);
 }

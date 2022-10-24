@@ -120,7 +120,6 @@ private:
   UINT m_FrameIndex;
   ID3D12CommandAllocatorPtr m_CmdAllocs[FRAME_COUNT];
   ID3D12CommandQueuePtr m_CmdQue;
-  ID3D12RootSignaturePtr m_RootSig;
   ID3D12DescriptorHeapPtr m_RtvHeap;
   ID3D12DescriptorHeapPtr m_SrvUavHeap;
   UINT m_RtvDescriptorSize;

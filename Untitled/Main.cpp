@@ -163,6 +163,7 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
   WCHAR* shadersPath = static_cast<WCHAR*>(::calloc(pathSize, sizeof(WCHAR)));
   DEFER(free_path_mem)
   {
+    // TODO:
     ::free(shadersPath);
   };
   getShadersPath(shadersPath, pathSize);

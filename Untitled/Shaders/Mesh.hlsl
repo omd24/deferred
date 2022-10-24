@@ -1,5 +1,7 @@
 
-
+//=================================================================================================
+// Uniforms
+//=================================================================================================
 struct VSConstants
 {
     row_major float4x4 World;
@@ -17,7 +19,9 @@ struct MatIndexConstants
 ConstantBuffer<VSConstants> VSCBuffer : register(b0);
 ConstantBuffer<MatIndexConstants> MatIndexCBuffer : register(b2);
 
-// =================================================================
+//=================================================================================================
+// VS and PS structs
+//=================================================================================================
 
 struct VSInput
 {
@@ -56,6 +60,9 @@ struct PSOutputGBuffer
     float4 Color : SV_Target0;
 };
 
+//=================================================================================================
+// Gbuffer shaders entry-points
+//=================================================================================================
 VSOutput VS(in VSInput input, in uint VertexID : SV_VertexID)
 {
     VSOutput result;
@@ -66,11 +73,10 @@ VSOutput VS(in VSInput input, in uint VertexID : SV_VertexID)
     result.PositionCS = float4(input.PositionOS, 1);
     return result;
 }
-
 PSOutputGBuffer PS(in PSInput input)
 {
     PSOutputGBuffer result;
 
-    result.Color = float4(1, 0, 0, 1);
+    result.Color = float4(0, 0, 1, 1);
     return result;
 }

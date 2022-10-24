@@ -277,56 +277,61 @@ void RenderManager::_createModelVertexBuffer()
 //---------------------------------------------------------------------------//
 bool RenderManager::_createPSOs()
 {
-  // Create the pipeline states, which includes compiling and loading shaders.
+  // Release previous resources:
+  if (gbufferPSO != nullptr)
+    gbufferPSO->Release();
+  if (deferredPSO != nullptr)
+    deferredPSO->Release();
+
+  // 1. Gbuffer pso:
   {
-    ID3DBlobPtr vertexShader;
-    ID3DBlobPtr pixelShader;
+    // Load and compile shaders.
+    ID3DBlobPtr vertexShaderBlob;
+    ID3DBlobPtr pixelShaderBlob;
 
     ID3DBlobPtr errorBlob;
 
 #if defined(_DEBUG)
-    // Enable better shader debugging with the graphics debugging tools.
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
     UINT compileFlags = 0;
 #endif
 
-    // Load and compile shaders.
     HRESULT hr = D3DCompileFromFile(
-        _getShaderPath(L"TriangleDraw.hlsl").c_str(),
+        _getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
         nullptr,
-        "VSTriangleDraw",
-        "vs_5_0",
+        "VS",
+        "vs_5_1",
         compileFlags,
         0,
-        &vertexShader,
+        &vertexShaderBlob,
         &errorBlob);
-    if (nullptr == vertexShader)
+    if (nullptr == vertexShaderBlob)
     {
       if (errorBlob != nullptr)
         OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      return false;
+      assert(false && "Shader compilation failed");
     }
     errorBlob = nullptr;
     D3DCompileFromFile(
-        _getShaderPath(L"TriangleDraw.hlsl").c_str(),
+        _getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
         nullptr,
-        "PSTriangleDraw",
-        "ps_5_0",
+        "PS",
+        "ps_5_1",
         compileFlags,
         0,
-        &pixelShader,
+        &pixelShaderBlob,
         &errorBlob);
-    if (nullptr == pixelShader)
+    if (nullptr == pixelShaderBlob)
     {
       if (errorBlob != nullptr)
         OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      return false;
+      assert(false && "Shader compilation failed");
     }
 
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
+    static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
         {"POSITION",
          0,
          DXGI_FORMAT_R32G32B32_FLOAT,
@@ -334,46 +339,100 @@ bool RenderManager::_createPSOs()
          0,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
          0},
-        {"COLOR",
+        {"NORMAL",
          0,
-         DXGI_FORMAT_R32G32B32A32_FLOAT,
+         DXGI_FORMAT_R32G32B32_FLOAT,
          0,
          12,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
          0},
+        {"UV",
+         0,
+         DXGI_FORMAT_R32G32_FLOAT,
+         0,
+         24,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+         0},
+        {"TANGENT",
+         0,
+         DXGI_FORMAT_R32G32B32_FLOAT,
+         0,
+         32,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+         0},
+        {"BITANGENT",
+         0,
+         DXGI_FORMAT_R32G32B32_FLOAT,
+         0,
+         44,
+         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+         0},
     };
 
-    // Describe the blend and depth states.
-    CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
-    blendDesc.RenderTarget[0].BlendEnable = FALSE;
-    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
-    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+    DXGI_FORMAT gbufferFormats[] = {
+        albedoTarget.format(),
+        materialIDTarget.format(),
+    };
 
-    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc(D3D12_DEFAULT);
-    depthStencilDesc.DepthEnable = FALSE;
-    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-
-    // Describe and create the graphics pipeline state object (PSO).
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.InputLayout = {inputElementDescs, arrayCount32(inputElementDescs)};
-    psoDesc.pRootSignature = m_RootSig.GetInterfacePtr();
-    psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.GetInterfacePtr());
-    psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.GetInterfacePtr());
-    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-    psoDesc.BlendState = blendDesc;
-    psoDesc.DepthStencilState = depthStencilDesc;
+    psoDesc.pRootSignature = gbufferRootSignature;
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.GetInterfacePtr());
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
+    psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+    psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
+    for (uint64_t i = 0; i < arrayCount32(gbufferFormats); ++i)
+      psoDesc.RTVFormats[i] = gbufferFormats[i];
     psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
     psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleDesc.Quality = 0;
+    psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
+    psoDesc.InputLayout.pInputElementDescs = standardInputElements;
 
-    D3D_EXEC_CHECKED(
-        m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_Pso)));
-    D3D_NAME_OBJECT(m_Pso);
+    m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gbufferPSO));
+    gbufferPSO->SetName(L"Gbuffer PSO");
+  }
+
+  // 2. Deferred pso
+  {
+    ID3DBlobPtr compShaderBlob;
+    // compile shader
+    {
+      ID3DBlobPtr csErrorBlob;
+#if defined(_DEBUG)
+      UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+      UINT compileFlags = 0;
+#endif
+
+      compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+
+      HRESULT hr = D3DCompileFromFile(
+          _getShaderPath(L"Deferred.hlsl").c_str(),
+          nullptr,
+          nullptr,
+          "CS",
+          "cs_5_1",
+          compileFlags,
+          0,
+          &compShaderBlob,
+          &csErrorBlob);
+      if (nullptr == compShaderBlob)
+      {
+        if (csErrorBlob != nullptr)
+          OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
+        assert(false && "Shader compilation failed");
+      }
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(compShaderBlob.GetInterfacePtr());
+    psoDesc.pRootSignature = deferredRootSig;
+    m_Dev->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&deferredPSO));
+    deferredPSO->SetName(L"Deferred PSO");
   }
 
   return true;
@@ -441,7 +500,8 @@ void RenderManager::_loadAssets()
     RenderTextureInit rtInit;
     rtInit.Width = m_Info.m_Width;
     rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    // rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
@@ -450,233 +510,34 @@ void RenderManager::_loadAssets()
     deferredTarget.init(rtInit);
   }
 
-  // Create the root signatures.
+  // Gbuffer Root Sig
   {
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+    D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
 
-    // This is the highest version the sample supports. If CheckFeatureSupport
-    // succeeds, the HighestVersion returned will not be greater than this.
-    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    // VSCBuffer
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[0].Descriptor.RegisterSpace = 0;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
 
-    if (FAILED(m_Dev->CheckFeatureSupport(
-            D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-    {
-      featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
+    // MatIndexCBuffer
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[1].Constants.Num32BitValues = 1;
+    rootParameters[1].Constants.RegisterSpace = 0;
+    rootParameters[1].Constants.ShaderRegister = 2;
 
-    // Graphics root signature.
-    {
-      CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-      ranges[0].Init(
-          D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-          1,
-          0,
-          0,
-          D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = 0;
+    rootSignatureDesc.pStaticSamplers = nullptr;
+    rootSignatureDesc.Flags =
+        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
-      CD3DX12_ROOT_PARAMETER1
-      rootParameters[GraphicsRootParametersCount];
-      rootParameters[GraphicsRootCBV].InitAsConstantBufferView(
-          0,
-          0,
-          D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC,
-          D3D12_SHADER_VISIBILITY_ALL);
-
-      CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-      rootSignatureDesc.Init_1_1(
-          arrayCount32(rootParameters),
-          rootParameters,
-          0,
-          nullptr,
-          D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-      ID3DBlobPtr signature;
-      ID3DBlobPtr error;
-      D3D_EXEC_CHECKED(D3DX12SerializeVersionedRootSignature(
-          &rootSignatureDesc, featureData.HighestVersion, &signature, &error));
-      D3D_EXEC_CHECKED(m_Dev->CreateRootSignature(
-          0,
-          signature->GetBufferPointer(),
-          signature->GetBufferSize(),
-          IID_PPV_ARGS(&m_RootSig)));
-      D3D_NAME_OBJECT(m_RootSig);
-    }
+    createRootSignature(m_Dev, &gbufferRootSignature, rootSignatureDesc);
+    gbufferRootSignature->SetName(L"Gbuffer Root Sig");
   }
-
-#pragma region Setup Gbuffer Stuff
-  DXGI_FORMAT gbufferFormats[] = {
-      albedoTarget.format(),
-      materialIDTarget.format(),
-  };
-
-  // TODO: this stuff should be wrapped as mesh renderer initialization
-
-  // 1. Load and compile shaders.
-  ID3DBlobPtr vertexShaderBlob;
-  ID3DBlobPtr pixelShaderBlob;
-
-  ID3DBlobPtr errorBlob;
-
-#if defined(_DEBUG)
-  UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-  UINT compileFlags = 0;
-#endif
-
-  HRESULT hr = D3DCompileFromFile(
-      _getShaderPath(L"Mesh.hlsl").c_str(),
-      nullptr,
-      nullptr,
-      "VS",
-      "vs_5_1",
-      compileFlags,
-      0,
-      &vertexShaderBlob,
-      &errorBlob);
-  if (nullptr == vertexShaderBlob)
-  {
-    if (errorBlob != nullptr)
-      OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-    assert(false && "Shader compilation failed");
-  }
-  errorBlob = nullptr;
-  D3DCompileFromFile(
-      _getShaderPath(L"Mesh.hlsl").c_str(),
-      nullptr,
-      nullptr,
-      "PS",
-      "ps_5_1",
-      compileFlags,
-      0,
-      &pixelShaderBlob,
-      &errorBlob);
-  if (nullptr == pixelShaderBlob)
-  {
-    if (errorBlob != nullptr)
-      OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-    assert(false && "Shader compilation failed");
-  }
-
-  // 2. Create gbuffer Root Sig
-  D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
-
-  // VSCBuffer
-  rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-  rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-  rootParameters[0].Descriptor.RegisterSpace = 0;
-  rootParameters[0].Descriptor.ShaderRegister = 0;
-
-  // MatIndexCBuffer
-  rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-  rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-  rootParameters[1].Constants.Num32BitValues = 1;
-  rootParameters[1].Constants.RegisterSpace = 0;
-  rootParameters[1].Constants.ShaderRegister = 2;
-
-  D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-  rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
-  rootSignatureDesc.pParameters = rootParameters;
-  rootSignatureDesc.NumStaticSamplers = 0;
-  rootSignatureDesc.pStaticSamplers = nullptr;
-  rootSignatureDesc.Flags =
-      D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-  createRootSignature(m_Dev, &gbufferRootSignature, rootSignatureDesc);
-
-  // 3. Gbuffer PSO
-
-  static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
-      {"POSITION",
-       0,
-       DXGI_FORMAT_R32G32B32_FLOAT,
-       0,
-       0,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"NORMAL",
-       0,
-       DXGI_FORMAT_R32G32B32_FLOAT,
-       0,
-       12,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"UV",
-       0,
-       DXGI_FORMAT_R32G32_FLOAT,
-       0,
-       24,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"TANGENT",
-       0,
-       DXGI_FORMAT_R32G32B32_FLOAT,
-       0,
-       32,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-      {"BITANGENT",
-       0,
-       DXGI_FORMAT_R32G32B32_FLOAT,
-       0,
-       44,
-       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-       0},
-  };
-
-  D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-  psoDesc.pRootSignature = gbufferRootSignature;
-  psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.GetInterfacePtr());
-  psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
-  psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
-  psoDesc.BlendState = GetBlendState(BlendState::Disabled);
-  psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
-  psoDesc.SampleMask = UINT_MAX;
-  psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-  psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
-  for (uint64_t i = 0; i < arrayCount32(gbufferFormats); ++i)
-    psoDesc.RTVFormats[i] = gbufferFormats[i];
-  psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-  psoDesc.SampleDesc.Count = 1;
-  psoDesc.SampleDesc.Quality = 0;
-  psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
-  psoDesc.InputLayout.pInputElementDescs = standardInputElements;
-
-  m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gbufferPSO));
-
-#pragma endregion
-#pragma region Setup Deferred Stuff
-  ID3DBlobPtr compShaderBlob;
-  // 1. compile shaders
-  {
-    ID3DBlobPtr csErrorBlob;
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-
-    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-
-    HRESULT hr = D3DCompileFromFile(
-        _getShaderPath(L"Deferred.hlsl").c_str(),
-        nullptr,
-        nullptr,
-        "CS",
-        "cs_5_1",
-        compileFlags,
-        0,
-        &compShaderBlob,
-        &csErrorBlob);
-    if (nullptr == compShaderBlob)
-    {
-      if (csErrorBlob != nullptr)
-        OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
-      assert(false && "Shader compilation failed");
-    }
-  }
-
-  // 2. Create deferred root sig
-  //
 
   // Deferred root signature
   {
@@ -743,18 +604,8 @@ void RenderManager::_loadAssets()
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
     createRootSignature(m_Dev, &deferredRootSig, rootSignatureDesc);
+    deferredRootSig->SetName(L"Deferred Root Sig");
   }
-
-  // 3. Deferred PSO
-  //
-  {
-    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.CS = CD3DX12_SHADER_BYTECODE(compShaderBlob.GetInterfacePtr());
-    psoDesc.pRootSignature = deferredRootSig;
-    m_Dev->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&deferredPSO));
-  }
-
-#pragma endregion
 
   _createPSOs();
 
@@ -887,6 +738,7 @@ void RenderManager::_populateCommandList()
 
   SetDescriptorHeaps(m_CmdList);
 
+#if 0
 #pragma region Forward Render:
   // Set necessary state.
   m_CmdList->SetPipelineState(m_Pso.GetInterfacePtr());
@@ -934,6 +786,7 @@ void RenderManager::_populateCommandList()
           D3D12_RESOURCE_STATE_RENDER_TARGET,
           D3D12_RESOURCE_STATE_PRESENT));
 #pragma endregion
+#endif
 
 #pragma region Deferred Render
   {
@@ -1015,10 +868,20 @@ void RenderManager::_populateCommandList()
       alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
   const uint32_t numComputeTilesY =
       alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
-  deferredTarget.transition(
-      m_CmdList,
-      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+  static bool firstAccess = true;
+  if (firstAccess)
+    deferredTarget.transition(
+        m_CmdList,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  else
+    deferredTarget.transition(
+        m_CmdList,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  firstAccess = false;
+
   m_CmdList->SetComputeRootSignature(deferredRootSig);
   m_CmdList->SetPipelineState(deferredPSO);
 
@@ -1066,8 +929,26 @@ void RenderManager::_populateCommandList()
   deferredTarget.transition(
       m_CmdList,
       D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+      D3D12_RESOURCE_STATE_COPY_SOURCE);
 
+  // Copy deferred target to backbuffer:
+  m_CmdList->ResourceBarrier(
+      1,
+      &CD3DX12_RESOURCE_BARRIER::Transition(
+          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+          D3D12_RESOURCE_STATE_PRESENT,
+          D3D12_RESOURCE_STATE_COPY_DEST));
+
+  m_CmdList->CopyResource(
+      m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+      deferredTarget.resource());
+
+  m_CmdList->ResourceBarrier(
+      1,
+      &CD3DX12_RESOURCE_BARRIER::Transition(
+          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+          D3D12_RESOURCE_STATE_COPY_DEST,
+          D3D12_RESOURCE_STATE_PRESENT));
 #pragma endregion
 
   D3D_EXEC_CHECKED(m_CmdList->Close());
@@ -1309,6 +1190,8 @@ void RenderManager::onCodeChange()
 void RenderManager::onShaderChange()
 {
   OutputDebugStringA("[RenderManager] Starting shader reload...\n");
+  _waitForRenderContext();
+
   if (_createPSOs())
   {
     OutputDebugStringA("[RenderManager] Shaders loaded\n");

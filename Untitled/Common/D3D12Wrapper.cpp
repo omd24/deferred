@@ -173,7 +173,7 @@ static void ClearFinishedUploads(uint64_t flushCount)
   }
 }
 
-void Initialize_Helpers()
+void initializeHelpers()
 {
   RTVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, false);
   SRVDescriptorHeap.Init(
@@ -542,7 +542,7 @@ void Initialize_Helpers()
   }
 }
 
-void Shutdown_Helpers()
+void shutdownHelpers()
 {
   SRVDescriptorHeap.FreePersistent(NullTexture2DSRV);
 
@@ -552,7 +552,7 @@ void Shutdown_Helpers()
   UAVDescriptorHeap.Shutdown();
 }
 
-void EndFrame_Helpers()
+void endFrameHelpers()
 {
   RTVDescriptorHeap.EndFrame();
   SRVDescriptorHeap.EndFrame();

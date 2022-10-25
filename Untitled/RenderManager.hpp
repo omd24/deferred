@@ -94,24 +94,6 @@ private:
   ID3D12RootSignature* deferredRootSig = nullptr;
   ID3D12PipelineState* deferredPSO = nullptr;
 
-  // Uniforms
-  struct TriangleParams
-  {
-    UINT m_Params[4];
-    float m_ParamsFloat[4];
-  };
-  struct FrameParams
-  {
-    XMFLOAT4X4 m_Wvp;
-    XMFLOAT4X4 m_InvView;
-
-    // Constant buffers are 256-byte aligned in GPU memory
-    float padding[32];
-  };
-  ID3D12ResourcePtr m_TriangleUniforms;
-  ID3D12ResourcePtr m_FrameUniforms;
-  UINT8* m_FrameUniformsDataPtr;
-
   // Pipeline objects.
   CD3DX12_VIEWPORT m_Viewport;
   CD3DX12_RECT m_ScissorRect;
@@ -121,16 +103,10 @@ private:
   ID3D12CommandAllocatorPtr m_CmdAllocs[FRAME_COUNT];
   ID3D12CommandQueuePtr m_CmdQue;
   ID3D12DescriptorHeapPtr m_RtvHeap;
-  ID3D12DescriptorHeapPtr m_SrvUavHeap;
   UINT m_RtvDescriptorSize;
-  UINT m_SrvUavDescriptorSize;
 
   // Asset objects.
-  ID3D12PipelineStatePtr m_Pso;
   ID3D12GraphicsCommandListPtr m_CmdList;
-  ID3D12ResourcePtr m_VtxBuffer;
-  ID3D12ResourcePtr m_VtxBufferUpload;
-  D3D12_VERTEX_BUFFER_VIEW m_VtxBufferView;
 
   ID3D12ResourcePtr m_VtxBufferModel;
   ID3D12ResourcePtr m_VtxBufferUploadModel;
@@ -138,8 +114,6 @@ private:
 
   Camera m_Camera;
   Timer m_Timer;
-
-  // Compute objects:
 
   // Synchronization objects.
   HANDLE m_SwapChainEvent;
@@ -149,12 +123,6 @@ private:
   UINT64 m_FrameFenceValues[FRAME_COUNT];
   UINT64 volatile m_RenderContextFenceValues[THREAD_COUNT];
 
-  // Vertex data (color for now)
-  struct Vertex
-  {
-    XMFLOAT3 m_Position;
-    XMFLOAT4 m_Color;
-  };
   struct ModelVertex
   {
     XMFLOAT3 m_Position;
@@ -165,38 +133,19 @@ private:
   };
   static_assert(sizeof(ModelVertex) == 56);
 
-  // Indices of the root signature parameters:
-  enum GraphicsRootParameters : UINT32
-  {
-    GraphicsRootCBV = 0,
-
-    GraphicsRootParametersCount
-  };
-
-  // ComputeRootParameters:
-
-  // Indices of shader resources in the descriptor heap:
-  enum DescriptorHeapIndex : UINT32
-  {
-    // Dummy indices
-    Uav0 = 0,
-    Srv0 = Uav0 + THREAD_COUNT,
-    DescriptorCount = Srv0 + THREAD_COUNT
-  };
-
-  std::wstring _getAssetPath(LPCWSTR p_AssetName);
-  std::wstring _getShaderPath(LPCWSTR p_ShaderName);
-  void _createVertexBuffer();
-  void _createModelVertexBuffer();
-  bool _createPSOs();
-  void _loadD3D12Pipeline();
-  void _loadAssets();
-  void _populateCommandList();
-  void _waitForRenderContext();
-  void _waitForGpu();
-  void _moveToNextFrame();
-  void _restoreD3DResources();
-  void _releaseD3DResources();
+  std::wstring getAssetPath(LPCWSTR p_AssetName);
+  std::wstring getShaderPath(LPCWSTR p_ShaderName);
+  void createModelVertexBuffer();
+  bool createPSOs();
+  void loadD3D12Pipeline();
+  void loadAssets();
+  void populateCommandList();
+  void waitForRenderContext();
+  void moveToNextFrame();
+  void restoreD3DResources();
+  void releaseD3DResources();
+  void renderForward();
+  void renderDeferred();
 };
 
 //---------------------------------------------------------------------------//

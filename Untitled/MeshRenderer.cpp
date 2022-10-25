@@ -1,19 +1,19 @@
 #include "MeshRenderer.hpp"
 
 //---------------------------------------------------------------------------//
-bool MeshRenderer::_createPSOs()
+bool MeshRenderer::createPSOs()
 {
   // TODO:
 
   return true;
 }
-void MeshRenderer::_loadAssets()
+void MeshRenderer::loadAssets()
 {
   // TODO:
 
   // Create Root Signatures
 
-  _createPSOs();
+  createPSOs();
 }
 //---------------------------------------------------------------------------//
 void OnInit(const Model* sceneModel)
@@ -27,7 +27,7 @@ void MeshRenderer::onLoad(ID3D12GraphicsCommandList* p_CmdList)
 
 
   // Load assets
-  _loadAssets();
+  loadAssets();
 }
 void MeshRenderer::onDestroy()
 {
@@ -141,7 +141,7 @@ void MeshRenderer::onRenderMainPass(ID3D12GraphicsCommandList* p_CmdList)
 void MeshRenderer::onShaderChange()
 {
   OutputDebugStringA("[MeshRenderer] Starting shader reload...\n");
-  if (_createPSOs())
+  if (createPSOs())
   {
     OutputDebugStringA("[MeshRenderer] Shaders loaded\n");
     return;

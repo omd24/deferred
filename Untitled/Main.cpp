@@ -161,11 +161,6 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
   // Get shader path:
   UINT pathSize = 512;
   WCHAR* shadersPath = static_cast<WCHAR*>(::calloc(pathSize, sizeof(WCHAR)));
-  DEFER(free_path_mem)
-  {
-    // TODO:
-    ::free(shadersPath);
-  };
   getShadersPath(shadersPath, pathSize);
   const std::wstring& p_WideStr = std::wstring(shadersPath);
   std::string shaderPathStr = WideStrToStr(p_WideStr);
@@ -176,6 +171,6 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
 
   // Run the application:
   int ret = appExec(p_Instance, p_CmdShow, nullptr);
-
+  ::free(shadersPath);
   return ret;
 }

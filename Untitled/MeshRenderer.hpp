@@ -40,6 +40,6 @@ private:
 
   std::vector<uint32_t> m_MeshDrawIndices;
 
-  bool _createPSOs();
-  void _loadAssets();
+  bool createPSOs();
+  void loadAssets();
 };

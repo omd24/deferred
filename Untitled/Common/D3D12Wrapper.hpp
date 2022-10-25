@@ -219,10 +219,10 @@ const uint32_t NumUserDescriptorRanges = 16;
 const uint32_t NumStandardDescriptorRanges = 7 + NumUserDescriptorRanges;
 
 // Lifetime
-void Initialize_Helpers();
-void Shutdown_Helpers();
+void initializeHelpers();
+void shutdownHelpers();
 
-void EndFrame_Helpers();
+void endFrameHelpers();
 
 // Resource Barriers
 void TransitionResource(

@@ -27,16 +27,16 @@ struct MaterialTextureIndices
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
-std::wstring RenderManager::_getShaderPath(LPCWSTR p_ShaderName)
+std::wstring RenderManager::getShaderPath(LPCWSTR p_ShaderName)
 {
   return m_Info.m_AssetsPath + L"Shaders\\" + p_ShaderName;
 }
-std::wstring RenderManager::_getAssetPath(LPCWSTR p_AssetName)
+std::wstring RenderManager::getAssetPath(LPCWSTR p_AssetName)
 {
   return m_Info.m_AssetsPath + p_AssetName;
 }
 //---------------------------------------------------------------------------//
-void RenderManager::_loadD3D12Pipeline()
+void RenderManager::loadD3D12Pipeline()
 {
   UINT dxgiFactoryFlags = 0;
 
@@ -131,8 +131,6 @@ void RenderManager::_loadD3D12Pipeline()
 
     m_RtvDescriptorSize =
         m_Dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    m_SrvUavDescriptorSize = m_Dev->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
   }
 
   // Create frame resources.
@@ -155,61 +153,8 @@ void RenderManager::_loadD3D12Pipeline()
     }
   }
 }
-//---------------------------------------------------------------------------//
-void RenderManager::_createVertexBuffer()
-{
-  Vertex vertices[] = {
-      {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-      {{0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-      {{-0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
-       {0.0f, 0.0f, 1.0f, 1.0f}}};
-
-  const UINT bufferSize = 3 * sizeof(Vertex);
-
-  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-      D3D12_HEAP_FLAG_NONE,
-      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-      D3D12_RESOURCE_STATE_COPY_DEST,
-      nullptr,
-      IID_PPV_ARGS(&m_VtxBuffer)));
-
-  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-      D3D12_HEAP_FLAG_NONE,
-      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-      D3D12_RESOURCE_STATE_GENERIC_READ,
-      nullptr,
-      IID_PPV_ARGS(&m_VtxBufferUpload)));
-
-  D3D_NAME_OBJECT(m_VtxBuffer);
-
-  D3D12_SUBRESOURCE_DATA vertexData = {};
-  vertexData.pData = reinterpret_cast<UINT8*>(&vertices[0]);
-  vertexData.RowPitch = bufferSize;
-  vertexData.SlicePitch = vertexData.RowPitch;
-
-  UpdateSubresources<1>(
-      m_CmdList.GetInterfacePtr(),
-      m_VtxBuffer.GetInterfacePtr(),
-      m_VtxBufferUpload.GetInterfacePtr(),
-      0,
-      0,
-      1,
-      &vertexData);
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_VtxBuffer.GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_COPY_DEST,
-          D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER));
-
-  m_VtxBufferView.BufferLocation = m_VtxBuffer->GetGPUVirtualAddress();
-  m_VtxBufferView.SizeInBytes = static_cast<UINT>(bufferSize);
-  m_VtxBufferView.StrideInBytes = sizeof(Vertex);
-}
-//
-void RenderManager::_createModelVertexBuffer()
+//---------------------------------------------------------------------------/
+void RenderManager::createModelVertexBuffer()
 {
   ModelVertex vertices[] = {
       {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f},
@@ -275,7 +220,7 @@ void RenderManager::_createModelVertexBuffer()
   m_VtxBufferViewModel.StrideInBytes = sizeof(ModelVertex);
 }
 //---------------------------------------------------------------------------//
-bool RenderManager::_createPSOs()
+bool RenderManager::createPSOs()
 {
   // Release previous resources:
   if (gbufferPSO != nullptr)
@@ -298,7 +243,7 @@ bool RenderManager::_createPSOs()
 #endif
 
     HRESULT hr = D3DCompileFromFile(
-        _getShaderPath(L"Mesh.hlsl").c_str(),
+        getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
         nullptr,
         "VS",
@@ -315,7 +260,7 @@ bool RenderManager::_createPSOs()
     }
     errorBlob = nullptr;
     D3DCompileFromFile(
-        _getShaderPath(L"Mesh.hlsl").c_str(),
+        getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
         nullptr,
         "PS",
@@ -411,7 +356,7 @@ bool RenderManager::_createPSOs()
       compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
 
       HRESULT hr = D3DCompileFromFile(
-          _getShaderPath(L"Deferred.hlsl").c_str(),
+          getShaderPath(L"Deferred.hlsl").c_str(),
           nullptr,
           nullptr,
           "CS",
@@ -438,11 +383,11 @@ bool RenderManager::_createPSOs()
   return true;
 }
 //---------------------------------------------------------------------------//
-void RenderManager::_loadAssets()
+void RenderManager::loadAssets()
 {
   // Init uploads and other helpers
   initializeUpload(m_Dev);
-  Initialize_Helpers();
+  initializeHelpers();
 
   // Create gbuffers:
   {
@@ -607,95 +552,18 @@ void RenderManager::_loadAssets()
     deferredRootSig->SetName(L"Deferred Root Sig");
   }
 
-  _createPSOs();
+  createPSOs();
 
   // Create the command list.
   D3D_EXEC_CHECKED(m_Dev->CreateCommandList(
       0,
       D3D12_COMMAND_LIST_TYPE_DIRECT,
       m_CmdAllocs[m_FrameIndex].GetInterfacePtr(),
-      m_Pso.GetInterfacePtr(),
+      gbufferPSO,
       IID_PPV_ARGS(&m_CmdList)));
   D3D_NAME_OBJECT(m_CmdList);
 
-  _createVertexBuffer();
-  _createModelVertexBuffer();
-
-  // Note: ComPtr's are CPU objects but this resource needs to stay in scope
-  // until the command list that references it has finished executing on the
-  // GPU. We will flush the GPU at the end of this method to ensure the resource
-  // is not prematurely destroyed.
-  ID3D12ResourcePtr cbufferCSUpload;
-
-  // Create the triangle constant buffer.
-  {
-    const UINT bufferSize = sizeof(TriangleParams);
-
-    D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        IID_PPV_ARGS(&m_TriangleUniforms)));
-
-    D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&cbufferCSUpload)));
-
-    D3D_NAME_OBJECT(m_TriangleUniforms);
-
-    TriangleParams cbufferCS = {};
-    cbufferCS.m_Params[0] = 21;
-    cbufferCS.m_Params[1] = int(ceil(4 / 128.0f));
-    cbufferCS.m_ParamsFloat[0] = 0.1f;
-    cbufferCS.m_ParamsFloat[1] = 1.0f;
-
-    D3D12_SUBRESOURCE_DATA CbufferData = {};
-    CbufferData.pData = reinterpret_cast<UINT8*>(&cbufferCS);
-    CbufferData.RowPitch = bufferSize;
-    CbufferData.SlicePitch = CbufferData.RowPitch;
-
-    UpdateSubresources<1>(
-        m_CmdList.GetInterfacePtr(),
-        m_TriangleUniforms.GetInterfacePtr(),
-        cbufferCSUpload.GetInterfacePtr(),
-        0,
-        0,
-        1,
-        &CbufferData);
-    m_CmdList->ResourceBarrier(
-        1,
-        &CD3DX12_RESOURCE_BARRIER::Transition(
-            m_TriangleUniforms.GetInterfacePtr(),
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER));
-  }
-
-  // Create the frame constant buffer.
-  {
-    const UINT frameUniformsSize = sizeof(FrameParams) * FRAME_COUNT;
-
-    D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(frameUniformsSize),
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_FrameUniforms)));
-
-    D3D_NAME_OBJECT(m_FrameUniforms);
-
-    CD3DX12_RANGE readRange(
-        0, 0); // We do not intend to read from this resource on the CPU.
-    D3D_EXEC_CHECKED(m_FrameUniforms->Map(
-        0, &readRange, reinterpret_cast<void**>(&m_FrameUniformsDataPtr)));
-    ZeroMemory(m_FrameUniformsDataPtr, frameUniformsSize);
-  }
+  createModelVertexBuffer();
 
   // Close the command list and execute it to begin the initial GPU setup.
   D3D_EXEC_CHECKED(m_CmdList->Close());
@@ -717,29 +585,12 @@ void RenderManager::_loadAssets()
       D3D_EXEC_CHECKED(HRESULT_FROM_WIN32(GetLastError()));
     }
 
-    _waitForRenderContext();
+    waitForRenderContext();
   }
 }
-//---------------------------------------------------------------------------//
-void RenderManager::_populateCommandList()
+void RenderManager::renderForward()
 {
-  EndFrame_Helpers();
-
-  // Command list allocators can only be reset when the associated
-  // command lists have finished execution on the GPU; apps should use
-  // fences to determine GPU execution progress.
-  D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
-
-  // However, when ExecuteCommandList() is called on a particular command
-  // list, that command list can then be reset at any time and must be before
-  // re-recording.
-  D3D_EXEC_CHECKED(m_CmdList->Reset(
-      m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), m_Pso.GetInterfacePtr()));
-
-  SetDescriptorHeaps(m_CmdList);
-
 #if 0
-#pragma region Forward Render:
   // Set necessary state.
   m_CmdList->SetPipelineState(m_Pso.GetInterfacePtr());
   m_CmdList->SetGraphicsRootSignature(m_RootSig.GetInterfacePtr());
@@ -785,10 +636,13 @@ void RenderManager::_populateCommandList()
           m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
           D3D12_RESOURCE_STATE_RENDER_TARGET,
           D3D12_RESOURCE_STATE_PRESENT));
-#pragma endregion
-#endif
+#endif // 0
+}
+void RenderManager::renderDeferred()
+{
+  // Draw to Gbuffers
+#pragma region Gbuffer pass
 
-#pragma region Deferred Render
   {
     // Transition our G-Buffer targets to a writable state
     D3D12_RESOURCE_BARRIER barriers[2] = {};
@@ -829,14 +683,14 @@ void RenderManager::_populateCommandList()
   // Render Gbuffer!
   //
 
-  // 1. Bind vb, ib, pso, root sig and so on
+  // Bind vb, ib, pso, root sig and so on
   m_CmdList->SetGraphicsRootSignature(gbufferRootSignature);
   m_CmdList->SetPipelineState(gbufferPSO);
   m_CmdList->IASetVertexBuffers(0, 1, &m_VtxBufferViewModel);
   m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
   //
-  // 2. Draw geometries
+  // Draw geometries
   m_CmdList->DrawInstanced(3, 1, 0, 0);
 
   {
@@ -860,6 +714,7 @@ void RenderManager::_populateCommandList()
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
+#pragma endregion
 
   //
   // Render fullscreen deferred pass!
@@ -949,12 +804,33 @@ void RenderManager::_populateCommandList()
           m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
           D3D12_RESOURCE_STATE_COPY_DEST,
           D3D12_RESOURCE_STATE_PRESENT));
-#pragma endregion
+}
+//---------------------------------------------------------------------------//
+void RenderManager::populateCommandList()
+{
+  endFrameHelpers();
+
+  // Command list allocators can only be reset when the associated
+  // command lists have finished execution on the GPU; apps should use
+  // fences to determine GPU execution progress.
+  D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
+
+  // However, when ExecuteCommandList() is called on a particular command
+  // list, that command list can then be reset at any time and must be before
+  // re-recording.
+  D3D_EXEC_CHECKED(m_CmdList->Reset(
+      m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
+
+  SetDescriptorHeaps(m_CmdList);
+
+  renderForward();
+
+  renderDeferred();
 
   D3D_EXEC_CHECKED(m_CmdList->Close());
 }
 //---------------------------------------------------------------------------//
-void RenderManager::_waitForRenderContext()
+void RenderManager::waitForRenderContext()
 {
   // Add a signal command to the queue.
   D3D_EXEC_CHECKED(m_CmdQue->Signal(
@@ -968,23 +844,8 @@ void RenderManager::_waitForRenderContext()
   // Wait until the signal command has been processed.
   WaitForSingleObject(m_RenderContextFenceEvent, INFINITE);
 }
-void RenderManager::_waitForGpu()
-{
-  // Schedule a Signal command in the queue.
-  D3D_EXEC_CHECKED(m_CmdQue->Signal(
-      m_RenderContextFence.GetInterfacePtr(),
-      m_RenderContextFenceValues[m_FrameIndex]));
-
-  // Wait until the fence has been processed.
-  D3D_EXEC_CHECKED(m_RenderContextFence->SetEventOnCompletion(
-      m_RenderContextFenceValues[m_FrameIndex], m_RenderContextFenceEvent));
-  WaitForSingleObjectEx(m_RenderContextFenceEvent, INFINITE, FALSE);
-
-  // Increment the fence value for the current frame.
-  m_RenderContextFenceValues[m_FrameIndex]++;
-}
 //---------------------------------------------------------------------------//
-void RenderManager::_moveToNextFrame()
+void RenderManager::moveToNextFrame()
 {
   // Assign the current fence value to the current frame.
   m_FrameFenceValues[m_FrameIndex] = m_RenderContextFenceValue;
@@ -1007,22 +868,22 @@ void RenderManager::_moveToNextFrame()
   }
 }
 //---------------------------------------------------------------------------//
-void RenderManager::_restoreD3DResources()
+void RenderManager::restoreD3DResources()
 {
   // Give GPU a chance to finish its execution in progress.
   try
   {
-    _waitForGpu();
+    waitForRenderContext();
   }
   catch (std::exception)
   {
     // Do nothing, currently attached adapter is unresponsive.
   }
-  _releaseD3DResources();
+  releaseD3DResources();
   onLoad();
 }
 //---------------------------------------------------------------------------//
-void RenderManager::_releaseD3DResources()
+void RenderManager::releaseD3DResources()
 {
   m_RenderContextFence = nullptr;
   resetComPtrArray(&m_RenderTargets);
@@ -1063,8 +924,6 @@ void RenderManager::onLoad()
 
   setArrayToZero(m_FrameFenceValues);
 
-  m_FrameUniformsDataPtr = nullptr;
-
   D3D_EXEC_CHECKED(DXGIDeclareAdapterRemovalSupport());
 
   cameraInit(&m_Camera, {0.0f, 0.0f, 1500.0f});
@@ -1073,19 +932,17 @@ void RenderManager::onLoad()
   timerInit(&m_Timer);
 
   // Load pipeline
-  _loadD3D12Pipeline();
+  loadD3D12Pipeline();
 
   // Load assets
-  _loadAssets();
+  loadAssets();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
 {
-  _waitForGpu();
-
   // Ensure that the GPU is no longer referencing resources that are about to be
   // cleaned up by the destructor.
-  _waitForRenderContext();
+  waitForRenderContext();
 
   // Close handles to fence events and threads.
   CloseHandle(m_RenderContextFenceEvent);
@@ -1102,9 +959,8 @@ void RenderManager::onDestroy()
   materialTextureIndices.deinit();
   deferredTarget.deinit();
 
-  //_waitForGpu();
   // Shudown uploads and other helpers
-  Shutdown_Helpers();
+  shutdownHelpers();
   shutdownUpload();
 }
 //---------------------------------------------------------------------------//
@@ -1115,17 +971,6 @@ void RenderManager::onUpdate()
 
   timerTick(&m_Timer, nullptr);
   cameraUpdate(&m_Camera, static_cast<float>(timerGetElapsedSeconds(&m_Timer)));
-
-  FrameParams frameUniforms = {};
-  XMMATRIX view = cameraGetViewMatrix(&m_Camera);
-  CXMMATRIX proj =
-      getProjectionMatrix(0.8f, m_Info.m_AspectRatio, 1.0f, 5000.0f);
-  XMStoreFloat4x4(&frameUniforms.m_Wvp, XMMatrixMultiply(view, proj));
-  XMStoreFloat4x4(&frameUniforms.m_InvView, XMMatrixInverse(nullptr, view));
-
-  UINT8* destination =
-      m_FrameUniformsDataPtr + sizeof(FrameParams) * m_FrameIndex;
-  memcpy(destination, &frameUniforms, sizeof(FrameParams));
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
@@ -1136,9 +981,7 @@ void RenderManager::onRender()
     {
       PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
 
-      // Record all the commands we need to render the scene into the command
-      // list.
-      _populateCommandList();
+      populateCommandList();
 
       EndFrame_Upload(m_CmdQue);
 
@@ -1152,14 +995,14 @@ void RenderManager::onRender()
       // Present the frame.
       D3D_EXEC_CHECKED(m_Swc->Present(1, 0));
 
-      _moveToNextFrame();
+      moveToNextFrame();
     }
     catch (HrException& e)
     {
       if (e.Error() == DXGI_ERROR_DEVICE_REMOVED ||
           e.Error() == DXGI_ERROR_DEVICE_RESET)
       {
-        _restoreD3DResources();
+        restoreD3DResources();
       }
       else
       {
@@ -1190,9 +1033,9 @@ void RenderManager::onCodeChange()
 void RenderManager::onShaderChange()
 {
   OutputDebugStringA("[RenderManager] Starting shader reload...\n");
-  _waitForRenderContext();
+  waitForRenderContext();
 
-  if (_createPSOs())
+  if (createPSOs())
   {
     OutputDebugStringA("[RenderManager] Shaders loaded\n");
     return;

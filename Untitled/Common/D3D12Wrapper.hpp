@@ -486,6 +486,56 @@ struct Buffer
     return m_Size > 0;
   }
 };
+struct FormattedBufferInit
+{
+    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+    uint64_t NumElements = 0;
+    bool CreateUAV = false;
+    bool Dynamic = false;
+    bool CPUAccessible = false;
+    const void* InitData = nullptr;
+    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_GENERIC_READ;
+    ID3D12Heap* Heap = nullptr;
+    uint64_t HeapOffset = 0;
+    const wchar_t* Name = nullptr;
+};
+struct FormattedBuffer
+{
+    Buffer InternalBuffer;
+    uint64_t Stride = 0;
+    uint64_t NumElements = 0;
+    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+    uint32_t SRV = uint32_t(-1);
+    D3D12_CPU_DESCRIPTOR_HANDLE UAV = { };
+    uint64_t GPUAddress = 0;
+
+    FormattedBuffer();
+    ~FormattedBuffer();
+
+    void Initialize(const FormattedBufferInit& init);
+    void Shutdown();
+
+    D3D12_INDEX_BUFFER_VIEW IBView() const;
+    ID3D12Resource* Resource() const { return InternalBuffer.m_Resource; }
+
+    void* Map();
+    template<typename T> T* Map() { return reinterpret_cast<T*>(Map()); };
+    void MapAndSetData(const void* data, uint64_t numElements);
+    void UpdateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
+    void MultiUpdateData(const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
+
+    void Transition(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const;
+    void MakeReadable(ID3D12GraphicsCommandList* cmdList) const;
+    void MakeWritable(ID3D12GraphicsCommandList* cmdList) const;
+    void UAVBarrier(ID3D12GraphicsCommandList* cmdList) const;
+
+private:
+
+    FormattedBuffer(const FormattedBuffer& other) { }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc(uint64_t bufferIdx) const;
+    void UpdateDynamicSRV() const;
+};
 //---------------------------------------------------------------------------//
 // StructuredBuffer
 //---------------------------------------------------------------------------//
@@ -561,6 +611,32 @@ private:
 //---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
+struct Texture
+{
+    uint32_t SRV = uint32_t(-1);
+    ID3D12Resource* Resource = nullptr;
+    uint32_t Width = 0;
+    uint32_t Height = 0;
+    uint32_t Depth = 0;
+    uint32_t NumMips = 0;
+    uint32_t ArraySize = 0;
+    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+    bool Cubemap = false;
+
+    Texture();
+    ~Texture();
+
+    bool Valid() const
+    {
+        return Resource != nullptr;
+    }
+
+    void Shutdown();
+
+private:
+
+    Texture(const Texture& other) { }
+};
 struct TextureBase
 {
   uint32_t SRV = uint32_t(-1);

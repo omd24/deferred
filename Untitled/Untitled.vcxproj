@@ -198,6 +198,7 @@
     <ClInclude Include="Common\Timer.hpp" />
     <ClInclude Include="Common\Utility.hpp" />
     <ClInclude Include="MeshRenderer.hpp" />
+    <ClInclude Include="Model.hpp" />
     <ClInclude Include="RenderManager.hpp" />
   </ItemGroup>
   <ItemGroup>

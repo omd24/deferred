@@ -41,6 +41,9 @@
     <ClInclude Include="Common\D3D12Wrapper.hpp">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="Model.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

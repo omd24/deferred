@@ -58,6 +58,7 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
     Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
 
     uint materialID = materialIDMap[pixelPos];
+    uint matTest = materialIDMap.SampleLevel(AnisoSampler, screenUV, 0);
     MaterialTextureIndices matIndices = materialIndicesBuffer[materialID];
     Texture2D AlbedoMap = Tex2DTable[NonUniformResourceIndex(matIndices.Albedo)];
     Texture2D NormalMap = Tex2DTable[NonUniformResourceIndex(matIndices.Normal)];

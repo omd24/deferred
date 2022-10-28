@@ -512,29 +512,29 @@ struct FormattedBuffer
     FormattedBuffer();
     ~FormattedBuffer();
 
-    void Initialize(const FormattedBufferInit& init);
-    void Shutdown();
+    void init(const FormattedBufferInit& init);
+    void deinit();
 
     D3D12_INDEX_BUFFER_VIEW IBView() const;
     ID3D12Resource* Resource() const { return InternalBuffer.m_Resource; }
 
-    void* Map();
+    void* map();
     template<typename T> T* Map() { return reinterpret_cast<T*>(Map()); };
-    void MapAndSetData(const void* data, uint64_t numElements);
-    void UpdateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
-    void MultiUpdateData(const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
+    void mapAndSetData(const void* data, uint64_t numElements);
+    void updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
+    void multiUpdateData(const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
 
-    void Transition(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const;
-    void MakeReadable(ID3D12GraphicsCommandList* cmdList) const;
-    void MakeWritable(ID3D12GraphicsCommandList* cmdList) const;
-    void UAVBarrier(ID3D12GraphicsCommandList* cmdList) const;
+    void transition(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const;
+    void makeReadable(ID3D12GraphicsCommandList* cmdList) const;
+    void makeWritable(ID3D12GraphicsCommandList* cmdList) const;
+    void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
 
 private:
 
     FormattedBuffer(const FormattedBuffer& other) { }
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc(uint64_t bufferIdx) const;
-    void UpdateDynamicSRV() const;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
+    void updateDynamicSRV() const;
 };
 //---------------------------------------------------------------------------//
 // StructuredBuffer

@@ -4,6 +4,150 @@
 
 #include "D3D12Wrapper.hpp"
 
+size_t bitsPerPixel(DXGI_FORMAT fmt)
+{
+  switch (static_cast<int>(fmt))
+  {
+  case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+  case DXGI_FORMAT_R32G32B32A32_FLOAT:
+  case DXGI_FORMAT_R32G32B32A32_UINT:
+  case DXGI_FORMAT_R32G32B32A32_SINT:
+    return 128;
+
+  case DXGI_FORMAT_R32G32B32_TYPELESS:
+  case DXGI_FORMAT_R32G32B32_FLOAT:
+  case DXGI_FORMAT_R32G32B32_UINT:
+  case DXGI_FORMAT_R32G32B32_SINT:
+    return 96;
+
+  case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+  case DXGI_FORMAT_R16G16B16A16_FLOAT:
+  case DXGI_FORMAT_R16G16B16A16_UNORM:
+  case DXGI_FORMAT_R16G16B16A16_UINT:
+  case DXGI_FORMAT_R16G16B16A16_SNORM:
+  case DXGI_FORMAT_R16G16B16A16_SINT:
+  case DXGI_FORMAT_R32G32_TYPELESS:
+  case DXGI_FORMAT_R32G32_FLOAT:
+  case DXGI_FORMAT_R32G32_UINT:
+  case DXGI_FORMAT_R32G32_SINT:
+  case DXGI_FORMAT_R32G8X24_TYPELESS:
+  case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+  case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+  case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
+  case DXGI_FORMAT_Y416:
+  case DXGI_FORMAT_Y210:
+  case DXGI_FORMAT_Y216:
+    return 64;
+
+  case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+  case DXGI_FORMAT_R10G10B10A2_UNORM:
+  case DXGI_FORMAT_R10G10B10A2_UINT:
+  case DXGI_FORMAT_R11G11B10_FLOAT:
+  case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+  case DXGI_FORMAT_R8G8B8A8_UNORM:
+  case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+  case DXGI_FORMAT_R8G8B8A8_UINT:
+  case DXGI_FORMAT_R8G8B8A8_SNORM:
+  case DXGI_FORMAT_R8G8B8A8_SINT:
+  case DXGI_FORMAT_R16G16_TYPELESS:
+  case DXGI_FORMAT_R16G16_FLOAT:
+  case DXGI_FORMAT_R16G16_UNORM:
+  case DXGI_FORMAT_R16G16_UINT:
+  case DXGI_FORMAT_R16G16_SNORM:
+  case DXGI_FORMAT_R16G16_SINT:
+  case DXGI_FORMAT_R32_TYPELESS:
+  case DXGI_FORMAT_D32_FLOAT:
+  case DXGI_FORMAT_R32_FLOAT:
+  case DXGI_FORMAT_R32_UINT:
+  case DXGI_FORMAT_R32_SINT:
+  case DXGI_FORMAT_R24G8_TYPELESS:
+  case DXGI_FORMAT_D24_UNORM_S8_UINT:
+  case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+  case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
+  case DXGI_FORMAT_R9G9B9E5_SHAREDEXP:
+  case DXGI_FORMAT_R8G8_B8G8_UNORM:
+  case DXGI_FORMAT_G8R8_G8B8_UNORM:
+  case DXGI_FORMAT_B8G8R8A8_UNORM:
+  case DXGI_FORMAT_B8G8R8X8_UNORM:
+  case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
+  case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+  case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+  case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+  case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+  case DXGI_FORMAT_AYUV:
+  case DXGI_FORMAT_Y410:
+  case DXGI_FORMAT_YUY2:
+    return 32;
+
+  case DXGI_FORMAT_P010:
+  case DXGI_FORMAT_P016:
+    return 24;
+
+  case DXGI_FORMAT_R8G8_TYPELESS:
+  case DXGI_FORMAT_R8G8_UNORM:
+  case DXGI_FORMAT_R8G8_UINT:
+  case DXGI_FORMAT_R8G8_SNORM:
+  case DXGI_FORMAT_R8G8_SINT:
+  case DXGI_FORMAT_R16_TYPELESS:
+  case DXGI_FORMAT_R16_FLOAT:
+  case DXGI_FORMAT_D16_UNORM:
+  case DXGI_FORMAT_R16_UNORM:
+  case DXGI_FORMAT_R16_UINT:
+  case DXGI_FORMAT_R16_SNORM:
+  case DXGI_FORMAT_R16_SINT:
+  case DXGI_FORMAT_B5G6R5_UNORM:
+  case DXGI_FORMAT_B5G5R5A1_UNORM:
+  case DXGI_FORMAT_A8P8:
+  case DXGI_FORMAT_B4G4R4A4_UNORM:
+    return 16;
+
+  case DXGI_FORMAT_NV12:
+  case DXGI_FORMAT_420_OPAQUE:
+  case DXGI_FORMAT_NV11:
+    return 12;
+
+  case DXGI_FORMAT_R8_TYPELESS:
+  case DXGI_FORMAT_R8_UNORM:
+  case DXGI_FORMAT_R8_UINT:
+  case DXGI_FORMAT_R8_SNORM:
+  case DXGI_FORMAT_R8_SINT:
+  case DXGI_FORMAT_A8_UNORM:
+  case DXGI_FORMAT_BC2_TYPELESS:
+  case DXGI_FORMAT_BC2_UNORM:
+  case DXGI_FORMAT_BC2_UNORM_SRGB:
+  case DXGI_FORMAT_BC3_TYPELESS:
+  case DXGI_FORMAT_BC3_UNORM:
+  case DXGI_FORMAT_BC3_UNORM_SRGB:
+  case DXGI_FORMAT_BC5_TYPELESS:
+  case DXGI_FORMAT_BC5_UNORM:
+  case DXGI_FORMAT_BC5_SNORM:
+  case DXGI_FORMAT_BC6H_TYPELESS:
+  case DXGI_FORMAT_BC6H_UF16:
+  case DXGI_FORMAT_BC6H_SF16:
+  case DXGI_FORMAT_BC7_TYPELESS:
+  case DXGI_FORMAT_BC7_UNORM:
+  case DXGI_FORMAT_BC7_UNORM_SRGB:
+  case DXGI_FORMAT_AI44:
+  case DXGI_FORMAT_IA44:
+  case DXGI_FORMAT_P8:
+    return 8;
+
+  case DXGI_FORMAT_R1_UNORM:
+    return 1;
+
+  case DXGI_FORMAT_BC1_TYPELESS:
+  case DXGI_FORMAT_BC1_UNORM:
+  case DXGI_FORMAT_BC1_UNORM_SRGB:
+  case DXGI_FORMAT_BC4_TYPELESS:
+  case DXGI_FORMAT_BC4_UNORM:
+  case DXGI_FORMAT_BC4_SNORM:
+    return 4;
+
+  default:
+    return 0;
+  }
+}
+
 //---------------------------------------------------------------------------//
 // global helper variables
 //---------------------------------------------------------------------------//
@@ -1619,6 +1763,196 @@ void Buffer::uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const
   barrier.UAV.pResource = m_Resource;
   p_CmdList->ResourceBarrier(1, &barrier);
 }
+//---------------------------------------------------------------------------//
+// FormattedBuffer
+//---------------------------------------------------------------------------//
+FormattedBuffer::FormattedBuffer()
+{
+}
+
+FormattedBuffer::~FormattedBuffer()
+{
+  assert(NumElements == 0);
+  deinit();
+}
+
+void FormattedBuffer::init(const FormattedBufferInit& init)
+{
+  DEBUG_BREAK(g_Device != nullptr);
+
+  deinit();
+
+  assert(init.Format != DXGI_FORMAT_UNKNOWN);
+  assert(init.NumElements > 0);
+  Stride = bitsPerPixel(init.Format) / 8;
+  NumElements = init.NumElements;
+  Format = init.Format;
+
+  InternalBuffer.init(
+      Stride * NumElements,
+      Stride,
+      init.Dynamic,
+      init.CPUAccessible,
+      init.CreateUAV,
+      init.InitData,
+      init.InitialState,
+      init.Heap,
+      init.HeapOffset,
+      init.Name);
+  GPUAddress = InternalBuffer.m_GpuAddress;
+
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  SRV = srvAlloc.Index;
+
+  // Start off all SRV's pointing to the first buffer
+  D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(0);
+  for (uint32_t i = 0; i < arrayCount32(srvAlloc.Handles); ++i)
+    g_Device->CreateShaderResourceView(
+        InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
+
+  if (init.CreateUAV)
+  {
+    assert(init.Dynamic == false);
+
+    UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    uavDesc.Format = Format;
+    uavDesc.Buffer.CounterOffsetInBytes = 0;
+    uavDesc.Buffer.FirstElement = 0;
+    uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+    uavDesc.Buffer.NumElements = uint32_t(NumElements);
+
+    g_Device->CreateUnorderedAccessView(
+        InternalBuffer.m_Resource, nullptr, &uavDesc, UAV);
+  }
+}
+
+void FormattedBuffer::deinit()
+{
+  SRVDescriptorHeap.FreePersistent(SRV);
+  UAVDescriptorHeap.FreePersistent(UAV);
+  InternalBuffer.deinit();
+  Stride = 0;
+  NumElements = 0;
+}
+
+D3D12_INDEX_BUFFER_VIEW FormattedBuffer::IBView() const
+{
+  assert(Format == DXGI_FORMAT_R16_UINT || Format == DXGI_FORMAT_R32_UINT);
+  D3D12_INDEX_BUFFER_VIEW ibView = {};
+  ibView.BufferLocation = GPUAddress;
+  ibView.Format = Format;
+  ibView.SizeInBytes = uint32_t(InternalBuffer.m_Size);
+  return ibView;
+}
+
+void* FormattedBuffer::map()
+{
+  MapResult mapResult = InternalBuffer.map();
+
+  GPUAddress = mapResult.GpuAddress;
+
+  updateDynamicSRV();
+
+  return mapResult.CpuAddress;
+}
+
+void FormattedBuffer::mapAndSetData(const void* data, uint64_t numElements)
+{
+  assert(numElements <= NumElements);
+  void* cpuAddr = map();
+  memcpy(cpuAddr, data, numElements * Stride);
+}
+
+void FormattedBuffer::updateData(
+    const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset)
+{
+  GPUAddress = InternalBuffer.updateData(
+      srcData, srcNumElements * Stride, dstElemOffset * Stride);
+
+  updateDynamicSRV();
+}
+
+void FormattedBuffer::multiUpdateData(
+    const void* srcData[],
+    uint64_t srcNumElements[],
+    uint64_t dstElemOffset[],
+    uint64_t numUpdates)
+{
+  uint64_t srcSizes[16];
+  uint64_t dstOffsets[16];
+  assert(numUpdates <= arrayCount<uint64_t>(srcSizes));
+  for (uint64_t i = 0; i < numUpdates; ++i)
+  {
+    srcSizes[i] = srcNumElements[i] * Stride;
+    dstOffsets[i] = dstElemOffset[i] * Stride;
+  }
+
+  GPUAddress =
+      InternalBuffer.multiUpdateData(srcData, srcSizes, dstOffsets, numUpdates);
+
+  updateDynamicSRV();
+}
+
+void FormattedBuffer::transition(
+    ID3D12GraphicsCommandList* cmdList,
+    D3D12_RESOURCE_STATES before,
+    D3D12_RESOURCE_STATES after) const
+{
+  InternalBuffer.transition(cmdList, before, after);
+}
+
+void FormattedBuffer::makeReadable(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.makeReadable(cmdList);
+}
+
+void FormattedBuffer::makeWritable(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.makeWritable(cmdList);
+}
+
+void FormattedBuffer::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.uavBarrier(cmdList);
+}
+
+D3D12_SHADER_RESOURCE_VIEW_DESC
+FormattedBuffer::srvDesc(uint64_t bufferIdx) const
+{
+  assert(bufferIdx == 0 || InternalBuffer.m_Dynamic);
+  assert(bufferIdx < RENDER_LATENCY);
+
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = Format;
+  srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+  srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  srvDesc.Buffer.FirstElement = uint32_t(NumElements * bufferIdx);
+  srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+  srvDesc.Buffer.NumElements = uint32_t(NumElements);
+  return srvDesc;
+}
+
+void FormattedBuffer::updateDynamicSRV() const
+{
+  assert(InternalBuffer.m_Dynamic);
+  D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(InternalBuffer.m_CurrBuffer);
+
+  D3D12_CPU_DESCRIPTOR_HANDLE handle =
+      SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
+  g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
+
+  for (uint64_t i = 1; i < RENDER_LATENCY; ++i)
+  {
+    uint64_t frameIdx = (g_CurrentCPUFrame + i) % RENDER_LATENCY;
+    D3D12_CPU_DESCRIPTOR_HANDLE handle =
+        SRVDescriptorHeap.CPUHandleFromIndex(SRV, frameIdx);
+    g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
+  }
+}
+
 //---------------------------------------------------------------------------//
 // StructuredBuffer
 //---------------------------------------------------------------------------//

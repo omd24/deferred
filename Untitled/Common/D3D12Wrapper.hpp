@@ -11,6 +11,8 @@
 //---------------------------------------------------------------------------//
 #define RENDER_LATENCY 2
 
+struct Texture;
+
 static ID3D12Device* g_Device = nullptr;
 static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
 
@@ -27,7 +29,7 @@ extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 void initializeUpload(ID3D12Device* p_Dev);
 void shutdownUpload();
 
-void EndFrame_Upload(ID3D12CommandQueue * p_Queue);
+void EndFrame_Upload(ID3D12CommandQueue* p_Queue);
 
 inline void setViewport(
     ID3D12GraphicsCommandList* p_CmdList,
@@ -91,8 +93,10 @@ inline void transitionResource(
   barrier.Transition.Subresource = p_SubResource;
   p_CmdList->ResourceBarrier(1, &barrier);
 }
-inline void createRootSignature(ID3D12Device *dev,
-    ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
+inline void createRootSignature(
+    ID3D12Device* dev,
+    ID3D12RootSignature** rootSignature,
+    const D3D12_ROOT_SIGNATURE_DESC1& desc)
 {
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = {};
   versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -116,6 +120,68 @@ inline void createRootSignature(ID3D12Device *dev,
       signature->GetBufferSize(),
       IID_PPV_ARGS(rootSignature));
 }
+inline bool fileExists(const wchar_t* filePath)
+{
+  if (filePath == NULL)
+    return false;
+
+  DWORD fileAttr = GetFileAttributes(filePath);
+  if (fileAttr == INVALID_FILE_ATTRIBUTES)
+    return false;
+
+  return true;
+}
+inline std::wstring getFileExtension(const wchar_t* filePath_)
+{
+  assert(filePath_);
+
+  std::wstring filePath(filePath_);
+  size_t idx = filePath.rfind(L'.');
+  if (idx != std::wstring::npos)
+    return filePath.substr(idx + 1, filePath.length() - idx - 1);
+  else
+    return std::wstring(L"");
+}
+// Returns the directory containing a file
+inline std::wstring getDirectoryFromFilePath(const wchar_t* filePath_)
+{
+  assert(filePath_);
+
+  std::wstring filePath(filePath_);
+  size_t idx = filePath.rfind(L'\\');
+  if (idx != std::wstring::npos)
+    return filePath.substr(0, idx + 1);
+  else
+    return std::wstring(L"");
+}
+inline void writeLog(const char* format, ...)
+{
+  char buffer[1024] = {0};
+  va_list args;
+  va_start(args, format);
+  vsprintf_s(buffer, arrayCount32(buffer), format, args);
+  OutputDebugStringA(buffer);
+  OutputDebugStringA("\n");
+}
+// Returns the name of the file given the path (extension included)
+inline std::wstring getFileName(const wchar_t* filePath_)
+{
+  assert(filePath_);
+
+  std::wstring filePath(filePath_);
+  size_t idx = filePath.rfind(L'\\');
+  if (idx != std::wstring::npos && idx < filePath.length() - 1)
+    return filePath.substr(idx + 1);
+  else
+  {
+    idx = filePath.rfind(L'/');
+    if (idx != std::wstring::npos && idx < filePath.length() - 1)
+      return filePath.substr(idx + 1);
+    else
+      return filePath;
+  }
+}
+
 //---------------------------------------------------------------------------//
 // various d3d helpers
 //---------------------------------------------------------------------------//
@@ -402,6 +468,7 @@ struct DescriptorHeap
     return NumPersistent + NumTemporary;
   }
 };
+
 //---------------------------------------------------------------------------//
 // buffer resource helpers
 //---------------------------------------------------------------------------//
@@ -420,6 +487,8 @@ struct UploadContext
   ID3D12Resource* Resource = nullptr;
   void* Submission = nullptr;
 };
+UploadContext resourceUploadBegin(uint64_t p_Size);
+void resourceUploadEnd(UploadContext& context);
 //---------------------------------------------------------------------------//
 // Buffers
 //---------------------------------------------------------------------------//
@@ -488,53 +557,68 @@ struct Buffer
 };
 struct FormattedBufferInit
 {
-    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
-    uint64_t NumElements = 0;
-    bool CreateUAV = false;
-    bool Dynamic = false;
-    bool CPUAccessible = false;
-    const void* InitData = nullptr;
-    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_GENERIC_READ;
-    ID3D12Heap* Heap = nullptr;
-    uint64_t HeapOffset = 0;
-    const wchar_t* Name = nullptr;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  uint64_t NumElements = 0;
+  bool CreateUAV = false;
+  bool Dynamic = false;
+  bool CPUAccessible = false;
+  const void* InitData = nullptr;
+  D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_GENERIC_READ;
+  ID3D12Heap* Heap = nullptr;
+  uint64_t HeapOffset = 0;
+  const wchar_t* Name = nullptr;
 };
 struct FormattedBuffer
 {
-    Buffer InternalBuffer;
-    uint64_t Stride = 0;
-    uint64_t NumElements = 0;
-    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
-    uint32_t SRV = uint32_t(-1);
-    D3D12_CPU_DESCRIPTOR_HANDLE UAV = { };
-    uint64_t GPUAddress = 0;
+  Buffer InternalBuffer;
+  uint64_t Stride = 0;
+  uint64_t NumElements = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  uint32_t SRV = uint32_t(-1);
+  D3D12_CPU_DESCRIPTOR_HANDLE UAV = {};
+  uint64_t GPUAddress = 0;
 
-    FormattedBuffer();
-    ~FormattedBuffer();
+  FormattedBuffer();
+  ~FormattedBuffer();
 
-    void init(const FormattedBufferInit& init);
-    void deinit();
+  void init(const FormattedBufferInit& init);
+  void deinit();
 
-    D3D12_INDEX_BUFFER_VIEW IBView() const;
-    ID3D12Resource* Resource() const { return InternalBuffer.m_Resource; }
+  D3D12_INDEX_BUFFER_VIEW IBView() const;
+  ID3D12Resource* Resource() const
+  {
+    return InternalBuffer.m_Resource;
+  }
 
-    void* map();
-    template<typename T> T* Map() { return reinterpret_cast<T*>(Map()); };
-    void mapAndSetData(const void* data, uint64_t numElements);
-    void updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
-    void multiUpdateData(const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
+  void* map();
+  template <typename T> T* Map()
+  {
+    return reinterpret_cast<T*>(Map());
+  };
+  void mapAndSetData(const void* data, uint64_t numElements);
+  void updateData(
+      const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
+  void multiUpdateData(
+      const void* srcData[],
+      uint64_t srcNumElements[],
+      uint64_t dstElemOffset[],
+      uint64_t numUpdates);
 
-    void transition(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const;
-    void makeReadable(ID3D12GraphicsCommandList* cmdList) const;
-    void makeWritable(ID3D12GraphicsCommandList* cmdList) const;
-    void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
+  void transition(
+      ID3D12GraphicsCommandList* cmdList,
+      D3D12_RESOURCE_STATES before,
+      D3D12_RESOURCE_STATES after) const;
+  void makeReadable(ID3D12GraphicsCommandList* cmdList) const;
+  void makeWritable(ID3D12GraphicsCommandList* cmdList) const;
+  void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
 
 private:
+  FormattedBuffer(const FormattedBuffer& other)
+  {
+  }
 
-    FormattedBuffer(const FormattedBuffer& other) { }
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
-    void updateDynamicSRV() const;
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
+  void updateDynamicSRV() const;
 };
 //---------------------------------------------------------------------------//
 // StructuredBuffer
@@ -613,29 +697,40 @@ private:
 //---------------------------------------------------------------------------//
 struct Texture
 {
-    uint32_t SRV = uint32_t(-1);
-    ID3D12Resource* Resource = nullptr;
-    uint32_t Width = 0;
-    uint32_t Height = 0;
-    uint32_t Depth = 0;
-    uint32_t NumMips = 0;
-    uint32_t ArraySize = 0;
-    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
-    bool Cubemap = false;
+  uint32_t SRV = uint32_t(-1);
+  ID3D12Resource* Resource = nullptr;
+  uint32_t Width = 0;
+  uint32_t Height = 0;
+  uint32_t Depth = 0;
+  uint32_t NumMips = 0;
+  uint32_t ArraySize = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  bool Cubemap = false;
 
-    Texture();
-    ~Texture();
+  Texture()
+  {
+  }
+  ~Texture()
+  {
+    assert(Resource == nullptr);
+  }
 
-    bool Valid() const
-    {
-        return Resource != nullptr;
-    }
+  bool Valid() const
+  {
+    return Resource != nullptr;
+  }
 
-    void Shutdown();
+  void Shutdown()
+  {
+    SRVDescriptorHeap.FreePersistent(SRV);
+    if (Resource != nullptr)
+      Resource->Release();
+  }
 
 private:
-
-    Texture(const Texture& other) { }
+  Texture(const Texture& other)
+  {
+  }
 };
 struct TextureBase
 {

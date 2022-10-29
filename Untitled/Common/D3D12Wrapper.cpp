@@ -1469,7 +1469,7 @@ void EndFrame_Upload(ID3D12CommandQueue* p_GfxQueue)
 
   TempFrameUsed = 0;
 }
-UploadContext _resourceUploadBegin(uint64_t p_Size)
+UploadContext resourceUploadBegin(uint64_t p_Size)
 {
   DEBUG_BREAK(g_Device != nullptr);
 
@@ -1507,7 +1507,7 @@ UploadContext _resourceUploadBegin(uint64_t p_Size)
   return context;
 }
 
-void _resourceUploadEnd(UploadContext& context)
+void resourceUploadEnd(UploadContext& context)
 {
   DEBUG_BREAK(context.CmdList != nullptr);
   DEBUG_BREAK(context.Submission != nullptr);
@@ -1625,7 +1625,7 @@ void Buffer::init(
   }
   else if (p_InitData)
   {
-    UploadContext uploadContext = _resourceUploadBegin(resourceDesc.Width);
+    UploadContext uploadContext = resourceUploadBegin(resourceDesc.Width);
 
     memcpy(uploadContext.CpuAddress, p_InitData, p_Size);
     if (p_Dynamic)
@@ -1638,7 +1638,7 @@ void Buffer::init(
         uploadContext.ResourceOffset,
         p_Size);
 
-    _resourceUploadEnd(uploadContext);
+    resourceUploadEnd(uploadContext);
   }
 }
 void Buffer::deinit()
@@ -1702,7 +1702,7 @@ uint64_t Buffer::multiUpdateData(
   for (uint64_t i = 0; i < p_NumUpdates; ++i)
     totalUpdateSize += p_SrcSize[i];
 
-  UploadContext uploadContext = _resourceUploadBegin(totalUpdateSize);
+  UploadContext uploadContext = resourceUploadBegin(totalUpdateSize);
 
   uint64_t uploadOffset = 0;
   for (uint64_t i = 0; i < p_NumUpdates; ++i)
@@ -1723,7 +1723,7 @@ uint64_t Buffer::multiUpdateData(
     uploadOffset += p_SrcSize[i];
   }
 
-  _resourceUploadEnd(uploadContext);
+  resourceUploadEnd(uploadContext);
 
   return m_GpuAddress + currOffset;
 }

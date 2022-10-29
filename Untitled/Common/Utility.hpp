@@ -204,6 +204,24 @@ inline std::string WideStrToStr(const std::wstring& p_WideStr)
   return str;
 }
 //---------------------------------------------------------------------------//
+inline std::wstring MakeString(const wchar_t* format, ...)
+{
+    wchar_t buffer[1024] = { 0 };
+    va_list args;
+    va_start(args, format);
+    vswprintf_s(buffer, 1024, format, args);
+    return std::wstring(buffer);
+}
+//---------------------------------------------------------------------------//
+inline std::string MakeString(const char* format, ...)
+{
+    char buffer[1024] = { 0 };
+    va_list args;
+    va_start(args, format);
+    vsprintf_s(buffer, 1024, format, args);
+    return std::string(buffer);
+}
+//---------------------------------------------------------------------------//
 // Alternative methods for string conversion
 template <typename CharSource, typename CharDest>
 inline size_t

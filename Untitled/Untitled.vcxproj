@@ -185,6 +185,7 @@
   <ItemGroup>
     <ClCompile Include="Common\D3D12Wrapper.cpp" />
     <ClCompile Include="Common\FileWatcher.cpp" />
+    <ClCompile Include="Common\Model.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MeshRenderer.cpp" />
     <ClCompile Include="RenderManager.cpp" />
@@ -198,7 +199,6 @@
     <ClInclude Include="Common\Timer.hpp" />
     <ClInclude Include="Common\Utility.hpp" />
     <ClInclude Include="MeshRenderer.hpp" />
-    <ClInclude Include="Model.hpp" />
     <ClInclude Include="RenderManager.hpp" />
   </ItemGroup>
   <ItemGroup>

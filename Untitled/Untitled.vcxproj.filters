@@ -16,6 +16,9 @@
     </ClCompile>
     <ClCompile Include="MeshRenderer.cpp" />
     <ClCompile Include="Common\D3D12Wrapper.cpp" />
+    <ClCompile Include="Common\Model.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -39,9 +42,6 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\D3D12Wrapper.hpp">
-      <Filter>Common</Filter>
-    </ClInclude>
-    <ClInclude Include="Model.hpp">
       <Filter>Common</Filter>
     </ClInclude>
   </ItemGroup>

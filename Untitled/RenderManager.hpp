@@ -5,6 +5,7 @@
 #include <Timer.hpp>
 #include "d3dx12.h"
 #include "D3D12Wrapper.hpp"
+#include "Model.hpp"
 
 #define FRAME_COUNT 3
 #define THREAD_COUNT 1
@@ -81,6 +82,9 @@ struct RenderManager
 
   //---------------------------------------------------------------------------//
 private:
+  // Model loading
+  Model sceneModel;
+
   // Gbuffer stuff
   RenderTexture albedoTarget;
   ID3D12RootSignature* gbufferRootSignature = nullptr;

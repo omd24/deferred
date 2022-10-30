@@ -51,9 +51,13 @@ static glm::mat4 convertMatrix(const aiMatrix4x4& mat)
       glm::vec4(mat.c1, mat.c2, mat.c3, mat.c4),
       glm::vec4(mat.d1, mat.d2, mat.d3, mat.d4));
 }
-void loadTexture(Texture& texture, const wchar_t* filePath, bool forceSRGB)
+void loadTexture(
+    ID3D12Device* dev,
+    Texture& texture,
+    const wchar_t* filePath,
+    bool forceSRGB)
 {
-  assert(g_Device != nullptr);
+  g_Device = dev;
 
   texture.Shutdown();
   if (fileExists(filePath) == false)
@@ -69,7 +73,7 @@ void loadTexture(Texture& texture, const wchar_t* filePath, bool forceSRGB)
   else if (extension == L"TGA" || extension == L"tga")
   {
     DirectX::ScratchImage tempImage;
-    DirectX::LoadFromTGAFile(filePath, nullptr, tempImage);
+    D3D_EXEC_CHECKED(DirectX::LoadFromTGAFile(filePath, nullptr, tempImage));
     DirectX::GenerateMipMaps(
         *tempImage.GetImage(0, 0, 0),
         DirectX::TEX_FILTER_DEFAULT,
@@ -80,8 +84,8 @@ void loadTexture(Texture& texture, const wchar_t* filePath, bool forceSRGB)
   else
   {
     DirectX::ScratchImage tempImage;
-    DirectX::LoadFromWICFile(
-        filePath, DirectX::WIC_FLAGS_NONE, nullptr, tempImage);
+    D3D_EXEC_CHECKED(DirectX::LoadFromWICFile(
+        filePath, DirectX::WIC_FLAGS_NONE, nullptr, tempImage));
     DirectX::GenerateMipMaps(
         *tempImage.GetImage(0, 0, 0),
         DirectX::TEX_FILTER_DEFAULT,
@@ -224,6 +228,7 @@ void loadTexture(Texture& texture, const wchar_t* filePath, bool forceSRGB)
   texture.Cubemap = metaData.IsCubemap() ? 1 : 0;
 }
 void loadMaterialResources(
+    ID3D12Device* dev,
     std::vector<MeshMaterial>& materials,
     const std::wstring& directory,
     bool forceSRGB,
@@ -261,7 +266,7 @@ void loadMaterialResources(
         bool useSRGB =
             forceSRGB && texType == uint64_t(MaterialTextures::Albedo);
         loadTexture(
-            newMatTexture->Texture, path.c_str(), useSRGB ? true : false);
+            dev, newMatTexture->Texture, path.c_str(), useSRGB ? true : false);
         materialTextures.push_back(newMatTexture);
         uint64_t idx = materialTextures.size() - 1;
 
@@ -735,7 +740,8 @@ static const wchar_t* SponzaRoughnessMaps[] = {
     L"Lion_Roughness.png",
     L"Sponza_Roof_roughness.png"};
 
-void Model::CreateWithAssimp(const ModelLoadSettings& settings)
+void Model::CreateWithAssimp(
+    ID3D12Device* dev, const ModelLoadSettings& settings)
 {
 
   const wchar_t* filePath = settings.FilePath;
@@ -868,7 +874,7 @@ void Model::CreateWithAssimp(const ModelLoadSettings& settings)
   }
 
   loadMaterialResources(
-      meshMaterials, fileDirectory, settings.ForceSRGB, materialTextures);
+      dev, meshMaterials, fileDirectory, settings.ForceSRGB, materialTextures);
 
   aabbMin = glm::vec3(maxFloat);
   aabbMax = glm::vec3(-maxFloat);
@@ -916,7 +922,7 @@ void Model::CreateWithAssimp(const ModelLoadSettings& settings)
   writeLog("Finished loading scene '%ls'", filePath);
 }
 
-void Model::CreateFromMeshData(const wchar_t* filePath)
+void Model::CreateFromMeshData(ID3D12Device* dev, const wchar_t* filePath)
 {
   if (fileExists(filePath) == false)
     throw std::exception("Model file does not exist");
@@ -926,11 +932,12 @@ void Model::CreateFromMeshData(const wchar_t* filePath)
   CreateBuffers();
 
   loadMaterialResources(
-      meshMaterials, fileDirectory, forceSRGB, materialTextures);
+      dev, meshMaterials, fileDirectory, forceSRGB, materialTextures);
 }
 
 // Procedural generation
 void Model::GenerateBoxScene(
+    ID3D12Device* dev,
     const glm::vec3& dimensions,
     const glm::vec3& position,
     const glm::quat& orientation,
@@ -943,7 +950,7 @@ void Model::GenerateBoxScene(
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
   fileDirectory = L"..\\Content\\Textures\\";
   loadMaterialResources(
-      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumBoxVerts);
   indices.resize(NumBoxIndices);
@@ -954,7 +961,7 @@ void Model::GenerateBoxScene(
 
   CreateBuffers();
 }
-void Model::GenerateBoxTestScene()
+void Model::GenerateBoxTestScene(ID3D12Device* dev)
 {
   meshMaterials.resize(1);
   MeshMaterial& material = meshMaterials[0];
@@ -962,7 +969,7 @@ void Model::GenerateBoxTestScene()
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = L"Hex.png";
   fileDirectory = L"..\\Content\\Textures\\";
   loadMaterialResources(
-      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumBoxVerts * 2);
   indices.resize(NumBoxIndices * 2);
@@ -986,6 +993,7 @@ void Model::GenerateBoxTestScene()
   CreateBuffers();
 }
 void Model::GeneratePlaneScene(
+    ID3D12Device* dev,
     const glm::vec2& dimensions,
     const glm::vec3& position,
     const glm::quat& orientation,
@@ -998,7 +1006,7 @@ void Model::GeneratePlaneScene(
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
   fileDirectory = L"..\\Content\\Textures\\";
   loadMaterialResources(
-      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumPlaneVerts);
   indices.resize(NumPlaneIndices);
@@ -1012,22 +1020,22 @@ void Model::GeneratePlaneScene(
 
 void Model::Shutdown()
 {
-    for(uint64_t i = 0; i < meshes.size(); ++i)
-        meshes[i].Shutdown();
-    meshes.clear();
-    meshMaterials.clear();
-    for(uint64_t i = 0; i < materialTextures.size(); ++i)
-    {
-        materialTextures[i]->Texture.Shutdown();
-        delete materialTextures[i];
-        materialTextures[i] = nullptr;
-    }
-    materialTextures.clear();
-    fileDirectory = L"";
-    forceSRGB = false;
+  for (uint64_t i = 0; i < meshes.size(); ++i)
+    meshes[i].Shutdown();
+  meshes.clear();
+  meshMaterials.clear();
+  for (uint64_t i = 0; i < materialTextures.size(); ++i)
+  {
+    materialTextures[i]->Texture.Shutdown();
+    delete materialTextures[i];
+    materialTextures[i] = nullptr;
+  }
+  materialTextures.clear();
+  fileDirectory = L"";
+  forceSRGB = false;
 
-    vertexBuffer.deinit();
-    indexBuffer.deinit();
-    vertices.clear();
-    indices.clear();
+  vertexBuffer.deinit();
+  indexBuffer.deinit();
+  vertices.clear();
+  indices.clear();
 }

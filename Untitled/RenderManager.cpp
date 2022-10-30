@@ -22,6 +22,8 @@ struct MaterialTextureIndices
 {
   uint32_t Albedo;
   uint32_t Normal;
+  uint32_t Roughness;
+  uint32_t Metallic;
 };
 
 //---------------------------------------------------------------------------//
@@ -388,6 +390,50 @@ void RenderManager::loadAssets()
   // Init uploads and other helpers
   initializeUpload(m_Dev);
   initializeHelpers();
+
+  // Model filename
+  static const wchar_t* ScenePath = L"..\\Content\\Models\\Sponza\\Sponza.fbx";
+
+  // Load scene
+  static const float SceneScale = 0.01f;
+  ModelLoadSettings settings;
+  settings.FilePath = ScenePath;
+  settings.ForceSRGB = true;
+  settings.SceneScale = SceneScale;
+  settings.MergeMeshes = false;
+  sceneModel.CreateWithAssimp(m_Dev, settings);
+
+  // Create a structured buffer containing texture indices per-material
+  const std::vector<MeshMaterial>& materials = sceneModel.Materials();
+  const uint64_t numMaterials = materials.size();
+  std::vector<MaterialTextureIndices> textureIndices(numMaterials);
+  for (uint64_t i = 0; i < numMaterials; ++i)
+  {
+    MaterialTextureIndices& matIndices = textureIndices[i];
+    const MeshMaterial& material = materials[i];
+
+    matIndices.Albedo =
+        material.Textures[uint64_t(MaterialTextures::Albedo)]->SRV;
+    matIndices.Normal =
+        material.Textures[uint64_t(MaterialTextures::Normal)]->SRV;
+    matIndices.Roughness =
+        material.Textures[uint64_t(MaterialTextures::Roughness)]->SRV;
+    matIndices.Metallic =
+        material.Textures[uint64_t(MaterialTextures::Metallic)]->SRV;
+  }
+  StructuredBufferInit sbInit;
+  sbInit.Stride = sizeof(MaterialTextureIndices);
+  sbInit.NumElements = numMaterials;
+  sbInit.Dynamic = false;
+  sbInit.InitData = textureIndices.data();
+  materialTextureIndices.init(sbInit);
+  materialTextureIndices.resource()->SetName(L"Material Texture Indices");
+
+  // Depth buffer
+  //
+  //
+  //
+  //
 
   // Create gbuffers:
   {
@@ -934,6 +980,9 @@ void RenderManager::onLoad()
   // Load pipeline
   loadD3D12Pipeline();
 
+  // Initialize COM for DirectX Texture Loader
+  CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
   // Load assets
   loadAssets();
 }
@@ -946,6 +995,8 @@ void RenderManager::onDestroy()
 
   // Close handles to fence events and threads.
   CloseHandle(m_RenderContextFenceEvent);
+
+  sceneModel.Shutdown();
 
   // TODO Release these in mesh renderer
   gbufferRootSignature->Release();

@@ -712,7 +712,7 @@ struct Texture
   }
   ~Texture()
   {
-    assert(Resource == nullptr);
+    //assert(Resource == nullptr);
   }
 
   bool Valid() const

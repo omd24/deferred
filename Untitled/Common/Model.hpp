@@ -342,19 +342,21 @@ public:
   }
 
   // Loading from file formats
-  void CreateWithAssimp(const ModelLoadSettings& settings);
+  void CreateWithAssimp(ID3D12Device* dev, const ModelLoadSettings& settings);
 
-  void CreateFromMeshData(const wchar_t* filePath);
+  void CreateFromMeshData(ID3D12Device* dev, const wchar_t* filePath);
 
   // Procedural generation
   void GenerateBoxScene(
+      ID3D12Device* dev,
       const glm::vec3& dimensions = glm::vec3(1.0f, 1.0f, 1.0f),
       const glm::vec3& position = glm::vec3(),
       const glm::quat& orientation = glm::identity<glm::quat>(),
       const wchar_t* colorMap = L"",
       const wchar_t* normalMap = L"");
-  void GenerateBoxTestScene();
+  void GenerateBoxTestScene(ID3D12Device* dev);
   void GeneratePlaneScene(
+      ID3D12Device* dev,
       const glm::vec2& dimensions = glm::vec2(1.0f, 1.0f),
       const glm::vec3& position = glm::vec3(),
       const glm::quat& orientation = glm::quat(0.0, 0.0, 0.0, 1.0),
@@ -435,7 +437,7 @@ protected:
     StructuredBufferInit sbInit;
     sbInit.Stride = sizeof(MeshVertex);
     sbInit.NumElements = vertices.size();
-    
+
     sbInit.InitData = vertices.data();
     vertexBuffer.init(sbInit);
 

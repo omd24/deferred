@@ -49,15 +49,6 @@ struct MeshVertex
     Tangent = glm::rotate(q, Tangent);
     Bitangent = glm::rotate(q, Bitangent);
   }
-
-  template <typename TSerializer> void Serialize(TSerializer& serializer)
-  {
-    SerializeItem(serializer, Position);
-    SerializeItem(serializer, Normal);
-    SerializeItem(serializer, UV);
-    SerializeItem(serializer, Tangent);
-    SerializeItem(serializer, Bitangent);
-  }
 };
 
 enum class MaterialTextures
@@ -81,13 +72,6 @@ struct MeshMaterial
     assert(uint64_t(texType) < uint64_t(MaterialTextures::Count));
     assert(Textures[uint64_t(texType)] != nullptr);
     return Textures[uint64_t(texType)]->SRV;
-  }
-
-  template <typename TSerializer> void Serialize(TSerializer& serializer)
-  {
-    for (uint64 i = 0; i < uint64_t(MaterialTextures::Count); ++i)
-      SerializeItem(serializer, TextureNames[i]);
-    BulkSerializeArray(serializer, TextureIndices, ArraySize_(TextureIndices));
   }
 };
 
@@ -321,20 +305,6 @@ public:
     return ElemStrings[uint64_t(elemType)];
   }
 
-  template <typename TSerializer> void Serialize(TSerializer& serializer)
-  {
-    BulkSerializeItem(serializer, meshParts);
-    SerializeItem(serializer, numVertices);
-    SerializeItem(serializer, numIndices);
-    SerializeItem(serializer, vtxOffset);
-    SerializeItem(serializer, idxOffset);
-    uint32_t idxType = uint32_t(indexType);
-    SerializeItem(serializer, idxType);
-    indexType = IndexType(idxType);
-    SerializeItem(serializer, aabbMin);
-    SerializeItem(serializer, aabbMax);
-  }
-
 protected:
   std::vector<MeshPart> meshParts;
 
@@ -455,20 +425,6 @@ public:
   static uint64_t NumInputElements()
   {
     return static_cast<uint64_t>(arrayCount32(StandardInputElements));
-  }
-
-  // Serialization
-  template <typename TSerializer> void Serialize(TSerializer& serializer)
-  {
-    SerializeItem(serializer, meshes);
-    SerializeItem(serializer, meshMaterials);
-    BulkSerializeItem(serializer, spotLights);
-    BulkSerializeItem(serializer, pointLights);
-    SerializeItem(serializer, forceSRGB);
-    SerializeItem(serializer, aabbMin);
-    SerializeItem(serializer, aabbMax);
-    BulkSerializeItem(serializer, vertices);
-    BulkSerializeItem(serializer, indices);
   }
 
 protected:

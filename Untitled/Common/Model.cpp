@@ -918,6 +918,15 @@ void Model::CreateWithAssimp(const ModelLoadSettings& settings)
 
 void Model::CreateFromMeshData(const wchar_t* filePath)
 {
+  if (fileExists(filePath) == false)
+    throw std::exception("Model file does not exist");
+
+  fileDirectory = getDirectoryFromFilePath(filePath);
+
+  CreateBuffers();
+
+  loadMaterialResources(
+      meshMaterials, fileDirectory, forceSRGB, materialTextures);
 }
 
 // Procedural generation
@@ -928,9 +937,53 @@ void Model::GenerateBoxScene(
     const wchar_t* colorMap,
     const wchar_t* normalMap)
 {
+  meshMaterials.resize(1);
+  MeshMaterial& material = meshMaterials[0];
+  material.TextureNames[uint64_t(MaterialTextures::Albedo)] = colorMap;
+  material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
+  fileDirectory = L"..\\Content\\Textures\\";
+  loadMaterialResources(
+      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+
+  vertices.resize(NumBoxVerts);
+  indices.resize(NumBoxIndices);
+
+  meshes.resize(1);
+  meshes[0].InitBox(
+      dimensions, position, orientation, 0, vertices.data(), indices.data());
+
+  CreateBuffers();
 }
 void Model::GenerateBoxTestScene()
 {
+  meshMaterials.resize(1);
+  MeshMaterial& material = meshMaterials[0];
+  material.TextureNames[uint64_t(MaterialTextures::Albedo)] = L"White.png";
+  material.TextureNames[uint64_t(MaterialTextures::Normal)] = L"Hex.png";
+  fileDirectory = L"..\\Content\\Textures\\";
+  loadMaterialResources(
+      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+
+  vertices.resize(NumBoxVerts * 2);
+  indices.resize(NumBoxIndices * 2);
+
+  meshes.resize(2);
+  meshes[0].InitBox(
+      glm::vec3(2.0f),
+      glm::vec3(0.0f, 1.5f, 0.0f),
+      glm::quat(0, 0, 0, 1),
+      0,
+      vertices.data(),
+      indices.data());
+  meshes[1].InitBox(
+      glm::vec3(10.0f, 0.25f, 10.0f),
+      glm::vec3(0.0f),
+      glm::quat(0, 0, 0, 1),
+      0,
+      &vertices[NumBoxVerts],
+      &indices[NumBoxIndices]);
+
+  CreateBuffers();
 }
 void Model::GeneratePlaneScene(
     const glm::vec2& dimensions,
@@ -939,8 +992,42 @@ void Model::GeneratePlaneScene(
     const wchar_t* colorMap,
     const wchar_t* normalMap)
 {
+  meshMaterials.resize(1);
+  MeshMaterial& material = meshMaterials[0];
+  material.TextureNames[uint64_t(MaterialTextures::Albedo)] = colorMap;
+  material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
+  fileDirectory = L"..\\Content\\Textures\\";
+  loadMaterialResources(
+      meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+
+  vertices.resize(NumPlaneVerts);
+  indices.resize(NumPlaneIndices);
+
+  meshes.resize(1);
+  meshes[0].InitPlane(
+      dimensions, position, orientation, 0, vertices.data(), indices.data());
+
+  CreateBuffers();
 }
 
 void Model::Shutdown()
 {
+    for(uint64_t i = 0; i < meshes.size(); ++i)
+        meshes[i].Shutdown();
+    meshes.clear();
+    meshMaterials.clear();
+    for(uint64_t i = 0; i < materialTextures.size(); ++i)
+    {
+        materialTextures[i]->Texture.Shutdown();
+        delete materialTextures[i];
+        materialTextures[i] = nullptr;
+    }
+    materialTextures.clear();
+    fileDirectory = L"";
+    forceSRGB = false;
+
+    vertexBuffer.deinit();
+    indexBuffer.deinit();
+    vertices.clear();
+    indices.clear();
 }

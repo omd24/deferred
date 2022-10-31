@@ -22,7 +22,6 @@ ConstantBuffer<MatIndexConstants> MatIndexCBuffer : register(b2);
 //=================================================================================================
 // VS and PS structs
 //=================================================================================================
-
 struct VSInput
 {
     float3 PositionOS 		    : POSITION;
@@ -53,6 +52,7 @@ struct PSInput
     float DepthVS               : DEPTHVS;
     float3 TangentWS 		    : TANGENTWS;
 	float3 BitangentWS 		    : BITANGENTWS;
+    float2 UV 		            : UV;
 };
 
 struct PSOutputGBuffer
@@ -65,13 +65,30 @@ struct PSOutputGBuffer
 //=================================================================================================
 VSOutput VS(in VSInput input, in uint VertexID : SV_VertexID)
 {
-    VSOutput result;
+    VSOutput output;
 
-    // result.position = position;
-    // result.color = color;
+    float3 positionOS = input.PositionOS;
 
-    result.PositionCS = float4(input.PositionOS, 1);
-    return result;
+    // Calc the world-space position
+    // output.PositionWS = mul(float4(positionOS, 1.0f), VSCBuffer.World).xyz;
+    output.PositionWS = float4(positionOS, 1.0f);
+
+    // Calc the clip-space position
+    // output.PositionCS = mul(float4(positionOS, 1.0f), VSCBuffer.WorldViewProjection);
+    output.PositionCS = float4(positionOS, 1.0f);
+    output.DepthVS = output.PositionCS.w;
+
+	// Rotate the normal into world space
+    output.NormalWS = normalize(mul(float4(input.NormalOS, 0.0f), VSCBuffer.World)).xyz;
+
+	// Rotate the rest of the tangent frame into world space
+	output.TangentWS = normalize(mul(float4(input.TangentOS, 0.0f), VSCBuffer.World)).xyz;
+	output.BitangentWS = normalize(mul(float4(input.BitangentOS, 0.0f), VSCBuffer.World)).xyz;
+
+    // Pass along the texture coordinates
+    output.UV = input.UV;
+
+    return output;
 }
 PSOutputGBuffer PS(in PSInput input)
 {

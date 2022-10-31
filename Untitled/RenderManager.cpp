@@ -10,6 +10,16 @@ enum DeferredRootParams : uint32_t
 
   NumDeferredRootParams
 };
+
+struct MeshVSConstants
+{
+  glm::mat4x4 World;
+  glm::mat4x4 View;
+  glm::mat4x4 WorldViewProjection;
+  float NearClip = 0.0f;
+  float FarClip = 0.0f;
+};
+
 struct DeferredConstants
 {
   DirectX::XMFLOAT4X4 InvViewProj;
@@ -25,7 +35,6 @@ struct MaterialTextureIndices
   uint32_t Roughness;
   uint32_t Metallic;
 };
-
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
@@ -663,6 +672,21 @@ void RenderManager::renderDeferred()
   m_CmdList->SetGraphicsRootSignature(gbufferRootSignature);
   m_CmdList->SetPipelineState(gbufferPSO);
 
+  // Set constant buffers:
+  {
+    glm::mat4 world = glm::identity<glm::mat4>();
+    glm::mat4 view = glm::identity<glm::mat4>();
+    glm::mat4 proj = glm::identity<glm::mat4>();
+
+    MeshVSConstants vsConstants;
+    vsConstants.World = world;
+    vsConstants.View = view;
+    vsConstants.WorldViewProjection = world * view * proj;
+    vsConstants.NearClip = 1.0f;
+    vsConstants.FarClip = 1000.0f;
+    BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
+  }
+
   // Bind vb and ib
   D3D12_VERTEX_BUFFER_VIEW vbView = sceneModel.VertexBuffer().vbView();
   D3D12_INDEX_BUFFER_VIEW ibView = sceneModel.IndexBuffer().IBView();
@@ -1008,6 +1032,8 @@ void RenderManager::onRender()
     {
       PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
 
+      moveToNextFrame();
+      waitForRenderContext();
       populateCommandList();
 
       EndFrame_Upload(m_CmdQue);
@@ -1023,6 +1049,7 @@ void RenderManager::onRender()
       D3D_EXEC_CHECKED(m_Swc->Present(1, 0));
 
       moveToNextFrame();
+      // waitForRenderContext();
     }
     catch (HrException& e)
     {

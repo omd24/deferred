@@ -155,72 +155,6 @@ void RenderManager::loadD3D12Pipeline()
     }
   }
 }
-//---------------------------------------------------------------------------/
-void RenderManager::createModelVertexBuffer()
-{
-  ModelVertex vertices[] = {
-      {{0.0f, 0.25f * m_Info.m_AspectRatio, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {0.0f, 0.0f},
-       {0.0f, 1.0f, 0.0f},
-       {1.0f, 0.0f, 0.0f}},
-      {{0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {1.0f, 1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {1.0f, 0.0f, 0.0f}},
-      {{-0.25f, -0.25f * m_Info.m_AspectRatio, 0.0f},
-       {0.0f, 0.0f, 1.0f},
-       {0.0f, 1.0f},
-       {0.0f, 1.0f, 0.0f},
-       {1.0f, 0.0f, 0.0f}}};
-
-  const UINT bufferSize = sizeof(vertices);
-  static_assert(bufferSize == 3 * 56);
-
-  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-      D3D12_HEAP_FLAG_NONE,
-      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-      D3D12_RESOURCE_STATE_COPY_DEST,
-      nullptr,
-      IID_PPV_ARGS(&m_VtxBufferModel)));
-
-  D3D_EXEC_CHECKED(m_Dev->CreateCommittedResource(
-      &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-      D3D12_HEAP_FLAG_NONE,
-      &CD3DX12_RESOURCE_DESC::Buffer(bufferSize),
-      D3D12_RESOURCE_STATE_GENERIC_READ,
-      nullptr,
-      IID_PPV_ARGS(&m_VtxBufferUploadModel)));
-
-  D3D_NAME_OBJECT(m_VtxBufferModel);
-
-  D3D12_SUBRESOURCE_DATA vertexData = {};
-  vertexData.pData = reinterpret_cast<UINT8*>(&vertices[0]);
-  vertexData.RowPitch = bufferSize;
-  vertexData.SlicePitch = vertexData.RowPitch;
-
-  UpdateSubresources<1>(
-      m_CmdList.GetInterfacePtr(),
-      m_VtxBufferModel.GetInterfacePtr(),
-      m_VtxBufferUploadModel.GetInterfacePtr(),
-      0,
-      0,
-      1,
-      &vertexData);
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_VtxBufferModel.GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_COPY_DEST,
-          D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER));
-
-  m_VtxBufferViewModel.BufferLocation =
-      m_VtxBufferModel->GetGPUVirtualAddress();
-  m_VtxBufferViewModel.SizeInBytes = static_cast<UINT>(bufferSize);
-  m_VtxBufferViewModel.StrideInBytes = sizeof(ModelVertex);
-}
 //---------------------------------------------------------------------------//
 bool RenderManager::createPSOs()
 {
@@ -327,13 +261,13 @@ bool RenderManager::createPSOs()
     psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
     psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
     psoDesc.BlendState = GetBlendState(BlendState::Disabled);
-    psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
+    psoDesc.DepthStencilState = GetDepthState(DepthState::WritesEnabled);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
     for (uint64_t i = 0; i < arrayCount32(gbufferFormats); ++i)
       psoDesc.RTVFormats[i] = gbufferFormats[i];
-    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    psoDesc.DSVFormat = depthBuffer.DSVFormat;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleDesc.Quality = 0;
     psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
@@ -403,7 +337,9 @@ void RenderManager::loadAssets()
   settings.MergeMeshes = false;
   sceneModel.CreateWithAssimp(m_Dev, settings);
 
-  // Create a structured buffer containing texture indices per-material
+  // Create a structured buffer containing texture indices per-material:
+  // 1. get the array of materials
+  // 2. loop through that and store the SRV indices (of the material textures)
   const std::vector<MeshMaterial>& materials = sceneModel.Materials();
   const uint64_t numMaterials = materials.size();
   std::vector<MaterialTextureIndices> textureIndices(numMaterials);
@@ -430,10 +366,17 @@ void RenderManager::loadAssets()
   materialTextureIndices.resource()->SetName(L"Material Texture Indices");
 
   // Depth buffer
-  //
-  //
-  //
-  //
+  {
+    DepthBufferInit dbInit;
+    dbInit.Width = m_Info.m_Width;
+    dbInit.Height = m_Info.m_Height;
+    dbInit.Format = DXGI_FORMAT_D32_FLOAT;
+    dbInit.MSAASamples = 1;
+    dbInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+                          D3D12_RESOURCE_STATE_DEPTH_READ;
+    dbInit.Name = L"Main Depth Buffer";
+    depthBuffer.init(dbInit);
+  }
 
   // Create gbuffers:
   {
@@ -459,31 +402,6 @@ void RenderManager::loadAssets()
     rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     rtInit.Name = L"Material ID Target";
     materialIDTarget.init(rtInit);
-  }
-
-  // Create a structured buffer containing texture indices per-material
-  {
-    // 1. get the array of materials
-    // 2. loop through that and store the SRV indices (of the material textures)
-    //
-    // assuming two materials
-    constexpr int numMaterials = 2;
-    std::array<MaterialTextureIndices, numMaterials> textureIndices;
-    for (uint64_t i = 0; i < numMaterials; ++i)
-    {
-      MaterialTextureIndices& matIndices = textureIndices[i];
-
-      matIndices.Albedo = 0;
-      matIndices.Normal = 0;
-    }
-
-    StructuredBufferInit sbInit;
-    sbInit.Stride = sizeof(MaterialTextureIndices);
-    sbInit.NumElements = numMaterials;
-    sbInit.Dynamic = false;
-    sbInit.InitData = textureIndices.data();
-    materialTextureIndices.init(sbInit);
-    materialTextureIndices.resource()->SetName(L"Material Texture Indices");
   }
 
   // Create deferred target:
@@ -609,8 +527,6 @@ void RenderManager::loadAssets()
       IID_PPV_ARGS(&m_CmdList)));
   D3D_NAME_OBJECT(m_CmdList);
 
-  createModelVertexBuffer();
-
   // Close the command list and execute it to begin the initial GPU setup.
   D3D_EXEC_CHECKED(m_CmdList->Close());
   ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
@@ -691,23 +607,32 @@ void RenderManager::renderDeferred()
 
   {
     // Transition our G-Buffer targets to a writable state
-    D3D12_RESOURCE_BARRIER barriers[2] = {};
+    D3D12_RESOURCE_BARRIER barriers[3] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[0].Transition.pResource = albedoTarget.resource();
+    barriers[0].Transition.pResource = depthBuffer.getResource();
     barriers[0].Transition.StateBefore =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+        D3D12_RESOURCE_STATE_DEPTH_READ;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.Subresource = 0;
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = materialIDTarget.resource();
+    barriers[1].Transition.pResource = albedoTarget.resource();
     barriers[1].Transition.StateBefore =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.Subresource = 0;
+
+    barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[2].Transition.pResource = materialIDTarget.resource();
+    barriers[2].Transition.StateBefore =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[2].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -718,45 +643,94 @@ void RenderManager::renderDeferred()
       materialIDTarget.m_RTV,
   };
   m_CmdList->OMSetRenderTargets(
-      arrayCount32(rtvHandles), rtvHandles, false, nullptr);
+      arrayCount32(rtvHandles), rtvHandles, false, &depthBuffer.DSV);
   const float clearColor[] = {0.0f, 0.0f, 0.0f, 0.0f};
   for (uint64_t i = 0; i < arrayCount(rtvHandles); ++i)
     m_CmdList->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
-
+  m_CmdList->ClearDepthStencilView(
+      depthBuffer.DSV,
+      D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+      1.0f,
+      0,
+      0,
+      nullptr);
   setViewport(m_CmdList, m_Info.m_Width, m_Info.m_Height);
 
   //
   // Render Gbuffer!
   //
 
-  // Bind vb, ib, pso, root sig and so on
   m_CmdList->SetGraphicsRootSignature(gbufferRootSignature);
   m_CmdList->SetPipelineState(gbufferPSO);
-  m_CmdList->IASetVertexBuffers(0, 1, &m_VtxBufferViewModel);
+
+  // Bind vb and ib
+  D3D12_VERTEX_BUFFER_VIEW vbView = sceneModel.VertexBuffer().vbView();
+  D3D12_INDEX_BUFFER_VIEW ibView = sceneModel.IndexBuffer().IBView();
+  m_CmdList->IASetVertexBuffers(0, 1, &vbView);
+  m_CmdList->IASetIndexBuffer(&ibView);
+
   m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
   //
-  // Draw geometries
-  m_CmdList->DrawInstanced(3, 1, 0, 0);
+  // Draw geometries:
 
+  // TODO:
+  // Frustum culling
+  const uint64_t numVisible = sceneModel.Meshes().size();
+
+  // Draw all visible meshes
+  uint32_t currMaterial = uint32_t(-1);
+  for (uint64_t i = 0; i < numVisible; ++i)
   {
-    D3D12_RESOURCE_BARRIER barriers[2] = {};
+    uint64_t meshIdx = i; // this should be just the visible mesh
+    const Mesh& mesh = sceneModel.Meshes()[meshIdx];
+
+    // Draw all parts
+    for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
+    {
+      const MeshPart& part = mesh.MeshParts()[partIdx];
+      if (part.MaterialIdx != currMaterial)
+      {
+        m_CmdList->SetGraphicsRoot32BitConstant(1, part.MaterialIdx, 0);
+        currMaterial = part.MaterialIdx;
+      }
+      m_CmdList->DrawIndexedInstanced(
+          part.IndexCount,
+          1,
+          mesh.IndexOffset() + part.IndexStart,
+          mesh.VertexOffset(),
+          0);
+    }
+  }
+
+  // Transition back G-Buffer stuff:
+  {
+    D3D12_RESOURCE_BARRIER barriers[3] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[0].Transition.pResource = albedoTarget.resource();
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.pResource = depthBuffer.getResource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+        D3D12_RESOURCE_STATE_DEPTH_READ;
     barriers[0].Transition.Subresource = 0;
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = materialIDTarget.resource();
+    barriers[1].Transition.pResource = albedoTarget.resource();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.StateAfter =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.Subresource = 0;
+
+    barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[2].Transition.pResource = materialIDTarget.resource();
+    barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[2].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[2].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -811,7 +785,7 @@ void RenderManager::renderDeferred()
     uint32_t srvIndices[] = {
         materialTextureIndices.m_SrvIndex,
         materialIDTarget.srv(),
-        0,
+        depthBuffer.getSrv(),
         albedoTarget.srv()};
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
@@ -1003,6 +977,8 @@ void RenderManager::onDestroy()
   gbufferPSO->Release();
   deferredRootSig->Release();
   deferredPSO->Release();
+
+  depthBuffer.deinit();
 
   // Shutdown render target(s):
   albedoTarget.deinit();

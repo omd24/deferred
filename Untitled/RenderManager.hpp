@@ -84,6 +84,7 @@ struct RenderManager
 private:
   // Model loading
   Model sceneModel;
+  DepthBuffer depthBuffer;
 
   // Gbuffer stuff
   RenderTexture albedoTarget;
@@ -112,10 +113,6 @@ private:
   // Asset objects.
   ID3D12GraphicsCommandListPtr m_CmdList;
 
-  ID3D12ResourcePtr m_VtxBufferModel;
-  ID3D12ResourcePtr m_VtxBufferUploadModel;
-  D3D12_VERTEX_BUFFER_VIEW m_VtxBufferViewModel;
-
   Camera m_Camera;
   Timer m_Timer;
 
@@ -139,7 +136,6 @@ private:
 
   std::wstring getAssetPath(LPCWSTR p_AssetName);
   std::wstring getShaderPath(LPCWSTR p_ShaderName);
-  void createModelVertexBuffer();
   bool createPSOs();
   void loadD3D12Pipeline();
   void loadAssets();

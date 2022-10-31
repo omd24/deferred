@@ -712,7 +712,7 @@ struct Texture
   }
   ~Texture()
   {
-    //assert(Resource == nullptr);
+    // assert(Resource == nullptr);
   }
 
   bool Valid() const
@@ -838,4 +838,63 @@ struct RenderTexture
 struct VolumeTexture
 {
   // TODO
+};
+
+struct DepthBufferInit
+{
+    uint64_t Width = 0;
+    uint64_t Height = 0;
+    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+    uint64_t MSAASamples = 1;
+    uint64_t ArraySize = 1;
+    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    const wchar_t* Name = nullptr;
+};
+struct DepthBuffer
+{
+  Texture Texture;
+  D3D12_CPU_DESCRIPTOR_HANDLE DSV = {};
+  D3D12_CPU_DESCRIPTOR_HANDLE ReadOnlyDSV = {};
+  std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> ArrayDSVs;
+  uint32_t MSAASamples = 1;
+  uint32_t MSAAQuality = 0;
+  DXGI_FORMAT DSVFormat = DXGI_FORMAT_UNKNOWN;
+
+  DepthBuffer();
+  ~DepthBuffer();
+
+  void init(const DepthBufferInit& init);
+  void deinit();
+
+  void transition(
+      ID3D12GraphicsCommandList* cmdList,
+      D3D12_RESOURCE_STATES before,
+      D3D12_RESOURCE_STATES after,
+      uint64_t arraySlice = uint64_t(-1)) const;
+  void makeReadable(
+      ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
+  void makeWritable(
+      ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
+
+  uint32_t getSrv() const
+  {
+    return Texture.SRV;
+  }
+  uint64_t getWidth() const
+  {
+    return Texture.Width;
+  }
+  uint64_t getHeight() const
+  {
+    return Texture.Height;
+  }
+  ID3D12Resource* getResource() const
+  {
+    return Texture.Resource;
+  }
+
+private:
+  DepthBuffer(const DepthBuffer& other)
+  {
+  }
 };

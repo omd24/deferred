@@ -22,9 +22,9 @@ struct MeshVSConstants
 
 struct DeferredConstants
 {
-  DirectX::XMFLOAT4X4 InvViewProj;
-  DirectX::XMFLOAT4X4 Projection;
-  DirectX::XMFLOAT2 RTSize;
+  glm::mat4 InvViewProj;
+  glm::mat4 Projection;
+  glm::vec2 RTSize;
   uint32_t NumComputeTilesX = 0;
 };
 
@@ -333,6 +333,14 @@ void RenderManager::loadAssets()
   // Init uploads and other helpers
   initializeUpload(m_Dev);
   initializeHelpers();
+
+  // set up camera
+  float aspect = float(m_Info.m_Width) / m_Info.m_Height;
+  camera.Initialize(
+      aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
+  camera.SetPosition(glm::vec3(-11.5f, 1.85f, -0.45f));
+  camera.SetXRotation(0.0f);
+  camera.SetYRotation(1.544f);
 
   // Model filename
   static const wchar_t* ScenePath = L"..\\Content\\Models\\Sponza\\Sponza.fbx";
@@ -789,22 +797,14 @@ void RenderManager::renderDeferred()
 
   // Set constant buffers
   {
-    DeferredConstants deferredConstants;
-    XMMATRIX view = cameraGetViewMatrix(&m_Camera);
-    CXMMATRIX proj =
-        getProjectionMatrix(0.8f, m_Info.m_AspectRatio, 1.0f, 5000.0f);
-    XMStoreFloat4x4(
-        &deferredConstants.InvViewProj,
-        XMMatrixInverse(nullptr, XMMatrixMultiply(view, proj)));
-    XMStoreFloat4x4(&deferredConstants.Projection, proj);
-    deferredConstants.RTSize =
-        XMFLOAT2(float(deferredTarget.width()), float(deferredTarget.height()));
-    deferredConstants.NumComputeTilesX = numComputeTilesX;
-    BindTempConstantBuffer(
-        m_CmdList,
-        deferredConstants,
-        DeferredParams_DeferredCBuffer,
-        CmdListMode::Compute);
+    glm::mat4 world = glm::identity<glm::mat4>();
+    MeshVSConstants vsConstants;
+    vsConstants.World = world;
+    vsConstants.View = camera.ViewMatrix();
+    vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
+    vsConstants.NearClip = camera.NearClip();
+    vsConstants.FarClip = camera.FarClip();
+    BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
 
     uint32_t srvIndices[] = {
         materialTextureIndices.m_SrvIndex,
@@ -970,9 +970,6 @@ void RenderManager::onLoad()
 
   D3D_EXEC_CHECKED(DXGIDeclareAdapterRemovalSupport());
 
-  cameraInit(&m_Camera, {0.0f, 0.0f, 1500.0f});
-  m_Camera.m_MoveSpeed = 2500.0f;
-
   timerInit(&m_Timer);
 
   // Load pipeline
@@ -1021,7 +1018,8 @@ void RenderManager::onUpdate()
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
 
   timerTick(&m_Timer, nullptr);
-  cameraUpdate(&m_Camera, static_cast<float>(timerGetElapsedSeconds(&m_Timer)));
+
+  // TODO: Update camera based on user-input
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
@@ -1068,12 +1066,12 @@ void RenderManager::onRender()
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyDown(UINT8 p_Key)
 {
-  cameraOnKeyDown(&m_Camera, p_Key);
+  // TODO: Update camera based on user-input
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyUp(UINT8 p_Key)
 {
-  cameraOnKeyUp(&m_Camera, p_Key);
+  // TODO: Update camera based on user-input
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onResize()

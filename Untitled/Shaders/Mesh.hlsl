@@ -70,12 +70,10 @@ VSOutput VS(in VSInput input, in uint VertexID : SV_VertexID)
     float3 positionOS = input.PositionOS;
 
     // Calc the world-space position
-    // output.PositionWS = mul(float4(positionOS, 1.0f), VSCBuffer.World).xyz;
-    output.PositionWS = float4(positionOS, 1.0f);
+    output.PositionWS = mul(float4(positionOS, 1.0f), VSCBuffer.World).xyz;
 
     // Calc the clip-space position
-    // output.PositionCS = mul(float4(positionOS, 1.0f), VSCBuffer.WorldViewProjection);
-    output.PositionCS = float4(positionOS, 1.0f);
+    output.PositionCS = mul(float4(positionOS, 1.0f), VSCBuffer.WorldViewProjection);
     output.DepthVS = output.PositionCS.w;
 
 	// Rotate the normal into world space

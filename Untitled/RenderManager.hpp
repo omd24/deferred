@@ -113,7 +113,7 @@ private:
   // Asset objects.
   ID3D12GraphicsCommandListPtr m_CmdList;
 
-  Camera m_Camera;
+  FirstPersonCamera camera;
   Timer m_Timer;
 
   // Synchronization objects.
@@ -123,16 +123,6 @@ private:
   HANDLE m_RenderContextFenceEvent;
   UINT64 m_FrameFenceValues[FRAME_COUNT];
   UINT64 volatile m_RenderContextFenceValues[THREAD_COUNT];
-
-  struct ModelVertex
-  {
-    XMFLOAT3 m_Position;
-    XMFLOAT3 m_Normal;
-    XMFLOAT2 m_UV;
-    XMFLOAT3 m_Tangent;
-    XMFLOAT3 m_Bitangent;
-  };
-  static_assert(sizeof(ModelVertex) == 56);
 
   std::wstring getAssetPath(LPCWSTR p_AssetName);
   std::wstring getShaderPath(LPCWSTR p_ShaderName);

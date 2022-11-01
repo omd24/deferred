@@ -4,185 +4,377 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <directxmath.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
-using namespace DirectX;
-//---------------------------------------------------------------------------//
-struct Camera
+// Abstract base class for camera types
+class CameraBase
 {
-  XMFLOAT3 m_InitialPosition;
-  XMFLOAT3 m_Position;
-  float m_Yaw;   // around y, relative to +z axis
-  float m_Pitch; // around x, relative to the xz plane
-  XMFLOAT3 m_LookDirection;
-  XMFLOAT3 m_UpDirection;
-  float m_MoveSpeed; // in units per second
-  float m_TurnSpeed; // in radians per second
 
-  struct
+protected:
+  glm::mat4 view;
+  glm::mat4 projection;
+  glm::mat4 viewProjection;
+
+  glm::mat4 world;
+  glm::vec3 position;
+  glm::quat orientation;
+
+  float nearZ = 0.0f;
+  float farZ = 0.0f;
+
+  virtual void CreateProjection() = 0;
+  void WorldMatrixChanged()
   {
-    bool w;
-    bool a;
-    bool s;
-    bool d;
 
-    bool left;
-    bool right;
-    bool up;
-    bool down;
-  } m_KeysPressed;
+    view = glm::inverse(world);
+    viewProjection = view * projection;
+  }
+
+public:
+  void Initialize(float nearZ, float farZ)
+  {
+    nearZ = nearZ;
+    farZ = farZ;
+    world = glm::identity<glm::mat4>();
+    view = glm::identity<glm::mat4>();
+    position = glm::vec3(0.0f, 0.0f, 0.0f);
+    orientation = glm::identity<glm::quat>();
+  }
+
+  const glm::mat4& ViewMatrix() const
+  {
+    return view;
+  };
+  const glm::mat4& ProjectionMatrix() const
+  {
+    return projection;
+  };
+  const glm::mat4& ViewProjectionMatrix() const
+  {
+    return viewProjection;
+  };
+  const glm::mat4& WorldMatrix() const
+  {
+    return world;
+  };
+  const glm::vec3& Position() const
+  {
+    return position;
+  };
+  const glm::quat& Orientation() const
+  {
+    return orientation;
+  };
+  float NearClip() const
+  {
+    return nearZ;
+  };
+  float FarClip() const
+  {
+    return farZ;
+  };
+
+  glm::vec3 Forward() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return transposed[2];
+  }
+  glm::vec3 Back() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return -transposed[2];
+  }
+  glm::vec3 Up() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return transposed[1];
+  }
+  glm::vec3 Down() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return -transposed[1];
+  }
+  glm::vec3 Right() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return -transposed[0];
+  }
+  glm::vec3 Left() const
+  {
+    glm::mat4 transposed = glm::transpose(world);
+    return transposed[0];
+  }
+
+  void
+  SetLookAt(const glm::vec3& eye, const glm::vec3& lookAt, const glm::vec3& up)
+  {
+    view = glm::lookAtLH(eye, lookAt, up);
+    world = glm::inverse(view);
+    position = eye;
+    orientation = glm::quat(world);
+
+    WorldMatrixChanged();
+  }
+  void SetWorldMatrix(const glm::mat4& newWorld)
+  {
+    world = newWorld;
+    glm::mat4 worldTranspose = glm::transpose(world);
+    position = worldTranspose[3];
+    orientation = glm::quat(world);
+
+    WorldMatrixChanged();
+  }
+  void SetPosition(const glm::vec3& newPosition)
+  {
+    position = newPosition;
+    world[0][3] = newPosition[0];
+    world[1][3] = newPosition[1];
+    world[2][3] = newPosition[2];
+
+    WorldMatrixChanged();
+  }
+  void SetOrientation(const glm::quat& newOrientation)
+  {
+    world = glm::mat4(glm::quat(newOrientation));
+    orientation = newOrientation;
+    world[0][3] = position[0];
+    world[1][3] = position[1];
+    world[2][3] = position[2];
+
+    WorldMatrixChanged();
+  }
+  void SetNearClip(float newNearClip)
+  {
+    nearZ = newNearClip;
+    CreateProjection();
+  }
+  void SetFarClip(float newFarClip)
+  {
+    farZ = newFarClip;
+    CreateProjection();
+  }
+  void SetProjection(const glm::mat4& newProjection)
+  {
+    projection = newProjection;
+    viewProjection = view * projection;
+  }
+
+  virtual bool IsOrthographic() const
+  {
+    return false;
+  }
 };
-//---------------------------------------------------------------------------//
-inline void cameraReset(Camera* p_Camera)
-{
-  p_Camera->m_Position = p_Camera->m_InitialPosition;
-  p_Camera->m_Yaw = XM_PI;
-  p_Camera->m_Pitch = 0.0f;
-  p_Camera->m_LookDirection = {0, 0, -1};
-}
-//---------------------------------------------------------------------------//
-inline void cameraInit(Camera* p_Camera, XMFLOAT3 p_Position)
-{
-  memset(p_Camera, 0, sizeof(*p_Camera));
-  p_Camera->m_LookDirection = XMFLOAT3(0, 0, -1);
-  p_Camera->m_InitialPosition = p_Position;
-  p_Camera->m_UpDirection = XMFLOAT3(0, 1, 0);
-  p_Camera->m_MoveSpeed = 20.0f;
-  p_Camera->m_TurnSpeed = XM_PIDIV2;
 
-  cameraReset(p_Camera);
-}
-//---------------------------------------------------------------------------//
-inline XMMATRIX getProjectionMatrix(
-    float p_Fov,
-    float p_AspectRatio,
-    float p_NearPlane = 1.0f,
-    float p_FarPlane = 1000.0f)
+// Camera with an orthographic projection
+class OrthographicCamera : public CameraBase
 {
-  return XMMatrixPerspectiveFovRH(
-      p_Fov, p_AspectRatio, p_NearPlane, p_FarPlane);
-}
-//---------------------------------------------------------------------------//
-inline XMMATRIX cameraGetViewMatrix(Camera* p_Camera)
-{
-  return XMMatrixLookToRH(
-      XMLoadFloat3(&p_Camera->m_Position),
-      XMLoadFloat3(&p_Camera->m_LookDirection),
-      XMLoadFloat3(&p_Camera->m_UpDirection));
-}
-//---------------------------------------------------------------------------//
-inline void cameraOnKeyDown(Camera* p_Camera, WPARAM p_Key)
-{
-  switch (p_Key)
-  {
-  case 'W':
-    p_Camera->m_KeysPressed.w = true;
-    break;
-  case 'A':
-    p_Camera->m_KeysPressed.a = true;
-    break;
-  case 'S':
-    p_Camera->m_KeysPressed.s = true;
-    break;
-  case 'D':
-    p_Camera->m_KeysPressed.d = true;
-    break;
-  case VK_LEFT:
-    p_Camera->m_KeysPressed.left = true;
-    break;
-  case VK_RIGHT:
-    p_Camera->m_KeysPressed.right = true;
-    break;
-  case VK_UP:
-    p_Camera->m_KeysPressed.up = true;
-    break;
-  case VK_DOWN:
-    p_Camera->m_KeysPressed.down = true;
-    break;
-  case VK_ESCAPE:
-    cameraReset(p_Camera);
-    break;
-  }
-}
-//---------------------------------------------------------------------------//
-inline void cameraOnKeyUp(Camera* p_Camera, WPARAM p_Key)
-{
-  switch (p_Key)
-  {
-  case 'W':
-    p_Camera->m_KeysPressed.w = false;
-    break;
-  case 'A':
-    p_Camera->m_KeysPressed.a = false;
-    break;
-  case 'S':
-    p_Camera->m_KeysPressed.s = false;
-    break;
-  case 'D':
-    p_Camera->m_KeysPressed.d = false;
-    break;
-  case VK_LEFT:
-    p_Camera->m_KeysPressed.left = false;
-    break;
-  case VK_RIGHT:
-    p_Camera->m_KeysPressed.right = false;
-    break;
-  case VK_UP:
-    p_Camera->m_KeysPressed.up = false;
-    break;
-  case VK_DOWN:
-    p_Camera->m_KeysPressed.down = false;
-    break;
-  }
-}
-//---------------------------------------------------------------------------//
-inline void cameraUpdate(Camera* p_Camera, float p_ElapsedSeconds)
-{
-  // Update move vector in view space:
-  XMFLOAT3 move(0, 0, 0);
 
-  if (p_Camera->m_KeysPressed.a)
-    move.x -= 1.0f;
-  if (p_Camera->m_KeysPressed.d)
-    move.x += 1.0f;
-  if (p_Camera->m_KeysPressed.w)
-    move.z -= 1.0f;
-  if (p_Camera->m_KeysPressed.s)
-    move.z += 1.0f;
+protected:
+  float xMin = 0.0f;
+  float xMax = 0.0f;
+  float yMin = 0.0f;
+  float yMax = 0.0f;
 
-  if (fabs(move.x) > 0.1f && fabs(move.z) > 0.1f)
+  virtual void CreateProjection() override
   {
-    XMVECTOR vector = XMVector3Normalize(XMLoadFloat3(&move));
-    move.x = XMVectorGetX(vector);
-    move.z = XMVectorGetZ(vector);
+    projection =
+        glm::mat4(glm::orthoLH_ZO(xMin, xMax, yMin, yMax, nearZ, farZ));
+    viewProjection = view * projection;
   }
 
-  float moveInterval = p_Camera->m_MoveSpeed * p_ElapsedSeconds;
-  float rotateInterval = p_Camera->m_TurnSpeed * p_ElapsedSeconds;
+public:
+  void Initialize(
+      float minX,
+      float minY,
+      float maxX,
+      float maxY,
+      float nearClip,
+      float farClip)
+  {
+    CameraBase::Initialize(nearClip, farClip);
 
-  if (p_Camera->m_KeysPressed.left)
-    p_Camera->m_Yaw += rotateInterval;
-  if (p_Camera->m_KeysPressed.right)
-    p_Camera->m_Yaw -= rotateInterval;
-  if (p_Camera->m_KeysPressed.up)
-    p_Camera->m_Pitch += rotateInterval;
-  if (p_Camera->m_KeysPressed.down)
-    p_Camera->m_Pitch -= rotateInterval;
+    assert(maxX > minX && maxX > minY);
 
-  // Clamp pitch to prevent from looking too far up or down
-  p_Camera->m_Pitch = min(p_Camera->m_Pitch, XM_PIDIV4);
-  p_Camera->m_Pitch = max(-XM_PIDIV4, p_Camera->m_Pitch);
+    nearZ = nearClip;
+    farZ = farClip;
+    xMin = minX;
+    xMax = maxX;
+    yMin = minY;
+    yMax = maxY;
 
-  // Move the camera in its local space.
-  float x = move.x * -cosf(p_Camera->m_Yaw) - move.z * sinf(p_Camera->m_Yaw);
-  float z = move.x * sinf(p_Camera->m_Yaw) - move.z * cosf(p_Camera->m_Yaw);
-  p_Camera->m_Position.x += x * moveInterval;
-  p_Camera->m_Position.z += z * moveInterval;
+    CreateProjection();
+  }
 
-  // Determine the look direction
-  float r = cosf(p_Camera->m_Pitch);
-  p_Camera->m_LookDirection.x = r * sinf(p_Camera->m_Yaw);
-  p_Camera->m_LookDirection.y = sinf(p_Camera->m_Pitch);
-  p_Camera->m_LookDirection.z = r * cosf(p_Camera->m_Yaw);
-}
+  float MinX() const
+  {
+    return xMin;
+  };
+  float MinY() const
+  {
+    return yMin;
+  };
+  float MaxX() const
+  {
+    return xMax;
+  };
+  float MaxY() const
+  {
+    return yMax;
+  };
+
+  void SetMinX(float minX)
+  {
+    xMin = minX;
+    CreateProjection();
+  }
+  void SetMinY(float minY)
+  {
+    yMin = minY;
+    CreateProjection();
+  }
+  void SetMaxX(float maxX)
+  {
+    xMax = maxX;
+    CreateProjection();
+  }
+  void SetMaxY(float maxY)
+  {
+    yMax = maxY;
+    CreateProjection();
+  }
+
+  bool IsOrthographic() const override
+  {
+    return true;
+  }
+};
+
+// Camera with a perspective projection
+class PerspectiveCamera : public CameraBase
+{
+public:
+  float width = 1024.0f;
+
+protected:
+  float aspect = 0.0f;
+  float fov = 0.0f;
+
+  virtual void CreateProjection() override
+  {
+    projection = glm::mat4(
+        glm::perspectiveFovLH_ZO(fov, width, width * aspect, nearZ, farZ));
+    viewProjection = view * projection;
+  }
+
+public:
+  void Initialize(
+      float aspectRatio,
+      float fieldOfView,
+      float nearClip,
+      float farClip,
+      float w)
+  {
+    CameraBase::Initialize(nearClip, farClip);
+    assert(aspectRatio > 0);
+    assert(fieldOfView > 0 && fieldOfView <= 3.14159f);
+    nearZ = nearClip;
+    farZ = farClip;
+    aspect = aspectRatio;
+    fov = fieldOfView;
+    width = w;
+    CreateProjection();
+  }
+
+  float AspectRatio() const
+  {
+    return aspect;
+  };
+  float FieldOfView() const
+  {
+    return fov;
+  };
+
+  void SetAspectRatio(float aspectRatio)
+  {
+    aspect = aspectRatio;
+    CreateProjection();
+  }
+  void SetFieldOfView(float fieldOfView)
+  {
+    fov = fieldOfView;
+    CreateProjection();
+  }
+};
+
+// Perspective camera that rotates about Z and Y axes
+class FirstPersonCamera : public PerspectiveCamera
+{
+
+protected:
+  float xRot = 0.0f;
+  float yRot = 0.0f;
+
+public:
+  void Initialize(
+      float aspectRatio = 16.0f / 9.0f,
+      float fieldOfView = glm::pi<float>(),
+      float nearClip = 0.01f,
+      float farClip = 100.0f,
+      float width = 1024.0f)
+  {
+    PerspectiveCamera::Initialize(
+        aspectRatio, fieldOfView, nearClip, farClip, width);
+    xRot = 0.0f;
+    yRot = 0.0f;
+  }
+
+  float XRotation() const
+  {
+    return xRot;
+  };
+  float YRotation() const
+  {
+    return yRot;
+  };
+
+  void SetXRotation(float xRotation)
+  {
+    xRot = glm::clamp(xRotation, -glm::half_pi<float>(), glm::half_pi<float>());
+    glm::quat myquaternion =
+        glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
+    SetOrientation(myquaternion);
+  }
+
+  float XMScalarModAngle(float Angle) noexcept
+  {
+    // Note: The modulo is performed with unsigned math only to work
+    // around a precision error on numbers that are close to PI
+
+    // Normalize the range from 0.0f to XM_2PI
+    Angle = Angle + glm::pi<float>();
+    // Perform the modulo, unsigned
+    float fTemp = fabsf(Angle);
+    fTemp = fTemp - (2.0f * glm::pi<float>() *
+                     static_cast<float>(
+                         static_cast<int32_t>(fTemp / glm::half_pi<float>())));
+    // Restore the number to the range of -XM_PI to XM_PI-epsilon
+    fTemp = fTemp - glm::pi<float>();
+    // If the modulo'd value was negative, restore negation
+    if (Angle < 0.0f)
+    {
+      fTemp = -fTemp;
+    }
+    return fTemp;
+  }
+
+  void SetYRotation(float yRotation)
+  {
+    yRot = XMScalarModAngle(yRotation);
+    glm::quat myquaternion =
+        glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
+    SetOrientation(myquaternion);
+  }
+};
 //---------------------------------------------------------------------------//

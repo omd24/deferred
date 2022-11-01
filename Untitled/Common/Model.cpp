@@ -356,8 +356,6 @@ void Mesh::InitFromAssimpMesh(
         uint16_t(assimpMesh.mFaces[triIdx].mIndices[2]);
   }
 
-  const uint64_t numSubsets = 1;
-  _Unreferenced_parameter_(numSubsets);
   meshParts.resize(1);
   MeshPart& part = meshParts[0];
   part.IndexStart = 0;
@@ -657,8 +655,6 @@ void Mesh::InitPlane(
   dstIndices[iIdx++] = 3;
   dstIndices[iIdx++] = 0;
 
-  const uint32_t indexSize = 2;
-  _Unreferenced_parameter_(indexSize);
   indexType = IndexType::Index16Bit;
 
   numVertices = uint32_t(NumPlaneVerts);

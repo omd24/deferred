@@ -45,11 +45,13 @@ static glm::vec3 convertColor(const aiColor3D& clr)
 
 static glm::mat4 convertMatrix(const aiMatrix4x4& mat)
 {
-  return glm::mat4(
+  glm::mat4 ret= glm::mat4(
       glm::vec4(mat.a1, mat.a2, mat.a3, mat.a4),
       glm::vec4(mat.b1, mat.b2, mat.b3, mat.b4),
       glm::vec4(mat.c1, mat.c2, mat.c3, mat.c4),
       glm::vec4(mat.d1, mat.d2, mat.d3, mat.d4));
+
+  return glm::transpose(ret);
 }
 void loadTexture(
     ID3D12Device* dev,

@@ -683,15 +683,13 @@ void RenderManager::renderDeferred()
   // Set constant buffers:
   {
     glm::mat4 world = glm::identity<glm::mat4>();
-    glm::mat4 view = glm::identity<glm::mat4>();
-    glm::mat4 proj = glm::identity<glm::mat4>();
-
+    // Set constant buffers
     MeshVSConstants vsConstants;
     vsConstants.World = world;
-    vsConstants.View = view;
-    vsConstants.WorldViewProjection = world * view * proj;
-    vsConstants.NearClip = 1.0f;
-    vsConstants.FarClip = 1000.0f;
+    vsConstants.View = camera.ViewMatrix();
+    vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
+    vsConstants.NearClip = camera.NearClip();
+    vsConstants.FarClip = camera.FarClip();
     BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
   }
 
@@ -1020,6 +1018,15 @@ void RenderManager::onUpdate()
   timerTick(&m_Timer, nullptr);
 
   // TODO: Update camera based on user-input
+  static float CamRotSpeed = 0.180f;
+
+  // Rotate the camera with the mouse
+  float xRot = camera.XRotation();
+  float yRot = camera.YRotation();
+  xRot += 2 * CamRotSpeed;
+  yRot += 2 * CamRotSpeed;
+  camera.SetXRotation(xRot);
+  camera.SetYRotation(yRot);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
@@ -1066,12 +1073,69 @@ void RenderManager::onRender()
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyDown(UINT8 p_Key)
 {
-  // TODO: Update camera based on user-input
+  float CamMoveSpeed = 5.0f;
+  float CamRotSpeed = 0.180f;
+  glm::vec3 camPos = camera.Position();
+
+  switch (p_Key)
+  {
+  case 'W':
+  {
+    camPos += camera.Forward() * CamMoveSpeed;
+  }
+  break;
+  case 'A':
+  {
+    camPos += camera.Left() * CamMoveSpeed;
+  }
+  break;
+  case 'S':
+  {
+    camPos += camera.Back() * CamMoveSpeed;
+  }
+  break;
+  case 'D':
+  {
+    camPos += camera.Right() * CamMoveSpeed;
+  }
+  break;
+  case VK_LEFT:
+  {
+    camPos += camera.Left() * CamMoveSpeed;
+  }
+  break;
+  case VK_RIGHT:
+  {
+    camPos += camera.Right() * CamMoveSpeed;
+  }
+  break;
+  case VK_UP:
+  {
+    camPos += camera.Up() * CamMoveSpeed;
+  }
+  break;
+  case VK_DOWN:
+  {
+    camPos += camera.Down() * CamMoveSpeed;
+  }
+  break;
+  }
+
+  camera.SetPosition(camPos);
+
+  // Rotate the camera with the mouse
+  {
+    // float xRot = camera.XRotation();
+    // float yRot = camera.YRotation();
+    // xRot += dx * CamRotSpeed;
+    // yRot += dy * CamRotSpeed;
+    // camera.SetXRotation(xRot);
+    // camera.SetYRotation(yRot);
+  }
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyUp(UINT8 p_Key)
 {
-  // TODO: Update camera based on user-input
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onResize()

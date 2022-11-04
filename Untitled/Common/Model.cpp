@@ -45,11 +45,20 @@ static glm::vec3 convertColor(const aiColor3D& clr)
 
 static glm::mat4 convertMatrix(const aiMatrix4x4& mat)
 {
-  glm::mat4 ret= glm::mat4(
+  glm::mat4 ret = glm::mat4(
       glm::vec4(mat.a1, mat.a2, mat.a3, mat.a4),
       glm::vec4(mat.b1, mat.b2, mat.b3, mat.b4),
       glm::vec4(mat.c1, mat.c2, mat.c3, mat.c4),
       glm::vec4(mat.d1, mat.d2, mat.d3, mat.d4));
+
+  return glm::transpose(ret);
+}
+static glm::mat3 convertMatrix4To3(const aiMatrix4x4& mat)
+{
+  glm::mat3 ret = glm::mat3(
+      glm::vec3(mat.a1, mat.a2, mat.a3),
+      glm::vec3(mat.b1, mat.b2, mat.b3),
+      glm::vec3(mat.c1, mat.c2, mat.c3));
 
   return glm::transpose(ret);
 }
@@ -795,18 +804,19 @@ void Model::CreateWithAssimp(
       ModelSpotLight& dstLight = spotLights[numSpotLights++];
 
       glm::mat4x4 translation =
-          glm::transpose(convertMatrix(translationNode->mTransformation));
+          (convertMatrix(translationNode->mTransformation));
       dstLight.Position = translation[3] * settings.SceneScale;
       dstLight.Position.z *= -1.0f;
       dstLight.Intensity = convertColor(srcLight.mColorDiffuse);
       dstLight.AngularAttenuation.x = srcLight.mAngleInnerCone;
       dstLight.AngularAttenuation.y = srcLight.mAngleOuterCone;
 
-      glm::mat4x4 rot =
-          glm::transpose(convertMatrix(rotationNode->mTransformation));
+      glm::mat3x3 rot =
+          glm::transpose(convertMatrix4To3(rotationNode->mTransformation));
       glm::mat3x3 rotation = glm::mat3x3(rot[0], rot[1], rot[2]);
       dstLight.Orientation = glm::normalize((glm::quat(rotation)));
-      dstLight.Direction = glm::normalize(rotation[2]);
+      dstLight.Direction = glm::normalize(
+          glm::vec3(rotation[2].x, rotation[2].y, rotation[2].z));
     }
     else if (srcLight.mType == aiLightSource_POINT)
     {

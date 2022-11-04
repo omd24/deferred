@@ -27,8 +27,7 @@ protected:
   virtual void CreateProjection() = 0;
   void WorldMatrixChanged()
   {
-
-    view = glm::inverse(world);
+    view = (glm::inverse(world));
     viewProjection = view * projection;
   }
 
@@ -110,8 +109,8 @@ public:
   void
   SetLookAt(const glm::vec3& eye, const glm::vec3& lookAt, const glm::vec3& up)
   {
-    view = glm::lookAtLH(eye, lookAt, up);
-    world = glm::inverse(view);
+    view = glm::transpose(glm::lookAtLH(eye, lookAt, up));
+    world = glm::transpose(glm::inverse(view));
     position = eye;
     orientation = glm::quat(world);
 
@@ -119,7 +118,7 @@ public:
   }
   void SetWorldMatrix(const glm::mat4& newWorld)
   {
-    world = newWorld;
+    world = glm::transpose(newWorld);
     glm::mat4 worldTranspose = glm::transpose(world);
     position = worldTranspose[3];
     orientation = glm::quat(world);
@@ -138,6 +137,7 @@ public:
   void SetOrientation(const glm::quat& newOrientation)
   {
     world = glm::mat4(glm::quat(newOrientation));
+    world = glm::transpose(world);
     orientation = newOrientation;
     world[0][3] = position[0];
     world[1][3] = position[1];
@@ -158,6 +158,7 @@ public:
   void SetProjection(const glm::mat4& newProjection)
   {
     projection = newProjection;
+    projection = glm::transpose(projection);
     viewProjection = view * projection;
   }
 
@@ -181,6 +182,7 @@ protected:
   {
     projection =
         glm::mat4(glm::orthoLH_ZO(xMin, xMax, yMin, yMax, nearZ, farZ));
+    projection = glm::transpose(projection);
     viewProjection = view * projection;
   }
 
@@ -264,7 +266,8 @@ protected:
   virtual void CreateProjection() override
   {
     projection = glm::mat4(
-        glm::perspectiveFovLH_ZO(fov, width, width * aspect, nearZ, farZ));
+        glm::perspectiveFovLH_ZO(fov, width, width / aspect, nearZ, farZ));
+    projection = glm::transpose(projection);
     viewProjection = view * projection;
   }
 
@@ -358,7 +361,7 @@ public:
     float fTemp = fabsf(Angle);
     fTemp = fTemp - (2.0f * glm::pi<float>() *
                      static_cast<float>(
-                         static_cast<int32_t>(fTemp / glm::half_pi<float>())));
+                         static_cast<int32_t>(fTemp / glm::two_pi<float>())));
     // Restore the number to the range of -XM_PI to XM_PI-epsilon
     fTemp = fTemp - glm::pi<float>();
     // If the modulo'd value was negative, restore negation

@@ -686,8 +686,8 @@ void RenderManager::renderDeferred()
     // Set constant buffers
     MeshVSConstants vsConstants;
     vsConstants.World = world;
-    vsConstants.View = camera.ViewMatrix();
-    vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
+    vsConstants.View = glm::transpose(camera.ViewMatrix());
+    vsConstants.WorldViewProjection = glm::transpose(world * camera.ViewProjectionMatrix());
     vsConstants.NearClip = camera.NearClip();
     vsConstants.FarClip = camera.FarClip();
     BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
@@ -1021,12 +1021,12 @@ void RenderManager::onUpdate()
   static float CamRotSpeed = 0.180f;
 
   // Rotate the camera with the mouse
-  float xRot = camera.XRotation();
-  float yRot = camera.YRotation();
-  xRot += 2 * CamRotSpeed;
-  yRot += 2 * CamRotSpeed;
-  camera.SetXRotation(xRot);
-  camera.SetYRotation(yRot);
+  //float xRot = camera.XRotation();
+  //float yRot = camera.YRotation();
+  //xRot += 2 * CamRotSpeed;
+  //yRot += 2 * CamRotSpeed;
+  //camera.SetXRotation(xRot);
+  //camera.SetYRotation(yRot);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()

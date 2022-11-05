@@ -621,6 +621,7 @@ void RenderManager::renderDeferred()
 {
   // Draw to Gbuffers
 #pragma region Gbuffer pass
+  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Gbuffers");
 
   {
     // Transition our G-Buffer targets to a writable state
@@ -674,7 +675,7 @@ void RenderManager::renderDeferred()
   setViewport(m_CmdList, m_Info.m_Width, m_Info.m_Height);
 
   //
-  // Render Gbuffer!
+  // Render the Gbuffer!
   //
 
   m_CmdList->SetGraphicsRootSignature(gbufferRootSignature);
@@ -687,7 +688,8 @@ void RenderManager::renderDeferred()
     MeshVSConstants vsConstants;
     vsConstants.World = world;
     vsConstants.View = glm::transpose(camera.ViewMatrix());
-    vsConstants.WorldViewProjection = glm::transpose(world * camera.ViewProjectionMatrix());
+    vsConstants.WorldViewProjection =
+        glm::transpose(world * camera.ViewProjectionMatrix());
     vsConstants.NearClip = camera.NearClip();
     vsConstants.FarClip = camera.FarClip();
     BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
@@ -764,11 +766,15 @@ void RenderManager::renderDeferred()
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
+
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Gbuffers
 #pragma endregion
 
   //
   // Render fullscreen deferred pass!
   //
+  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Deferred");
+
   const uint32_t numComputeTilesX =
       alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
   const uint32_t numComputeTilesY =
@@ -795,14 +801,17 @@ void RenderManager::renderDeferred()
 
   // Set constant buffers
   {
-    glm::mat4 world = glm::identity<glm::mat4>();
-    MeshVSConstants vsConstants;
-    vsConstants.World = world;
-    vsConstants.View = camera.ViewMatrix();
-    vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
-    vsConstants.NearClip = camera.NearClip();
-    vsConstants.FarClip = camera.FarClip();
-    BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
+    DeferredConstants deferredConstants;
+    deferredConstants.InvViewProj = glm::inverse(camera.ViewProjectionMatrix());
+    deferredConstants.Projection = camera.ProjectionMatrix();
+    deferredConstants.RTSize = glm::vec2(
+        float(deferredTarget.width()), float(deferredTarget.height()));
+    deferredConstants.NumComputeTilesX = numComputeTilesX;
+    BindTempConstantBuffer(
+        m_CmdList,
+        deferredConstants,
+        DeferredParams_DeferredCBuffer,
+        CmdListMode::Compute);
 
     uint32_t srvIndices[] = {
         materialTextureIndices.m_SrvIndex,
@@ -823,12 +832,15 @@ void RenderManager::renderDeferred()
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
+
+  // Copy deferred target to backbuffer:
+  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Copy to Backbuffer");
+
   deferredTarget.transition(
       m_CmdList,
       D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
       D3D12_RESOURCE_STATE_COPY_SOURCE);
-
-  // Copy deferred target to backbuffer:
   m_CmdList->ResourceBarrier(
       1,
       &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -846,6 +858,8 @@ void RenderManager::renderDeferred()
           m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
           D3D12_RESOURCE_STATE_COPY_DEST,
           D3D12_RESOURCE_STATE_PRESENT));
+
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Copy to Backbuffer
 }
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
@@ -1021,12 +1035,12 @@ void RenderManager::onUpdate()
   static float CamRotSpeed = 0.180f;
 
   // Rotate the camera with the mouse
-  //float xRot = camera.XRotation();
-  //float yRot = camera.YRotation();
-  //xRot += 2 * CamRotSpeed;
-  //yRot += 2 * CamRotSpeed;
-  //camera.SetXRotation(xRot);
-  //camera.SetYRotation(yRot);
+  // float xRot = camera.XRotation();
+  // float yRot = camera.YRotation();
+  // xRot += 2 * CamRotSpeed;
+  // yRot += 2 * CamRotSpeed;
+  // camera.SetXRotation(xRot);
+  // camera.SetYRotation(yRot);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
@@ -1037,7 +1051,6 @@ void RenderManager::onRender()
     {
       PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
 
-      moveToNextFrame();
       waitForRenderContext();
       populateCommandList();
 

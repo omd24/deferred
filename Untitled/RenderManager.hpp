@@ -87,7 +87,7 @@ private:
   DepthBuffer depthBuffer;
 
   // Gbuffer stuff
-  RenderTexture albedoTarget;
+  RenderTexture gbufferTestTarget;
   ID3D12RootSignature* gbufferRootSignature = nullptr;
   ID3D12PipelineState* gbufferPSO = nullptr;
 

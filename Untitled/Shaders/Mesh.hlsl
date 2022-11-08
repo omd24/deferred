@@ -150,6 +150,7 @@ struct PSInput
 struct PSOutputGBuffer
 {
     float4 Color : SV_Target0;
+    uint MaterialID : SV_Target1;
 };
 
 //=================================================================================================
@@ -195,5 +196,10 @@ PSOutputGBuffer PS(in PSInput input)
     Quaternion tangentFrame = QuatFrom3x3(float3x3(tangentWS, bitangentWS, normalWS));
 
     result.Color = PackQuaternion(tangentFrame);
+
+    result.MaterialID = MatIndexCBuffer.MatIndex & 0x7F;
+    if(handedness == -1.0f)
+        result.MaterialID |= 0x80;
+
     return result;
 }

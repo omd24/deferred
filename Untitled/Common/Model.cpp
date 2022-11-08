@@ -245,6 +245,7 @@ void loadMaterialResources(
     bool forceSRGB,
     std::vector<MaterialTexture*>& materialTextures)
 {
+  int numLoadedTemp = 0;
   const uint64_t numMaterials = materials.size();
   for (uint64_t matIdx = 0; matIdx < numMaterials; ++matIdx)
   {
@@ -280,6 +281,7 @@ void loadMaterialResources(
             dev, newMatTexture->Texture, path.c_str(), useSRGB ? true : false);
         materialTextures.push_back(newMatTexture);
         uint64_t idx = materialTextures.size() - 1;
+        numLoadedTemp++;
 
         material.Textures[texType] = &newMatTexture->Texture;
         material.TextureIndices[texType] = uint32_t(idx);

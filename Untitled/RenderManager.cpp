@@ -260,7 +260,7 @@ bool RenderManager::createPSOs()
     };
 
     DXGI_FORMAT gbufferFormats[] = {
-        albedoTarget.format(),
+        gbufferTestTarget.format(),
         materialIDTarget.format(),
     };
 
@@ -406,7 +406,7 @@ void RenderManager::loadAssets()
     rtInit.CreateUAV = false;
     rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     rtInit.Name = L"Albedo Target";
-    albedoTarget.init(rtInit);
+    gbufferTestTarget.init(rtInit);
   }
   {
     RenderTextureInit rtInit;
@@ -638,7 +638,7 @@ void RenderManager::renderDeferred()
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = albedoTarget.resource();
+    barriers[1].Transition.pResource = gbufferTestTarget.resource();
     barriers[1].Transition.StateBefore =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -657,7 +657,7 @@ void RenderManager::renderDeferred()
 
   // Set the G-Buffer render targets and clear them
   D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {
-      albedoTarget.m_RTV,
+      gbufferTestTarget.m_RTV,
       materialIDTarget.m_RTV,
   };
   m_CmdList->OMSetRenderTargets(
@@ -750,7 +750,7 @@ void RenderManager::renderDeferred()
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = albedoTarget.resource();
+    barriers[1].Transition.pResource = gbufferTestTarget.resource();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.StateAfter =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -817,7 +817,7 @@ void RenderManager::renderDeferred()
         materialTextureIndices.m_SrvIndex,
         materialIDTarget.srv(),
         depthBuffer.getSrv(),
-        albedoTarget.srv()};
+        gbufferTestTarget.srv()};
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
@@ -1014,7 +1014,7 @@ void RenderManager::onDestroy()
   depthBuffer.deinit();
 
   // Shutdown render target(s):
-  albedoTarget.deinit();
+  gbufferTestTarget.deinit();
   materialIDTarget.deinit();
   materialTextureIndices.deinit();
   deferredTarget.deinit();

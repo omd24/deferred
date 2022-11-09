@@ -11,6 +11,8 @@ Buffer<uint> BufferUintTable[] : register(t0, space6);
 
 typedef float4 Quaternion;
 
+static const float DeferredUVScale = 2.0f;
+
 float4 PackQuaternion(in Quaternion q)
 {
     Quaternion absQ = abs(q);
@@ -149,8 +151,9 @@ struct PSInput
 
 struct PSOutputGBuffer
 {
-    float4 Color : SV_Target0;
-    uint MaterialID : SV_Target1;
+    float4 TangentFrame : SV_Target0;
+    float4 UV : SV_Target1;
+    uint MaterialID : SV_Target2;
 };
 
 //=================================================================================================
@@ -195,11 +198,15 @@ PSOutputGBuffer PS(in PSInput input)
 
     Quaternion tangentFrame = QuatFrom3x3(float3x3(tangentWS, bitangentWS, normalWS));
 
-    result.Color = PackQuaternion(tangentFrame);
+    result.TangentFrame = PackQuaternion(tangentFrame);
 
     result.MaterialID = MatIndexCBuffer.MatIndex & 0x7F;
     if(handedness == -1.0f)
         result.MaterialID |= 0x80;
+
+    result.UV.xy = frac(input.UV / DeferredUVScale);
+    result.UV.zw = float2(ddx_fine(input.PositionSS.z), ddy_fine(input.PositionSS.z));
+    result.UV.zw = sign(result.UV.zw) * pow(abs(result.UV.zw), 1 / 2.0f);
 
     return result;
 }

@@ -260,7 +260,8 @@ bool RenderManager::createPSOs()
     };
 
     DXGI_FORMAT gbufferFormats[] = {
-        gbufferTestTarget.format(),
+        tangentFrameTarget.format(),
+        uvTarget.format(),
         materialIDTarget.format(),
     };
 
@@ -400,13 +401,25 @@ void RenderManager::loadAssets()
     RenderTextureInit rtInit;
     rtInit.Width = m_Info.m_Width;
     rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = false;
     rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"Albedo Target";
-    gbufferTestTarget.init(rtInit);
+    rtInit.Name = L"Tangent Frame Target";
+    tangentFrameTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_SNORM;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"UV Target";
+    uvTarget.init(rtInit);
   }
   {
     RenderTextureInit rtInit;
@@ -625,7 +638,7 @@ void RenderManager::renderDeferred()
 
   {
     // Transition our G-Buffer targets to a writable state
-    D3D12_RESOURCE_BARRIER barriers[3] = {};
+    D3D12_RESOURCE_BARRIER barriers[4] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -638,7 +651,7 @@ void RenderManager::renderDeferred()
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = gbufferTestTarget.resource();
+    barriers[1].Transition.pResource = tangentFrameTarget.resource();
     barriers[1].Transition.StateBefore =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -646,18 +659,27 @@ void RenderManager::renderDeferred()
 
     barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[2].Transition.pResource = materialIDTarget.resource();
+    barriers[2].Transition.pResource = uvTarget.resource();
     barriers[2].Transition.StateBefore =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[2].Transition.Subresource = 0;
+
+    barriers[3].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[3].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[3].Transition.pResource = materialIDTarget.resource();
+    barriers[3].Transition.StateBefore =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[3].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
 
   // Set the G-Buffer render targets and clear them
   D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = {
-      gbufferTestTarget.m_RTV,
+      tangentFrameTarget.m_RTV,
+      uvTarget.m_RTV,
       materialIDTarget.m_RTV,
   };
   m_CmdList->OMSetRenderTargets(
@@ -737,7 +759,7 @@ void RenderManager::renderDeferred()
 
   // Transition back G-Buffer stuff:
   {
-    D3D12_RESOURCE_BARRIER barriers[3] = {};
+    D3D12_RESOURCE_BARRIER barriers[4] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -750,7 +772,7 @@ void RenderManager::renderDeferred()
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = gbufferTestTarget.resource();
+    barriers[1].Transition.pResource = tangentFrameTarget.resource();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.StateAfter =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -758,11 +780,19 @@ void RenderManager::renderDeferred()
 
     barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[2].Transition.pResource = materialIDTarget.resource();
+    barriers[2].Transition.pResource = uvTarget.resource();
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[2].Transition.StateAfter =
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[2].Transition.Subresource = 0;
+
+    barriers[3].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[3].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[3].Transition.pResource = materialIDTarget.resource();
+    barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[3].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[3].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -816,8 +846,9 @@ void RenderManager::renderDeferred()
     uint32_t srvIndices[] = {
         materialTextureIndices.m_SrvIndex,
         materialIDTarget.srv(),
+        uvTarget.srv(),
         depthBuffer.getSrv(),
-        gbufferTestTarget.srv()};
+        tangentFrameTarget.srv()};
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
@@ -1014,7 +1045,8 @@ void RenderManager::onDestroy()
   depthBuffer.deinit();
 
   // Shutdown render target(s):
-  gbufferTestTarget.deinit();
+  uvTarget.deinit();
+  tangentFrameTarget.deinit();
   materialIDTarget.deinit();
   materialTextureIndices.deinit();
   deferredTarget.deinit();

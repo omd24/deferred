@@ -91,6 +91,8 @@ private:
   ID3D12RootSignature* gbufferRootSignature = nullptr;
   ID3D12PipelineState* gbufferPSO = nullptr;
 
+  RenderTexture tangentFrameTarget;
+  RenderTexture uvTarget;
   RenderTexture materialIDTarget;
   StructuredBuffer materialTextureIndices;
 

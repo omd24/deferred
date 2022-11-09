@@ -13,13 +13,15 @@ struct SRVIndexConstants
 {
     uint MaterialIndicesBufferIdx;
     uint MaterialIDMapIdx;
+    uint UVMapIdx;
     uint DepthMapIdx;
-    uint GbufferTestIndex;
+    uint TangentFrameMapIndex;
 };
 
 ConstantBuffer<DeferredConstants> DeferredCBuffer : register(b2);
 ConstantBuffer<SRVIndexConstants> SRVIndices : register(b4);
 
+static const float DeferredUVScale = 2.0f;
 static const uint DeferredTileSize = 8;
 static const uint ThreadGroupSize = DeferredTileSize * DeferredTileSize;
 
@@ -65,9 +67,13 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
     float2 screenUV = (pixelPos) * invRTSize;
 
     StructuredBuffer<MaterialTextureIndices> materialIndicesBuffer = MaterialIndexBuffers[SRVIndices.MaterialIndicesBufferIdx];
-    Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
 
+    Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
     uint packedMaterialID = materialIDMap[pixelPos];
+
+    Texture2D uvMap = Tex2DTable[SRVIndices.UVMapIdx];
+    float2 uv = uvMap[pixelPos].xy * DeferredUVScale;
+
     float handedness = packedMaterialID & 0x80 ? -1.0f : 1.0f;
     uint materialID = packedMaterialID & 0x7F;
     uint matTest = materialIDMap.SampleLevel(AnisoSampler, screenUV, 0);
@@ -75,10 +81,10 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
     Texture2D AlbedoMap = Tex2DTable[NonUniformResourceIndex(matIndices.Albedo)];
     Texture2D NormalMap = Tex2DTable[NonUniformResourceIndex(matIndices.Normal)];
 
-    float4 color = AlbedoMap.SampleLevel(AnisoSampler, screenUV, 0);
+    float4 color = AlbedoMap.SampleLevel(AnisoSampler, uv, 0);
     // shadingInput.AlbedoMap = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
 
-    // Texture2D<float4> AlbedoMapTemp = Tex2DTable[NonUniformResourceIndex(SRVIndices.GbufferTestIndex)];
+    // Texture2D<float4> AlbedoMapTemp = Tex2DTable[NonUniformResourceIndex(SRVIndices.TangentFrameMapIndex)];
     // float4 color = AlbedoMapTemp.SampleLevel(AnisoSampler, screenUV, 0);
 
     OutputTexture[pixelPos] = float4(color.r, color.g, color.b, color.a);

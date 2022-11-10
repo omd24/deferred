@@ -206,20 +206,20 @@ inline std::string WideStrToStr(const std::wstring& p_WideStr)
 //---------------------------------------------------------------------------//
 inline std::wstring MakeString(const wchar_t* format, ...)
 {
-    wchar_t buffer[1024] = { 0 };
-    va_list args;
-    va_start(args, format);
-    vswprintf_s(buffer, 1024, format, args);
-    return std::wstring(buffer);
+  wchar_t buffer[1024] = {0};
+  va_list args;
+  va_start(args, format);
+  vswprintf_s(buffer, 1024, format, args);
+  return std::wstring(buffer);
 }
 //---------------------------------------------------------------------------//
 inline std::string MakeString(const char* format, ...)
 {
-    char buffer[1024] = { 0 };
-    va_list args;
-    va_start(args, format);
-    vsprintf_s(buffer, 1024, format, args);
-    return std::string(buffer);
+  char buffer[1024] = {0};
+  va_list args;
+  va_start(args, format);
+  vsprintf_s(buffer, 1024, format, args);
+  return std::string(buffer);
 }
 //---------------------------------------------------------------------------//
 // Alternative methods for string conversion
@@ -627,6 +627,6 @@ inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title)
   SetWindowText(g_WinHandle, windowText.c_str());
 }
 //---------------------------------------------------------------------------//
-
-
-
+typedef void (*MsgFunction)(void*, HWND, UINT, WPARAM, LPARAM);
+inline MsgFunction g_ImguiCallback;
+//---------------------------------------------------------------------------//

@@ -7,6 +7,9 @@
     <Filter Include="Shaders">
       <UniqueIdentifier>{c65d1662-97d7-4045-a0b0-a5b0aa603e9d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Common\Imgui">
+      <UniqueIdentifier>{87b14766-f3ca-460a-a530-eb1dec943ab8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
@@ -14,10 +17,30 @@
     <ClCompile Include="Common\FileWatcher.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="MeshRenderer.cpp" />
     <ClCompile Include="Common\D3D12Wrapper.cpp" />
     <ClCompile Include="Common\Model.cpp">
       <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\ImguiHelper.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui.cpp">
+      <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui_draw.cpp">
+      <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui_impl_dx12.cpp">
+      <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui_impl_win32.cpp">
+      <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui_tables.cpp">
+      <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\ImGui\imgui_widgets.cpp">
+      <Filter>Common\Imgui</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -37,12 +60,35 @@
     <ClInclude Include="Common\Thread.hpp">
       <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="MeshRenderer.hpp" />
     <ClInclude Include="Common\Model.hpp">
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="Common\D3D12Wrapper.hpp">
       <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\ImguiHelper.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imgui.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imgui_impl_dx12.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imgui_impl_win32.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imgui_internal.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imstb_rectpack.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imstb_textedit.h">
+      <Filter>Common\Imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Externals\ImGui\imstb_truetype.h">
+      <Filter>Common\Imgui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

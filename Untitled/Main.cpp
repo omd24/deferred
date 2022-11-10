@@ -10,6 +10,9 @@ std::unique_ptr<FileWatcher> g_FileWatcher;
 static LRESULT CALLBACK
 msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
 {
+  if (g_ImguiCallback != nullptr)
+    g_ImguiCallback(nullptr, p_Wnd, p_Message, p_WParam, p_LParam);
+
   CallBackRegistery* funcRegPtr = reinterpret_cast<CallBackRegistery*>(
       GetWindowLongPtr(p_Wnd, GWLP_USERDATA));
   switch (p_Message)
@@ -136,7 +139,7 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
   }
 
   //// Deinit upload system
-  //shutdownUpload();
+  // shutdownUpload();
 
   g_Renderer->onDestroy();
 
@@ -156,7 +159,7 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
     //::free(rendererMem);
   };
   g_Renderer = new (rendererMem) RenderManager;
-  g_Renderer->OnInit(1280, 720, L"D3D12 Draw Traingle");
+  g_Renderer->OnInit(1280, 720, L"D3D12 Draw Untitled");
 
   // Get shader path:
   UINT pathSize = 512;

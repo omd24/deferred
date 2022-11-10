@@ -1,4 +1,5 @@
 #include "RenderManager.hpp"
+#include "ImguiHelper.hpp"
 #include <pix3.h>
 
 enum DeferredRootParams : uint32_t
@@ -913,8 +914,6 @@ void RenderManager::populateCommandList()
   renderForward();
 
   renderDeferred();
-
-  D3D_EXEC_CHECKED(m_CmdList->Close());
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()
@@ -1023,6 +1022,9 @@ void RenderManager::onLoad()
 
   // Load assets
   loadAssets();
+
+  // Init imgui
+  ImGuiHelper::init(g_WinHandle, m_Dev);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
@@ -1054,6 +1056,8 @@ void RenderManager::onDestroy()
   // Shudown uploads and other helpers
   shutdownHelpers();
   shutdownUpload();
+
+  ImGuiHelper::deinit();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
@@ -1073,6 +1077,10 @@ void RenderManager::onUpdate()
   // yRot += 2 * CamRotSpeed;
   // camera.SetXRotation(xRot);
   // camera.SetYRotation(yRot);
+
+  // Imgui begin frame:
+  // TODO: add correct delta time
+  ImGuiHelper::beginFrame(m_Info.m_Width, m_Info.m_Height, 1.0f / 60.0f, m_Dev);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
@@ -1088,12 +1096,35 @@ void RenderManager::onRender()
 
       EndFrame_Upload(m_CmdQue);
 
+      // Imgui rendering:
+      PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
+      m_CmdList->ResourceBarrier(
+      1,
+      &CD3DX12_RESOURCE_BARRIER::Transition(
+          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+          D3D12_RESOURCE_STATE_PRESENT,
+          D3D12_RESOURCE_STATE_RENDER_TARGET));
+      CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
+          m_RtvHeap->GetCPUDescriptorHandleForHeapStart(),
+          m_FrameIndex,
+          m_RtvDescriptorSize);
+      ImGuiHelper::endFrame(
+          m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
+            m_CmdList->ResourceBarrier(
+      1,
+      &CD3DX12_RESOURCE_BARRIER::Transition(
+          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+          D3D12_RESOURCE_STATE_RENDER_TARGET,
+          D3D12_RESOURCE_STATE_PRESENT));
+      PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render Imgui
+
       // Execute the command list.
+      D3D_EXEC_CHECKED(m_CmdList->Close());
       ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
       m_CmdQue->ExecuteCommandLists(
           arrayCount32(ppCommandLists), ppCommandLists);
 
-      PIXEndEvent(m_CmdQue.GetInterfacePtr());
+      PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render
 
       // Present the frame.
       D3D_EXEC_CHECKED(m_Swc->Present(1, 0));

@@ -1773,7 +1773,7 @@ FormattedBuffer::FormattedBuffer()
 FormattedBuffer::~FormattedBuffer()
 {
   assert(NumElements == 0);
-  deinit();
+  // deinit();
 }
 
 void FormattedBuffer::init(const FormattedBufferInit& init)

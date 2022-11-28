@@ -37,6 +37,11 @@ struct MaterialTextureIndices
   uint32_t Metallic;
 };
 //---------------------------------------------------------------------------//
+// Internal variables
+//---------------------------------------------------------------------------//
+static POINT prevMousePos = {};
+
+//---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
 std::wstring RenderManager::getShaderPath(LPCWSTR p_ShaderName)
@@ -1067,16 +1072,30 @@ void RenderManager::onUpdate()
 
   timerTick(&m_Timer, nullptr);
 
-  // TODO: Update camera based on user-input
-  static float CamRotSpeed = 0.180f;
+  // TODO: Better camera input handling
+  static float CamRotSpeed = 0.005f;
 
   // Rotate the camera with the mouse
-  // float xRot = camera.XRotation();
-  // float yRot = camera.YRotation();
-  // xRot += 2 * CamRotSpeed;
-  // yRot += 2 * CamRotSpeed;
-  // camera.SetXRotation(xRot);
-  // camera.SetYRotation(yRot);
+  {
+    POINT pos;
+    GetCursorPos(&pos);
+    if (g_WinHandle)
+      ScreenToClient(g_WinHandle, &pos);
+    float dx = static_cast<float>(pos.x - prevMousePos.x);
+    float dy = static_cast<float>(pos.y - prevMousePos.y);
+    bool rbPressed = (GetKeyState(VK_RBUTTON) & 0x8000) > 0;
+    // bool lbPressed = (GetKeyState(VK_LBUTTON) & 0x8000) > 0;
+    if (rbPressed)
+    {
+      float xRot = camera.XRotation();
+      float yRot = camera.YRotation();
+      xRot += dy * CamRotSpeed;
+      yRot += dx * CamRotSpeed;
+      camera.SetXRotation(xRot);
+      camera.SetYRotation(yRot);
+    }
+    prevMousePos = pos;
+  }
 
   // Imgui begin frame:
   // TODO: add correct delta time
@@ -1099,23 +1118,23 @@ void RenderManager::onRender()
       // Imgui rendering:
       PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
       m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_PRESENT,
-          D3D12_RESOURCE_STATE_RENDER_TARGET));
+          1,
+          &CD3DX12_RESOURCE_BARRIER::Transition(
+              m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+              D3D12_RESOURCE_STATE_PRESENT,
+              D3D12_RESOURCE_STATE_RENDER_TARGET));
       CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
           m_RtvHeap->GetCPUDescriptorHandleForHeapStart(),
           m_FrameIndex,
           m_RtvDescriptorSize);
       ImGuiHelper::endFrame(
           m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
-            m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_RENDER_TARGET,
-          D3D12_RESOURCE_STATE_PRESENT));
+      m_CmdList->ResourceBarrier(
+          1,
+          &CD3DX12_RESOURCE_BARRIER::Transition(
+              m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+              D3D12_RESOURCE_STATE_RENDER_TARGET,
+              D3D12_RESOURCE_STATE_PRESENT));
       PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render Imgui
 
       // Execute the command list.
@@ -1149,8 +1168,7 @@ void RenderManager::onRender()
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyDown(UINT8 p_Key)
 {
-  float CamMoveSpeed = 5.0f;
-  float CamRotSpeed = 0.180f;
+  float CamMoveSpeed = 0.1f;
   glm::vec3 camPos = camera.Position();
 
   switch (p_Key)
@@ -1198,16 +1216,6 @@ void RenderManager::onKeyDown(UINT8 p_Key)
   }
 
   camera.SetPosition(camPos);
-
-  // Rotate the camera with the mouse
-  {
-    // float xRot = camera.XRotation();
-    // float yRot = camera.YRotation();
-    // xRot += dx * CamRotSpeed;
-    // yRot += dy * CamRotSpeed;
-    // camera.SetXRotation(xRot);
-    // camera.SetYRotation(yRot);
-  }
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyUp(UINT8 p_Key)

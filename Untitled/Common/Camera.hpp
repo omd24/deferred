@@ -4,6 +4,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+
+#ifndef GLM_FORCE_RADIANS
+#define GLM_FORCE_RADIANS
+#endif
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -98,12 +103,12 @@ public:
   glm::vec3 Right() const
   {
     glm::mat4 transposed = glm::transpose(world);
-    return -transposed[0];
+    return transposed[0];
   }
   glm::vec3 Left() const
   {
     glm::mat4 transposed = glm::transpose(world);
-    return transposed[0];
+    return -transposed[0];
   }
 
   void
@@ -142,7 +147,7 @@ public:
     world[0][3] = position[0];
     world[1][3] = position[1];
     world[2][3] = position[2];
-
+    // world = glm::transpose(world);
     WorldMatrixChanged();
   }
   void SetNearClip(float newNearClip)
@@ -285,7 +290,7 @@ public:
     nearZ = nearClip;
     farZ = farClip;
     aspect = aspectRatio;
-    fov = fieldOfView;
+    fov = fieldOfView /* * 180.0f / 3.14f*/;
     width = w;
     CreateProjection();
   }

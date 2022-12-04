@@ -621,6 +621,42 @@ private:
   void updateDynamicSRV() const;
 };
 //---------------------------------------------------------------------------//
+// Uniform buffer
+//---------------------------------------------------------------------------//
+struct ConstantBufferInit
+{
+    uint64_t Size = 0;
+    bool Dynamic = true;
+    bool CPUAccessible = true;
+    const void* InitData = nullptr;
+    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    ID3D12Heap* Heap = nullptr;
+    uint64_t HeapOffset = 0;
+    const wchar_t* Name = nullptr;
+};
+
+struct ConstantBuffer
+{
+    Buffer InternalBuffer;
+    uint64_t CurrentGPUAddress = 0;
+
+    ConstantBuffer();
+    ~ConstantBuffer();
+
+    void init(const ConstantBufferInit& init);
+    void deinit();
+
+    void setAsGfxRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
+    void setAsComputeRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
+
+    void* map();
+    template<typename T> T* Map() { return reinterpret_cast<T*>(Map()); }
+    void mapAndSetData(const void* data, uint64_t dataSize);
+    template<typename T> void MapAndSetData(const T& data) { MapAndSetData(&data, sizeof(T)); }
+    void updateData(const void* srcData, uint64_t srcSize, uint64_t dstOffset);
+    void multiUpdateData(const void* srcData[], uint64_t srcSize[], uint64_t dstOffset[], uint64_t numUpdates);
+};
+//---------------------------------------------------------------------------//
 // StructuredBuffer
 //---------------------------------------------------------------------------//
 struct StructuredBufferInit

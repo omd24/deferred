@@ -1949,8 +1949,84 @@ void FormattedBuffer::updateDynamicSRV() const
     uint64_t frameIdx = (g_CurrentCPUFrame + i) % RENDER_LATENCY;
     D3D12_CPU_DESCRIPTOR_HANDLE handle =
         SRVDescriptorHeap.CPUHandleFromIndex(SRV, frameIdx);
-    g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
+    g_Device->CreateShaderResourceView(
+        InternalBuffer.m_Resource, &desc, handle);
   }
+}
+//---------------------------------------------------------------------------//
+// Uniform buffer
+//---------------------------------------------------------------------------//
+
+ConstantBuffer::ConstantBuffer()
+{
+}
+
+ConstantBuffer::~ConstantBuffer()
+{
+}
+
+void ConstantBuffer::init(const ConstantBufferInit& init)
+{
+  InternalBuffer.init(
+      init.Size,
+      ConstantBufferAlignment,
+      init.Dynamic,
+      init.CPUAccessible,
+      false,
+      init.InitData,
+      init.InitialState,
+      init.Heap,
+      init.HeapOffset,
+      init.Name);
+}
+
+void ConstantBuffer::deinit()
+{
+  InternalBuffer.deinit();
+}
+
+void ConstantBuffer::setAsGfxRootParameter(
+    ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const
+{
+  assert(InternalBuffer.m_Size > 0);
+  cmdList->SetGraphicsRootConstantBufferView(rootParameter, CurrentGPUAddress);
+}
+
+void ConstantBuffer::setAsComputeRootParameter(
+    ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const
+{
+  assert(InternalBuffer.m_Size > 0);
+  cmdList->SetComputeRootConstantBufferView(rootParameter, CurrentGPUAddress);
+}
+
+void* ConstantBuffer::map()
+{
+  MapResult mapResult = InternalBuffer.map();
+  CurrentGPUAddress = mapResult.GpuAddress;
+  return mapResult.CpuAddress;
+}
+
+void ConstantBuffer::mapAndSetData(const void* data, uint64_t dataSize)
+{
+  assert(dataSize <= InternalBuffer.m_Size);
+  void* cpuAddr = map();
+  memcpy(cpuAddr, data, dataSize);
+}
+
+void ConstantBuffer::updateData(
+    const void* srcData, uint64_t srcSize, uint64_t dstOffset)
+{
+  CurrentGPUAddress = InternalBuffer.updateData(srcData, srcSize, dstOffset);
+}
+
+void ConstantBuffer::multiUpdateData(
+    const void* srcData[],
+    uint64_t srcSize[],
+    uint64_t dstOffset[],
+    uint64_t numUpdates)
+{
+  CurrentGPUAddress =
+      InternalBuffer.multiUpdateData(srcData, srcSize, dstOffset, numUpdates);
 }
 
 //---------------------------------------------------------------------------//
@@ -2205,12 +2281,12 @@ void RenderTexture::init(const RenderTextureInit& p_Init)
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
     rtvDesc.Format = p_Init.Format;
-      rtvDesc.Texture2DArray.ArraySize = 1;
+    rtvDesc.Texture2DArray.ArraySize = 1;
 
     for (uint64_t i = 0; i < p_Init.ArraySize; ++i)
     {
 
-        rtvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
+      rtvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
 
       m_ArrayRTVs[i] = RTVDescriptorHeap.AllocatePersistent().Handles[0];
       g_Device->CreateRenderTargetView(
@@ -2299,211 +2375,241 @@ DepthBuffer::DepthBuffer()
 
 DepthBuffer::~DepthBuffer()
 {
-    assert(DSVFormat == DXGI_FORMAT_UNKNOWN);
-    deinit();
+  assert(DSVFormat == DXGI_FORMAT_UNKNOWN);
+  deinit();
 }
 
 void DepthBuffer::init(const DepthBufferInit& init)
 {
-    deinit();
+  deinit();
 
-    assert(init.Width > 0);
-    assert(init.Height > 0);
-    assert(init.MSAASamples > 0);
+  assert(init.Width > 0);
+  assert(init.Height > 0);
+  assert(init.MSAASamples > 0);
 
-    DXGI_FORMAT texFormat = init.Format;
-    DXGI_FORMAT srvFormat = init.Format;
-    if(init.Format == DXGI_FORMAT_D16_UNORM)
-    {
-        texFormat = DXGI_FORMAT_R16_TYPELESS;
-        srvFormat = DXGI_FORMAT_R16_UNORM;
-    }
-    else if(init.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
-    {
-        texFormat = DXGI_FORMAT_R24G8_TYPELESS;
-        srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-    }
-    else if(init.Format == DXGI_FORMAT_D32_FLOAT)
-    {
-        texFormat = DXGI_FORMAT_R32_TYPELESS;
-        srvFormat = DXGI_FORMAT_R32_FLOAT;
-    }
-    else if(init.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT)
-    {
-        texFormat = DXGI_FORMAT_R32G8X24_TYPELESS;
-        srvFormat = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-    }
-    else
-    {
-        assert(false && "Invalid depth buffer format!");
-    }
+  DXGI_FORMAT texFormat = init.Format;
+  DXGI_FORMAT srvFormat = init.Format;
+  if (init.Format == DXGI_FORMAT_D16_UNORM)
+  {
+    texFormat = DXGI_FORMAT_R16_TYPELESS;
+    srvFormat = DXGI_FORMAT_R16_UNORM;
+  }
+  else if (init.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+  {
+    texFormat = DXGI_FORMAT_R24G8_TYPELESS;
+    srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+  }
+  else if (init.Format == DXGI_FORMAT_D32_FLOAT)
+  {
+    texFormat = DXGI_FORMAT_R32_TYPELESS;
+    srvFormat = DXGI_FORMAT_R32_FLOAT;
+  }
+  else if (init.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT)
+  {
+    texFormat = DXGI_FORMAT_R32G8X24_TYPELESS;
+    srvFormat = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+  }
+  else
+  {
+    assert(false && "Invalid depth buffer format!");
+  }
 
-    D3D12_RESOURCE_DESC textureDesc = { };
-    textureDesc.MipLevels = 1;
-    textureDesc.Format = texFormat;
-    textureDesc.Width = uint32_t(init.Width);
-    textureDesc.Height = uint32_t(init.Height);
-    textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-    textureDesc.DepthOrArraySize = uint16_t(init.ArraySize);
-    textureDesc.SampleDesc.Count = 1;
-    textureDesc.SampleDesc.Quality = 0;
-    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    textureDesc.Alignment = 0;
+  D3D12_RESOURCE_DESC textureDesc = {};
+  textureDesc.MipLevels = 1;
+  textureDesc.Format = texFormat;
+  textureDesc.Width = uint32_t(init.Width);
+  textureDesc.Height = uint32_t(init.Height);
+  textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+  textureDesc.DepthOrArraySize = uint16_t(init.ArraySize);
+  textureDesc.SampleDesc.Count = 1;
+  textureDesc.SampleDesc.Quality = 0;
+  textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+  textureDesc.Alignment = 0;
 
-    D3D12_CLEAR_VALUE clearValue = { };
-    clearValue.DepthStencil.Depth = 1.0f;
-    clearValue.DepthStencil.Stencil = 0;
-    clearValue.Format = init.Format;
+  D3D12_CLEAR_VALUE clearValue = {};
+  clearValue.DepthStencil.Depth = 1.0f;
+  clearValue.DepthStencil.Stencil = 0;
+  clearValue.Format = init.Format;
 
-    D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(GetDefaultHeapProps(), D3D12_HEAP_FLAG_NONE, &textureDesc,
-                                                 init.InitialState, &clearValue, IID_PPV_ARGS(&Texture.Resource)));
+  D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
+      GetDefaultHeapProps(),
+      D3D12_HEAP_FLAG_NONE,
+      &textureDesc,
+      init.InitialState,
+      &clearValue,
+      IID_PPV_ARGS(&Texture.Resource)));
 
-    if(init.Name != nullptr)
-        Texture.Resource->SetName(init.Name);
+  if (init.Name != nullptr)
+    Texture.Resource->SetName(init.Name);
 
-    PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
-    Texture.SRV = srvAlloc.Index;
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  Texture.SRV = srvAlloc.Index;
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = { };
-    srvDesc.Format = srvFormat;
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    if(init.MSAASamples == 1 && init.ArraySize == 1)
-    {
-        srvDesc.Texture2D.MipLevels = 1;
-        srvDesc.Texture2D.MostDetailedMip = 0;
-        srvDesc.Texture2D.PlaneSlice = 0;
-        srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    }
-    else if(init.MSAASamples == 1 && init.ArraySize > 1)
-    {
-        srvDesc.Texture2DArray.ArraySize = uint32_t(init.ArraySize);
-        srvDesc.Texture2DArray.FirstArraySlice = 0;
-        srvDesc.Texture2DArray.MipLevels = 1;
-        srvDesc.Texture2DArray.MostDetailedMip = 0;
-        srvDesc.Texture2DArray.PlaneSlice = 0;
-        srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-    }
-    else if(init.MSAASamples > 1 && init.ArraySize == 1)
-    {
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-    }
-    else if(init.MSAASamples > 1 && init.ArraySize > 1)
-    {
-        srvDesc.Texture2DMSArray.FirstArraySlice = 0;
-        srvDesc.Texture2DMSArray.ArraySize = uint32_t(init.ArraySize);
-        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-    }
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = srvFormat;
+  srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  if (init.MSAASamples == 1 && init.ArraySize == 1)
+  {
+    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.PlaneSlice = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+  }
+  else if (init.MSAASamples == 1 && init.ArraySize > 1)
+  {
+    srvDesc.Texture2DArray.ArraySize = uint32_t(init.ArraySize);
+    srvDesc.Texture2DArray.FirstArraySlice = 0;
+    srvDesc.Texture2DArray.MipLevels = 1;
+    srvDesc.Texture2DArray.MostDetailedMip = 0;
+    srvDesc.Texture2DArray.PlaneSlice = 0;
+    srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+  }
+  else if (init.MSAASamples > 1 && init.ArraySize == 1)
+  {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+  }
+  else if (init.MSAASamples > 1 && init.ArraySize > 1)
+  {
+    srvDesc.Texture2DMSArray.FirstArraySlice = 0;
+    srvDesc.Texture2DMSArray.ArraySize = uint32_t(init.ArraySize);
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+  }
 
-    for(uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
-        g_Device->CreateShaderResourceView(Texture.Resource, &srvDesc, srvAlloc.Handles[i]);
+  for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
+    g_Device->CreateShaderResourceView(
+        Texture.Resource, &srvDesc, srvAlloc.Handles[i]);
 
-    Texture.Width = uint32_t(init.Width);
-    Texture.Height = uint32_t(init.Height);
-    Texture.Depth = 1;
-    Texture.NumMips = 1;
-    Texture.ArraySize = uint32_t(init.ArraySize);
-    Texture.Format = srvFormat;
-    Texture.Cubemap = false;
-    MSAASamples = uint32_t(init.MSAASamples);
-    MSAAQuality = uint32_t(textureDesc.SampleDesc.Quality);
+  Texture.Width = uint32_t(init.Width);
+  Texture.Height = uint32_t(init.Height);
+  Texture.Depth = 1;
+  Texture.NumMips = 1;
+  Texture.ArraySize = uint32_t(init.ArraySize);
+  Texture.Format = srvFormat;
+  Texture.Cubemap = false;
+  MSAASamples = uint32_t(init.MSAASamples);
+  MSAAQuality = uint32_t(textureDesc.SampleDesc.Quality);
 
-    DSV = DSVDescriptorHeap.AllocatePersistent().Handles[0];
+  DSV = DSVDescriptorHeap.AllocatePersistent().Handles[0];
 
-    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = { };
+  D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+  dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+  dsvDesc.Format = init.Format;
+
+  if (init.MSAASamples == 1 && init.ArraySize == 1)
+  {
+    dsvDesc.Texture2D.MipSlice = 0;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+  }
+  else if (init.MSAASamples == 1 && init.ArraySize > 1)
+  {
+    dsvDesc.Texture2DArray.ArraySize = uint32_t(init.ArraySize);
+    dsvDesc.Texture2DArray.FirstArraySlice = 0;
+    dsvDesc.Texture2DArray.MipSlice = 0;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+  }
+  else if (init.MSAASamples > 1 && init.ArraySize == 1)
+  {
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+  }
+  else if (init.MSAASamples > 1 && init.ArraySize > 1)
+  {
+    dsvDesc.Texture2DMSArray.ArraySize = uint32_t(init.ArraySize);
+    dsvDesc.Texture2DMSArray.FirstArraySlice = 0;
+    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+  }
+
+  g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, DSV);
+
+  bool hasStencil = init.Format == DXGI_FORMAT_D24_UNORM_S8_UINT ||
+                    init.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+
+  ReadOnlyDSV = DSVDescriptorHeap.AllocatePersistent().Handles[0];
+  dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+  if (hasStencil)
+    dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+  g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, ReadOnlyDSV);
+
+  if (init.ArraySize > 1)
+  {
+    ArrayDSVs.resize(init.ArraySize);
+
     dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-    dsvDesc.Format = init.Format;
+    if (init.MSAASamples > 1)
+      dsvDesc.Texture2DMSArray.ArraySize = 1;
+    else
+      dsvDesc.Texture2DArray.ArraySize = 1;
 
-    if(init.MSAASamples == 1 && init.ArraySize == 1)
+    for (uint64_t i = 0; i < init.ArraySize; ++i)
     {
-        dsvDesc.Texture2D.MipSlice = 0;
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+      if (init.MSAASamples > 1)
+        dsvDesc.Texture2DMSArray.FirstArraySlice = uint32_t(i);
+      else
+        dsvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
+
+      ArrayDSVs[i] = DSVDescriptorHeap.AllocatePersistent().Handles[0];
+      g_Device->CreateDepthStencilView(
+          Texture.Resource, &dsvDesc, ArrayDSVs[i]);
     }
-    else if(init.MSAASamples == 1 && init.ArraySize > 1)
-    {
-        dsvDesc.Texture2DArray.ArraySize = uint32_t(init.ArraySize);
-        dsvDesc.Texture2DArray.FirstArraySlice = 0;
-        dsvDesc.Texture2DArray.MipSlice = 0;
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-    }
-    else if(init.MSAASamples > 1 && init.ArraySize == 1)
-    {
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
-    }
-    else if(init.MSAASamples > 1 && init.ArraySize > 1)
-    {
-        dsvDesc.Texture2DMSArray.ArraySize = uint32_t(init.ArraySize);
-        dsvDesc.Texture2DMSArray.FirstArraySlice = 0;
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-    }
+  }
 
-    g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, DSV);
-
-    bool hasStencil = init.Format == DXGI_FORMAT_D24_UNORM_S8_UINT || init.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-
-    ReadOnlyDSV = DSVDescriptorHeap.AllocatePersistent().Handles[0];
-    dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-    if(hasStencil)
-        dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
-    g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, ReadOnlyDSV);
-
-    if(init.ArraySize > 1)
-    {
-        ArrayDSVs.resize(init.ArraySize);
-
-        dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-        if(init.MSAASamples > 1)
-            dsvDesc.Texture2DMSArray.ArraySize = 1;
-        else
-            dsvDesc.Texture2DArray.ArraySize = 1;
-
-        for(uint64_t i = 0; i < init.ArraySize; ++i)
-        {
-            if(init.MSAASamples > 1)
-                dsvDesc.Texture2DMSArray.FirstArraySlice = uint32_t(i);
-            else
-                dsvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
-
-            ArrayDSVs[i] = DSVDescriptorHeap.AllocatePersistent().Handles[0];
-            g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, ArrayDSVs[i]);
-        }
-    }
-
-    DSVFormat = init.Format;
+  DSVFormat = init.Format;
 }
 
 void DepthBuffer::deinit()
 {
-    DSVDescriptorHeap.FreePersistent(DSV);
-    DSVDescriptorHeap.FreePersistent(ReadOnlyDSV);
-    for(uint64_t i = 0; i < ArrayDSVs.size(); ++i)
-        DSVDescriptorHeap.FreePersistent(ArrayDSVs[i]);
-    ArrayDSVs.clear();
-    Texture.Shutdown();
-    DSVFormat = DXGI_FORMAT_UNKNOWN;
+  DSVDescriptorHeap.FreePersistent(DSV);
+  DSVDescriptorHeap.FreePersistent(ReadOnlyDSV);
+  for (uint64_t i = 0; i < ArrayDSVs.size(); ++i)
+    DSVDescriptorHeap.FreePersistent(ArrayDSVs[i]);
+  ArrayDSVs.clear();
+  Texture.Shutdown();
+  DSVFormat = DXGI_FORMAT_UNKNOWN;
 }
 
-void DepthBuffer::transition(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after, uint64_t arraySlice) const
+void DepthBuffer::transition(
+    ID3D12GraphicsCommandList* cmdList,
+    D3D12_RESOURCE_STATES before,
+    D3D12_RESOURCE_STATES after,
+    uint64_t arraySlice) const
 {
-    uint32_t subResourceIdx = arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
-    assert(Texture.Resource != nullptr);
-    TransitionResource(cmdList, Texture.Resource, before, after, subResourceIdx);
+  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(arraySlice);
+  assert(Texture.Resource != nullptr);
+  TransitionResource(cmdList, Texture.Resource, before, after, subResourceIdx);
 }
 
-void DepthBuffer::makeReadable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
+void DepthBuffer::makeReadable(
+    ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
 {
-    uint32_t subResourceIdx = arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
-    assert(Texture.Resource != nullptr);
-    TransitionResource(cmdList, Texture.Resource, D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                             D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, subResourceIdx);
+  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(arraySlice);
+  assert(Texture.Resource != nullptr);
+  TransitionResource(
+      cmdList,
+      Texture.Resource,
+      D3D12_RESOURCE_STATE_DEPTH_WRITE,
+      D3D12_RESOURCE_STATE_DEPTH_READ |
+          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      subResourceIdx);
 }
 
-void DepthBuffer::makeWritable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
+void DepthBuffer::makeWritable(
+    ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
 {
-    uint32_t subResourceIdx = arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
-    assert(Texture.Resource != nullptr);
-    TransitionResource(cmdList, Texture.Resource, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                             D3D12_RESOURCE_STATE_DEPTH_WRITE, subResourceIdx);
+  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(arraySlice);
+  assert(Texture.Resource != nullptr);
+  TransitionResource(
+      cmdList,
+      Texture.Resource,
+      D3D12_RESOURCE_STATE_DEPTH_READ |
+          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_DEPTH_WRITE,
+      subResourceIdx);
 }

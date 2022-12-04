@@ -2,10 +2,21 @@
 #include "ImguiHelper.hpp"
 #include <pix3.h>
 
+//---------------------------------------------------------------------------//
+// Internal variables
+//---------------------------------------------------------------------------//
+static POINT prevMousePos = {};
+static constexpr uint32_t MaxSpotLights = 32;
+static const float SpotLightIntensityFactor = 25.0f;
+
+//---------------------------------------------------------------------------//
+// Internal structs
+//---------------------------------------------------------------------------//
 enum DeferredRootParams : uint32_t
 {
   DeferredParams_StandardDescriptors, // textures
   DeferredParams_DeferredCBuffer,
+  DeferredParams_LightCBuffer,
   DeferredParams_SRVIndices,
   DeferredParams_UAVDescriptors,
 
@@ -36,10 +47,20 @@ struct MaterialTextureIndices
   uint32_t Roughness;
   uint32_t Metallic;
 };
-//---------------------------------------------------------------------------//
-// Internal variables
-//---------------------------------------------------------------------------//
-static POINT prevMousePos = {};
+struct SpotLight
+{
+  glm::vec3 Position;
+  float AngularAttenuationX;
+  glm::vec3 Direction;
+  float AngularAttenuationY;
+  glm::vec3 Intensity;
+  float Range;
+};
+struct LightConstants
+{
+  SpotLight Lights[MaxSpotLights];
+  glm::mat4x4 ShadowMatrices[MaxSpotLights];
+};
 
 //---------------------------------------------------------------------------//
 // Internal private methods
@@ -455,6 +476,18 @@ void RenderManager::loadAssets()
     deferredTarget.init(rtInit);
   }
 
+  {
+    // Spot light and shadow bounds buffer
+    ConstantBufferInit cbInit;
+    cbInit.Size = sizeof(LightConstants);
+    cbInit.Dynamic = true;
+    cbInit.CPUAccessible = false;
+    cbInit.InitialState = D3D12_RESOURCE_STATE_COMMON;
+    cbInit.Name = L"Spot Light Buffer";
+
+    spotLightBuffer.init(cbInit);
+  }
+
   // Gbuffer Root Sig
   {
     D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
@@ -514,6 +547,16 @@ void RenderManager::loadAssets()
         2;
     rootParameters[DeferredParams_DeferredCBuffer].Descriptor.Flags =
         D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // LightCBuffer
+    rootParameters[DeferredParams_LightCBuffer].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_LightCBuffer].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_LightCBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_LightCBuffer].Descriptor.ShaderRegister = 3;
+    rootParameters[DeferredParams_LightCBuffer].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 
     // SRV Indices
     rootParameters[DeferredParams_SRVIndices].ParameterType =
@@ -712,7 +755,6 @@ void RenderManager::renderDeferred()
   // Set constant buffers:
   {
     glm::mat4 world = glm::identity<glm::mat4>();
-    // Set constant buffers
     MeshVSConstants vsConstants;
     vsConstants.World = world;
     vsConstants.View = glm::transpose(camera.ViewMatrix());
@@ -858,6 +900,9 @@ void RenderManager::renderDeferred()
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
+
+  spotLightBuffer.setAsComputeRootParameter(
+      m_CmdList, DeferredParams_LightCBuffer);
 
   D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {deferredTarget.m_UAV};
   BindTempDescriptorTable(
@@ -1057,6 +1102,7 @@ void RenderManager::onDestroy()
   materialIDTarget.deinit();
   materialTextureIndices.deinit();
   deferredTarget.deinit();
+  spotLightBuffer.deinit();
 
   // Shudown uploads and other helpers
   shutdownHelpers();
@@ -1096,6 +1142,10 @@ void RenderManager::onUpdate()
     }
     prevMousePos = pos;
   }
+
+  // TODO:
+  // Update light uniforms
+  //
 
   // Imgui begin frame:
   // TODO: add correct delta time

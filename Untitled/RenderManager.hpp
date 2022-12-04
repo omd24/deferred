@@ -96,6 +96,9 @@ private:
   RenderTexture materialIDTarget;
   StructuredBuffer materialTextureIndices;
 
+  // Light stuff
+  ConstantBuffer spotLightBuffer;
+
   // Deferred Stuff
   RenderTexture deferredTarget;
   ID3D12RootSignature* deferredRootSig = nullptr;

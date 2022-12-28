@@ -7,6 +7,15 @@
 #include "Utility.hpp"
 
 //---------------------------------------------------------------------------//
+// global helper variables
+//---------------------------------------------------------------------------//
+// Total number of CPU frames completed
+// (completed means all command buffers submitted to the GPU):
+extern uint64_t g_CurrentCPUFrame;
+extern uint64_t g_CurrentGPUFrame;
+extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
+
+//---------------------------------------------------------------------------//
 // D3D12 Globals:
 //---------------------------------------------------------------------------//
 #define RENDER_LATENCY 2
@@ -16,13 +25,6 @@ struct Texture;
 static ID3D12Device* g_Device = nullptr;
 static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
 
-// Total number of CPU frames completed
-// (completed means all command buffers submitted to the GPU):
-extern uint64_t g_CurrentCPUFrame;
-
-extern uint64_t g_CurrentGPUFrame;
-
-extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 //---------------------------------------------------------------------------//
 // Direct3D 12 helper functions
 //---------------------------------------------------------------------------//

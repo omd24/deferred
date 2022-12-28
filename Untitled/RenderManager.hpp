@@ -36,6 +36,18 @@ struct RendererSettings
   //
 };
 //---------------------------------------------------------------------------//
+// General Structs:
+//---------------------------------------------------------------------------//
+struct SpotLight
+{
+  glm::vec3 Position;
+  float AngularAttenuationX;
+  glm::vec3 Direction;
+  float AngularAttenuationY;
+  glm::vec3 Intensity;
+  float Range;
+};
+//---------------------------------------------------------------------------//
 // RenderManager Manager:
 //---------------------------------------------------------------------------//
 struct RenderManager
@@ -97,6 +109,7 @@ private:
   StructuredBuffer materialTextureIndices;
 
   // Light stuff
+  std::vector<SpotLight> spotLights;
   ConstantBuffer spotLightBuffer;
 
   // Deferred Stuff

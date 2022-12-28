@@ -4,6 +4,10 @@
 
 #include "D3D12Wrapper.hpp"
 
+uint64_t g_CurrentCPUFrame = 0;
+uint64_t g_CurrentGPUFrame = 0;
+uint64_t g_CurrFrameIdx = 0; // CurrentCPUFrame % RenderLatency
+
 size_t bitsPerPixel(DXGI_FORMAT fmt)
 {
   switch (static_cast<int>(fmt))
@@ -147,13 +151,6 @@ size_t bitsPerPixel(DXGI_FORMAT fmt)
     return 0;
   }
 }
-
-//---------------------------------------------------------------------------//
-// global helper variables
-//---------------------------------------------------------------------------//
-uint64_t g_CurrentCPUFrame = 0;
-uint64_t g_CurrentGPUFrame = 0;
-uint64_t g_CurrFrameIdx = 0;
 
 //---------------------------------------------------------------------------//
 // internal helper structs

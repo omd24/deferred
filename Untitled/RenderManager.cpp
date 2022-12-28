@@ -1,6 +1,7 @@
 #include "RenderManager.hpp"
 #include "ImguiHelper.hpp"
 #include <pix3.h>
+#include <algorithm>
 
 //---------------------------------------------------------------------------//
 // Internal variables
@@ -8,6 +9,7 @@
 static POINT prevMousePos = {};
 static constexpr uint32_t MaxSpotLights = 32;
 static const float SpotLightIntensityFactor = 25.0f;
+static uint32_t MaxLightClamp = 0;
 
 //---------------------------------------------------------------------------//
 // Internal structs
@@ -46,15 +48,6 @@ struct MaterialTextureIndices
   uint32_t Normal;
   uint32_t Roughness;
   uint32_t Metallic;
-};
-struct SpotLight
-{
-  glm::vec3 Position;
-  float AngularAttenuationX;
-  glm::vec3 Direction;
-  float AngularAttenuationY;
-  glm::vec3 Intensity;
-  float Range;
 };
 struct LightConstants
 {
@@ -382,6 +375,30 @@ void RenderManager::loadAssets()
   settings.MergeMeshes = false;
   sceneModel.CreateWithAssimp(m_Dev, settings);
 
+  {
+    // Initialize the spotlight data used for rendering
+    const uint64_t numSpotLights =
+        std::min<uint64_t>(MaxSpotLights, sceneModel.SpotLights().size());
+    spotLights.resize(numSpotLights);
+
+    for (uint64_t i = 0; i < numSpotLights; ++i)
+    {
+      const ModelSpotLight& srcLight = sceneModel.SpotLights()[i];
+
+      SpotLight& spotLight = spotLights[i];
+      spotLight.Position = srcLight.Position;
+      spotLight.Direction = -srcLight.Direction;
+      spotLight.Intensity = srcLight.Intensity * SpotLightIntensityFactor;
+      spotLight.AngularAttenuationX =
+          std::cos(srcLight.AngularAttenuation.x * 0.5f);
+      spotLight.AngularAttenuationY =
+          std::cos(srcLight.AngularAttenuation.y * 0.5f);
+      spotLight.Range = 7.5f;
+    }
+
+    MaxLightClamp = static_cast<uint32_t>(numSpotLights);
+  }
+
   // Create a structured buffer containing texture indices per-material:
   // 1. get the array of materials
   // 2. loop through that and store the SRV indices (of the material textures)
@@ -611,8 +628,8 @@ void RenderManager::loadAssets()
   ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
   m_CmdQue->ExecuteCommandLists(arrayCount32(ppCommandLists), ppCommandLists);
 
-  // Create synchronization objects and wait until assets have been uploaded to
-  // the GPU.
+  // Create synchronization objects and wait until assets have been uploaded
+  // to the GPU.
   {
     D3D_EXEC_CHECKED(m_Dev->CreateFence(
         m_RenderContextFenceValue,
@@ -972,7 +989,8 @@ void RenderManager::waitForRenderContext()
   D3D_EXEC_CHECKED(m_CmdQue->Signal(
       m_RenderContextFence.GetInterfacePtr(), m_RenderContextFenceValue));
 
-  // Instruct the fence to set the event obj when the signal command completes.
+  // Instruct the fence to set the event obj when the signal command
+  // completes.
   D3D_EXEC_CHECKED(m_RenderContextFence->SetEventOnCompletion(
       m_RenderContextFenceValue, m_RenderContextFenceEvent));
   m_RenderContextFenceValue++;
@@ -994,7 +1012,8 @@ void RenderManager::moveToNextFrame()
   // Update the frame index.
   m_FrameIndex = m_Swc->GetCurrentBackBufferIndex();
 
-  // If the next frame is not ready to be rendered yet, wait until it is ready.
+  // If the next frame is not ready to be rendered yet, wait until it is
+  // ready.
   if (m_RenderContextFence->GetCompletedValue() <
       m_FrameFenceValues[m_FrameIndex])
   {
@@ -1079,8 +1098,8 @@ void RenderManager::onLoad()
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
 {
-  // Ensure that the GPU is no longer referencing resources that are about to be
-  // cleaned up by the destructor.
+  // Ensure that the GPU is no longer referencing resources that are about to
+  // be cleaned up by the destructor.
   waitForRenderContext();
 
   // Close handles to fence events and threads.
@@ -1143,9 +1162,14 @@ void RenderManager::onUpdate()
     prevMousePos = pos;
   }
 
-  // TODO:
   // Update light uniforms
-  //
+  {
+    const void* srcData[1] = {spotLights.data()};
+    uint64_t sizes[1] = {spotLights.size() * sizeof(SpotLight)};
+    uint64_t offsets[1] = {0};
+    spotLightBuffer.multiUpdateData(
+        srcData, sizes, offsets, arrayCount(srcData));
+  }
 
   // Imgui begin frame:
   // TODO: add correct delta time
@@ -1197,6 +1221,8 @@ void RenderManager::onRender()
 
       // Present the frame.
       D3D_EXEC_CHECKED(m_Swc->Present(1, 0));
+
+      ++g_CurrentCPUFrame;
 
       moveToNextFrame();
       // waitForRenderContext();

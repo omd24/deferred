@@ -210,7 +210,7 @@ bool RenderManager::createPSOs()
     HRESULT hr = D3DCompileFromFile(
         getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
-        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
         "VS",
         "vs_5_1",
         compileFlags,
@@ -227,7 +227,7 @@ bool RenderManager::createPSOs()
     D3DCompileFromFile(
         getShaderPath(L"Mesh.hlsl").c_str(),
         nullptr,
-        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
         "PS",
         "ps_5_1",
         compileFlags,
@@ -324,7 +324,7 @@ bool RenderManager::createPSOs()
       HRESULT hr = D3DCompileFromFile(
           getShaderPath(L"Deferred.hlsl").c_str(),
           nullptr,
-          nullptr,
+          D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "CS",
           "cs_5_1",
           compileFlags,

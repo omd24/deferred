@@ -1,4 +1,6 @@
 
+#include "Shading.hlsl"
+
 //=================================================================================================
 // Uniforms
 //=================================================================================================
@@ -136,6 +138,11 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
 
     // Texture2D<float4> AlbedoMapTemp = Tex2DTable[NonUniformResourceIndex(SRVIndices.TangentFrameMapIndex)];
     // float4 color = AlbedoMapTemp.SampleLevel(AnisoSampler, screenUV, 0);
+
+    float3 inp = float3(1.0f, 1.0f, 1.0f);
+    float3 temp = CalcLighting(inp, inp, inp,
+                    inp, inp, 1.0f,
+                    inp, inp);
 
     OutputTexture[pixelPos] = float4(color.r, color.g, color.b, color.a);
 }

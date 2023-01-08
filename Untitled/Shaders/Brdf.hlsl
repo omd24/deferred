@@ -1,3 +1,4 @@
+static const float Pi = 3.141592654f;
 
 //-------------------------------------------------------------------------------------------------
 // Fresnel factor using Schlick's approximation (Real-Time Rendering 4th Ed. - Eq. 9.16).
@@ -139,7 +140,7 @@ float GGX_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in flo
 
     // N.B. 
     // The dividend of GGX_G1 helper is 2 * nDotX
-    // So the divident in the Smith G becomes 4 * nDotL * nDotV
+    // So the dividend in the Smith G becomes 4 * nDotL * nDotV
     // Which is the divisor in GGX_Specular
     // Hence to avoid redundant computation that term can be removed from GGX_G1 dividend
     // and there would be no need to divide to (4.0f * nDotL * nDotV) here

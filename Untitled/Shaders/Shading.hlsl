@@ -151,6 +151,8 @@ float3 ShadePixel(in ShadingInput input)
         }
     }
 
+    // return albedoMap.xyz;
+
     float3 ambient = 1.0f; // TODO!
     output += ambient * diffuseAlbedo;
 

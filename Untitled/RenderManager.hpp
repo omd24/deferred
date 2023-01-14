@@ -47,7 +47,17 @@ struct SpotLight
   glm::vec3 Intensity;
   float Range;
 };
-//---------------------------------------------------------------------------//
+struct ShadingConstants
+{
+    Float4Align glm::vec3 CameraPosWS;
+
+    uint32_t NumXTiles = 0;
+    uint32_t NumXYTiles = 0;
+    float NearClip = 0.0f;
+    float FarClip = 0.0f;
+};
+static_assert(sizeof(ShadingConstants) == 32);
+    //---------------------------------------------------------------------------//
 // RenderManager Manager:
 //---------------------------------------------------------------------------//
 struct RenderManager

@@ -17,6 +17,7 @@ static uint32_t MaxLightClamp = 0;
 enum DeferredRootParams : uint32_t
 {
   DeferredParams_StandardDescriptors, // textures
+  DeferredParams_PSCBuffer,
   DeferredParams_DeferredCBuffer,
   DeferredParams_LightCBuffer,
   DeferredParams_SRVIndices,
@@ -554,6 +555,16 @@ void RenderManager::loadAssets()
     rootParameters[DeferredParams_StandardDescriptors]
         .DescriptorTable.NumDescriptorRanges = NumStandardDescriptorRanges;
 
+    // PSCBuffer
+    rootParameters[DeferredParams_PSCBuffer].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_PSCBuffer].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_PSCBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_PSCBuffer].Descriptor.ShaderRegister = 0;
+    rootParameters[DeferredParams_PSCBuffer].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
     // DeferredCBuffer
     rootParameters[DeferredParams_DeferredCBuffer].ParameterType =
         D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -897,7 +908,8 @@ void RenderManager::renderDeferred()
   // Set constant buffers
   {
     DeferredConstants deferredConstants;
-    deferredConstants.InvViewProj = glm::inverse(camera.ViewProjectionMatrix());
+    deferredConstants.InvViewProj =
+        glm::transpose(glm::inverse(camera.ViewProjectionMatrix()));
     deferredConstants.Projection = camera.ProjectionMatrix();
     deferredConstants.RTSize = glm::vec2(
         float(deferredTarget.width()), float(deferredTarget.height()));
@@ -916,6 +928,21 @@ void RenderManager::renderDeferred()
         tangentFrameTarget.srv()};
     BindTempConstantBuffer(
         m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
+  }
+
+  {
+    ShadingConstants shadingConstants;
+    shadingConstants.CameraPosWS = camera.Position();
+    shadingConstants.NumXTiles = numComputeTilesX;
+    shadingConstants.NumXYTiles = numComputeTilesY;
+    shadingConstants.NearClip = camera.NearClip();
+    shadingConstants.FarClip = camera.FarClip();
+
+    BindTempConstantBuffer(
+        m_CmdList,
+        shadingConstants,
+        DeferredParams_PSCBuffer,
+        CmdListMode::Compute);
   }
 
   spotLightBuffer.setAsComputeRootParameter(
@@ -1309,6 +1336,7 @@ void RenderManager::onCodeChange()
 void RenderManager::onShaderChange()
 {
   OutputDebugStringA("[RenderManager] Starting shader reload...\n");
+  Sleep(1000);
   waitForRenderContext();
 
   if (createPSOs())

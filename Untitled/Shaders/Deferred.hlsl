@@ -207,8 +207,7 @@ void ShadeSample(in uint2 pixelPos)
     shadingInput.ShadingCBuffer = PSCBuffer;
     shadingInput.LightCBuffer = LightCBuffer;
 
-    // TODO:
-    // float3 shadingResult = ShadePixel(shadingInput, sunShadowMap, spotLightShadowMap, ShadowMapSampler);
+    float3 shadingResult = ShadePixel(shadingInput);
 
     // TODOs:
     // #if MSAA_
@@ -224,8 +223,8 @@ void ShadeSample(in uint2 pixelPos)
     // if(AppSettings.ShowUVGradients)
     //     shadingResult = abs(float3(uvDX, uvDY.x)) * 64.0f;
 
-    // OutputTexture[pixelPos] = float4(shadingResult, 1.0f);
-    OutputTexture[pixelPos] = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
+    OutputTexture[pixelPos] = float4(shadingResult, 1.0f);
+    // OutputTexture[pixelPos] = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
 }
 
 //=================================================================================================

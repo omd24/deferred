@@ -1,6 +1,6 @@
 
 // This is the standard set of descriptor tables that shaders use for accessing the SRV's that they need.
-// These must match "NumStandardDescriptorRanges" and "StandardDescriptorRanges()" from DX12_Helpers.h
+// These must match "NumStandardDescriptorRanges" and "StandardDescriptorRanges()" from code side
 Texture2D Tex2DTable[] : register(t0, space0);
 Texture2DArray Tex2DArrayTable[] : register(t0, space1);
 TextureCube TexCubeTable[] : register(t0, space2);

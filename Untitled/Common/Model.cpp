@@ -33,6 +33,9 @@ static_assert(
 
 static constexpr float maxFloat = std::numeric_limits<float>::max();
 
+// Scale factor used for storing physical light units in fp16 floats (equal to 2^-10).
+const float FP16Scale = 0.0009765625f;
+
 static glm::vec3 convertVector(const aiVector3D& vec)
 {
   return glm::vec3(vec.x, vec.y, vec.z);
@@ -807,7 +810,7 @@ void Model::CreateWithAssimp(
           (convertMatrix(translationNode->mTransformation));
       dstLight.Position = translation[3] * settings.SceneScale;
       dstLight.Position.z *= -1.0f;
-      dstLight.Intensity = convertColor(srcLight.mColorDiffuse);
+      dstLight.Intensity = convertColor(srcLight.mColorDiffuse) * FP16Scale;
       dstLight.AngularAttenuation.x = srcLight.mAngleInnerCone;
       dstLight.AngularAttenuation.y = srcLight.mAngleOuterCone;
 

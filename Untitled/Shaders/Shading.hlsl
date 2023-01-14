@@ -144,7 +144,6 @@ float3 ShadePixel(in ShadingInput input)
                 float falloff = saturate(1.0f - (d * d * d * d));
                 falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
                 float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
-                intensity = clamp(intensity, 0.0f, 1.0f);;
 
                 output += CalcLighting(normalWS, surfaceToLight, intensity, diffuseAlbedo, specularAlbedo,
                                            roughness, positionWS, CBuffer.CameraPosWS);
@@ -156,6 +155,9 @@ float3 ShadePixel(in ShadingInput input)
     output += ambient * diffuseAlbedo;
 
     output = clamp(output, 0.0f, FP16Max);
+
+    // DEBUG:
+    // return albedoMap.xyz;
 
     return output;
 }

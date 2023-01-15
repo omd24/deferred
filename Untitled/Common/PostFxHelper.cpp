@@ -1,4 +1,5 @@
 #include "PostFxHelper.hpp"
+#include "d3dx12.h"
 #include "pix3.h"
 
 static const uint32_t MaxInputs = 8;
@@ -19,8 +20,8 @@ void PostFxHelper::init()
 {
   // Load and compile triangle shader:
   {
-    ID3DBlobPtr vertexShaderBlob;
-    ID3DBlobPtr errorBlob;
+    ID3DBlobPtr pixelShaderBlob = nullptr;
+    ID3DBlobPtr errorBlob = nullptr;
 
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -41,17 +42,15 @@ void PostFxHelper::init()
         "vs_5_1",
         compileFlags,
         0,
-        &vertexShaderBlob,
+        &m_FullscreenTriangleVS,
         &errorBlob);
-    if (nullptr == vertexShaderBlob)
+    if (nullptr == m_FullscreenTriangleVS)
     {
       if (errorBlob != nullptr)
         OutputDebugStringA((char*)errorBlob->GetBufferPointer());
       assert(false && "Shader compilation failed");
     }
     errorBlob = nullptr;
-    m_FullscreenTriangleVS.pShaderBytecode = vertexShaderBlob->GetBufferPointer();
-    m_FullscreenTriangleVS.BytecodeLength = vertexShaderBlob->GetBufferSize();
   }
 
   // Create root signature:
@@ -164,7 +163,7 @@ void PostFxHelper::end()
 }
 
 void PostFxHelper::postProcess(
-    D3D12_SHADER_BYTECODE p_PixelShader,
+    ID3DBlobPtr p_PixelShader,
     const char* p_Name,
     const RenderTexture& p_Input,
     const RenderTexture& p_Output)
@@ -174,7 +173,7 @@ void PostFxHelper::postProcess(
   postProcess(p_PixelShader, p_Name, inputs, 1, outputs, 1);
 }
 void PostFxHelper::postProcess(
-    D3D12_SHADER_BYTECODE p_PixelShader,
+    ID3DBlobPtr p_PixelShader,
     const char* p_Name,
     const RenderTexture& p_Input,
     const TempRenderTarget* p_Output)
@@ -184,7 +183,7 @@ void PostFxHelper::postProcess(
   postProcess(p_PixelShader, p_Name, inputs, 1, outputs, 1);
 }
 void PostFxHelper::postProcess(
-    D3D12_SHADER_BYTECODE p_PixelShader,
+    ID3DBlobPtr p_PixelShader,
     const char* p_Name,
     const TempRenderTarget* p_Input,
     const RenderTexture& p_Output)
@@ -194,7 +193,7 @@ void PostFxHelper::postProcess(
   postProcess(p_PixelShader, p_Name, inputs, 1, outputs, 1);
 }
 void PostFxHelper::postProcess(
-    D3D12_SHADER_BYTECODE p_PixelShader,
+    ID3DBlobPtr p_PixelShader,
     const char* p_Name,
     const TempRenderTarget* p_Input,
     const TempRenderTarget* p_Output)
@@ -204,7 +203,7 @@ void PostFxHelper::postProcess(
   postProcess(p_PixelShader, p_Name, inputs, 1, outputs, 1);
 }
 void PostFxHelper::postProcess(
-    D3D12_SHADER_BYTECODE p_PixelShader,
+    ID3DBlobPtr p_PixelShader,
     const char* p_Name,
     const uint32_t* p_Inputs,
     uint64_t p_NumInputs,
@@ -220,26 +219,22 @@ void PostFxHelper::postProcess(
   PIXBeginEvent(m_CmdList, 0, p_Name);
 
   ID3D12PipelineState* pso = nullptr;
-  const uint64_t numPSOs = m_PSOs.size();
-  for (uint64_t i = 0; i < numPSOs; ++i)
-  {
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.pRootSignature = m_RootSig;
-    psoDesc.VS = m_FullscreenTriangleVS;
-    psoDesc.PS = p_PixelShader;
-    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::NoCull);
-    psoDesc.BlendState = GetBlendState(BlendState::Disabled);
-    psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = uint32_t(p_NumOutputs);
-    for (uint64_t i = 0; i < p_NumOutputs; ++i)
-      psoDesc.RTVFormats[i] = p_Outputs[i]->m_Texture.Format;
-    psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
-    psoDesc.SampleDesc.Count = 1;
-    D3D_EXEC_CHECKED(g_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso)));
-    m_PSOs[i] = pso;
-  }
+  D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+  psoDesc.pRootSignature = m_RootSig;
+  psoDesc.VS = CD3DX12_SHADER_BYTECODE(m_FullscreenTriangleVS);
+  psoDesc.PS = CD3DX12_SHADER_BYTECODE(p_PixelShader);
+  psoDesc.RasterizerState = GetRasterizerState(RasterizerState::NoCull);
+  psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+  psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
+  psoDesc.SampleMask = UINT_MAX;
+  psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+  psoDesc.NumRenderTargets = uint32_t(p_NumOutputs);
+  for (uint64_t i = 0; i < p_NumOutputs; ++i)
+    psoDesc.RTVFormats[i] = p_Outputs[i]->m_Texture.Format;
+  psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+  psoDesc.SampleDesc.Count = 1;
+  D3D_EXEC_CHECKED(g_Device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pso)));
+  m_PSOs.push_back(pso);
 
   D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
   for (uint64_t n = 0; n < p_NumOutputs; ++n)

@@ -22,8 +22,7 @@ extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 
 struct Texture;
 
-static ID3D12Device* g_Device = nullptr;
-static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
+extern ID3D12Device* g_Device;
 
 //---------------------------------------------------------------------------//
 // Direct3D 12 helper functions
@@ -96,9 +95,7 @@ inline void transitionResource(
   p_CmdList->ResourceBarrier(1, &barrier);
 }
 inline void createRootSignature(
-    ID3D12Device* dev,
-    ID3D12RootSignature** rootSignature,
-    const D3D12_ROOT_SIGNATURE_DESC1& desc)
+    ID3D12Device* dev, ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc)
 {
   D3D12_VERSIONED_ROOT_SIGNATURE_DESC versionedDesc = {};
   versionedDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -106,21 +103,16 @@ inline void createRootSignature(
 
   ID3DBlobPtr signature;
   ID3DBlobPtr error;
-  HRESULT hr =
-      D3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
+  HRESULT hr = D3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
   if (FAILED(hr))
   {
-    const char* errString =
-        error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
+    const char* errString = error ? reinterpret_cast<const char*>(error->GetBufferPointer()) : "";
 
     assert(false && "Failed to create root signature");
   }
 
   dev->CreateRootSignature(
-      0,
-      signature->GetBufferPointer(),
-      signature->GetBufferSize(),
-      IID_PPV_ARGS(rootSignature));
+      0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature));
 }
 inline bool fileExists(const wchar_t* filePath)
 {
@@ -263,8 +255,7 @@ struct TempBuffer
 };
 
 // Constants
-const uint64_t ConstantBufferAlignment =
-    D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+const uint64_t ConstantBufferAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
 const uint64_t VertexBufferAlignment = 4;
 const uint64_t IndexBufferAlignment = 4;
 const uint32_t StandardMSAAPattern = 0xFFFFFFFF;
@@ -302,13 +293,9 @@ void TransitionResource(
 
 // Resource management
 uint64_t GetResourceSize(
-    const D3D12_RESOURCE_DESC& desc,
-    uint32_t firstSubResource = 0,
-    uint32_t numSubResources = 1);
+    const D3D12_RESOURCE_DESC& desc, uint32_t firstSubResource = 0, uint32_t numSubResources = 1);
 uint64_t GetResourceSize(
-    ID3D12Resource* resource,
-    uint32_t firstSubResource = 0,
-    uint32_t numSubResources = 1);
+    ID3D12Resource* resource, uint32_t firstSubResource = 0, uint32_t numSubResources = 1);
 
 // Heap helpers
 const D3D12_HEAP_PROPERTIES* GetDefaultHeapProps();
@@ -339,8 +326,7 @@ void SetViewport(
     float zMin = 0.0f,
     float zMax = 1.0f);
 void CreateRootSignature(
-    ID3D12RootSignature** rootSignature,
-    const D3D12_ROOT_SIGNATURE_DESC1& desc);
+    ID3D12RootSignature** rootSignature, const D3D12_ROOT_SIGNATURE_DESC1& desc);
 uint32_t DispatchSize(uint64_t numElements, uint64_t groupSize);
 
 // Resource binding
@@ -368,9 +354,7 @@ void BindAsDescriptorTable(
     uint32_t rootParameter,
     CmdListMode p_CmdListMode);
 void BindStandardDescriptorTable(
-    ID3D12GraphicsCommandList* p_CmdList,
-    uint32_t rootParameter,
-    CmdListMode p_CmdListMode);
+    ID3D12GraphicsCommandList* p_CmdList, uint32_t rootParameter, CmdListMode p_CmdListMode);
 
 // Helpers for buffer types that use temporary buffer memory from the upload
 // helper
@@ -389,8 +373,7 @@ void BindTempConstantBuffer(
     uint32_t rootParameter,
     CmdListMode cmdListMode)
 {
-  BindTempConstantBuffer(
-      cmdList, &cbData, sizeof(T), rootParameter, cmdListMode);
+  BindTempConstantBuffer(cmdList, &cbData, sizeof(T), rootParameter, cmdListMode);
 }
 
 template <uint32_t N>
@@ -400,8 +383,7 @@ void BindTempConstantBuffer(
     uint32_t rootParameter,
     CmdListMode cmdListMode)
 {
-  BindTempConstantBuffer(
-      cmdList, cbData, N * sizeof(uint32_t), rootParameter, cmdListMode);
+  BindTempConstantBuffer(cmdList, cbData, N * sizeof(uint32_t), rootParameter, cmdListMode);
 }
 
 struct PersistentDescriptorAlloc
@@ -465,10 +447,7 @@ struct DescriptorHeap
   uint32_t IndexFromHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle);
 
   ID3D12DescriptorHeap* CurrentHeap() const;
-  uint32_t TotalNumDescriptors() const
-  {
-    return NumPersistent + NumTemporary;
-  }
+  uint32_t TotalNumDescriptors() const { return NumPersistent + NumTemporary; }
 };
 
 //---------------------------------------------------------------------------//
@@ -536,13 +515,9 @@ struct Buffer
   {
     return mapAndSetData(&p_Data, sizeof(T));
   }
-  uint64_t
-  updateData(const void* p_SrcData, uint64_t p_SrcSize, uint64_t p_DstOffset);
+  uint64_t updateData(const void* p_SrcData, uint64_t p_SrcSize, uint64_t p_DstOffset);
   uint64_t multiUpdateData(
-      const void* p_SrcData[],
-      uint64_t p_SrcSize[],
-      uint64_t p_DstOffset[],
-      uint64_t p_NumUpdates);
+      const void* p_SrcData[], uint64_t p_SrcSize[], uint64_t p_DstOffset[], uint64_t p_NumUpdates);
 
   void transition(
       ID3D12GraphicsCommandList* p_CmdList,
@@ -552,10 +527,7 @@ struct Buffer
   void makeWritable(ID3D12GraphicsCommandList* p_CmdList) const;
   void uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const;
 
-  bool initialized() const
-  {
-    return m_Size > 0;
-  }
+  bool initialized() const { return m_Size > 0; }
 };
 struct FormattedBufferInit
 {
@@ -587,19 +559,12 @@ struct FormattedBuffer
   void deinit();
 
   D3D12_INDEX_BUFFER_VIEW IBView() const;
-  ID3D12Resource* Resource() const
-  {
-    return InternalBuffer.m_Resource;
-  }
+  ID3D12Resource* Resource() const { return InternalBuffer.m_Resource; }
 
   void* map();
-  template <typename T> T* Map()
-  {
-    return reinterpret_cast<T*>(Map());
-  };
+  template <typename T> T* Map() { return reinterpret_cast<T*>(Map()); };
   void mapAndSetData(const void* data, uint64_t numElements);
-  void updateData(
-      const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
+  void updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
   void multiUpdateData(
       const void* srcData[],
       uint64_t srcNumElements[],
@@ -615,9 +580,7 @@ struct FormattedBuffer
   void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
 
 private:
-  FormattedBuffer(const FormattedBuffer& other)
-  {
-  }
+  FormattedBuffer(const FormattedBuffer& other) {}
 
   D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
   void updateDynamicSRV() const;
@@ -627,36 +590,37 @@ private:
 //---------------------------------------------------------------------------//
 struct ConstantBufferInit
 {
-    uint64_t Size = 0;
-    bool Dynamic = true;
-    bool CPUAccessible = true;
-    const void* InitData = nullptr;
-    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-    ID3D12Heap* Heap = nullptr;
-    uint64_t HeapOffset = 0;
-    const wchar_t* Name = nullptr;
+  uint64_t Size = 0;
+  bool Dynamic = true;
+  bool CPUAccessible = true;
+  const void* InitData = nullptr;
+  D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+  ID3D12Heap* Heap = nullptr;
+  uint64_t HeapOffset = 0;
+  const wchar_t* Name = nullptr;
 };
 
 struct ConstantBuffer
 {
-    Buffer InternalBuffer;
-    uint64_t CurrentGPUAddress = 0;
+  Buffer InternalBuffer;
+  uint64_t CurrentGPUAddress = 0;
 
-    ConstantBuffer();
-    ~ConstantBuffer();
+  ConstantBuffer();
+  ~ConstantBuffer();
 
-    void init(const ConstantBufferInit& init);
-    void deinit();
+  void init(const ConstantBufferInit& init);
+  void deinit();
 
-    void setAsGfxRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
-    void setAsComputeRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
+  void setAsGfxRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
+  void setAsComputeRootParameter(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const;
 
-    void* map();
-    template<typename T> T* Map() { return reinterpret_cast<T*>(Map()); }
-    void mapAndSetData(const void* data, uint64_t dataSize);
-    template<typename T> void MapAndSetData(const T& data) { MapAndSetData(&data, sizeof(T)); }
-    void updateData(const void* srcData, uint64_t srcSize, uint64_t dstOffset);
-    void multiUpdateData(const void* srcData[], uint64_t srcSize[], uint64_t dstOffset[], uint64_t numUpdates);
+  void* map();
+  template <typename T> T* Map() { return reinterpret_cast<T*>(Map()); }
+  void mapAndSetData(const void* data, uint64_t dataSize);
+  template <typename T> void MapAndSetData(const T& data) { MapAndSetData(&data, sizeof(T)); }
+  void updateData(const void* srcData, uint64_t srcSize, uint64_t dstOffset);
+  void multiUpdateData(
+      const void* srcData[], uint64_t srcSize[], uint64_t dstOffset[], uint64_t numUpdates);
 };
 //---------------------------------------------------------------------------//
 // StructuredBuffer
@@ -686,32 +650,19 @@ struct StructuredBuffer
   D3D12_CPU_DESCRIPTOR_HANDLE m_CounterUAV = {};
   uint64_t m_GpuAddress = 0;
 
-  StructuredBuffer()
-  {
-  }
-  ~StructuredBuffer()
-  {
-  }
+  StructuredBuffer() {}
+  ~StructuredBuffer() {}
 
   void init(const StructuredBufferInit& p_Init);
   void deinit();
 
   D3D12_VERTEX_BUFFER_VIEW vbView() const;
-  ID3D12Resource* resource() const
-  {
-    return m_InternalBuffer.m_Resource;
-  }
+  ID3D12Resource* resource() const { return m_InternalBuffer.m_Resource; }
 
   void* map();
-  template <typename T> T* map()
-  {
-    return reinterpret_cast<T*>(map());
-  }
+  template <typename T> T* map() { return reinterpret_cast<T*>(map()); }
   void mapAndSetData(const void* p_Data, uint64_t p_NumElements);
-  void updateData(
-      const void* p_SrcData,
-      uint64_t p_SrcNumElements,
-      uint64_t p_DstElemOffset);
+  void updateData(const void* p_SrcData, uint64_t p_SrcNumElements, uint64_t p_DstElemOffset);
   void multiUpdateData(
       const void* p_SrcData[],
       uint64_t p_SrcNumElements[],
@@ -745,18 +696,13 @@ struct Texture
   DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
   bool Cubemap = false;
 
-  Texture()
-  {
-  }
+  Texture() {}
   ~Texture()
   {
     // assert(Resource == nullptr);
   }
 
-  bool Valid() const
-  {
-    return Resource != nullptr;
-  }
+  bool Valid() const { return Resource != nullptr; }
 
   void Shutdown()
   {
@@ -766,9 +712,7 @@ struct Texture
   }
 
 private:
-  Texture(const Texture& other)
-  {
-  }
+  Texture(const Texture& other) {}
 };
 struct TextureBase
 {
@@ -782,17 +726,10 @@ struct TextureBase
   DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
   bool Cubemap = false;
 
-  TextureBase()
-  {
-  }
-  ~TextureBase()
-  {
-  }
+  TextureBase() {}
+  ~TextureBase() {}
 
-  bool Valid() const
-  {
-    return Resource != nullptr;
-  }
+  bool Valid() const { return Resource != nullptr; }
 
   void deinit()
   {
@@ -809,8 +746,7 @@ struct RenderTextureInit
   uint64_t MSAASamples = 1;
   uint64_t ArraySize = 1;
   bool CreateUAV = false;
-  D3D12_RESOURCE_STATES InitialState =
-      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+  D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
   const wchar_t* Name = nullptr;
 };
 struct RenderTexture
@@ -822,12 +758,8 @@ struct RenderTexture
   uint32_t m_MSAASamples = 0;
   uint32_t m_MSAAQuality = 0;
 
-  RenderTexture()
-  {
-  }
-  ~RenderTexture()
-  {
-  }
+  RenderTexture() {}
+  ~RenderTexture() {}
 
   void init(const RenderTextureInit& p_Init);
   void deinit();
@@ -848,26 +780,11 @@ struct RenderTexture
       uint64_t p_ArraySlice = uint64_t(-1)) const;
   void uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const;
 
-  uint32_t srv() const
-  {
-    return m_Texture.SRV;
-  }
-  uint64_t width() const
-  {
-    return m_Texture.Width;
-  }
-  uint64_t height() const
-  {
-    return m_Texture.Height;
-  }
-  DXGI_FORMAT format() const
-  {
-    return m_Texture.Format;
-  }
-  ID3D12Resource* resource() const
-  {
-    return m_Texture.Resource;
-  }
+  uint32_t srv() const { return m_Texture.SRV; }
+  uint64_t width() const { return m_Texture.Width; }
+  uint64_t height() const { return m_Texture.Height; }
+  DXGI_FORMAT format() const { return m_Texture.Format; }
+  ID3D12Resource* resource() const { return m_Texture.Resource; }
   uint64_t subResourceIndex(uint64_t p_MipLevel, uint64_t p_ArraySlice) const
   {
     return p_ArraySlice * m_Texture.NumMips + p_MipLevel;
@@ -880,13 +797,13 @@ struct VolumeTexture
 
 struct DepthBufferInit
 {
-    uint64_t Width = 0;
-    uint64_t Height = 0;
-    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
-    uint64_t MSAASamples = 1;
-    uint64_t ArraySize = 1;
-    D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    const wchar_t* Name = nullptr;
+  uint64_t Width = 0;
+  uint64_t Height = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  uint64_t MSAASamples = 1;
+  uint64_t ArraySize = 1;
+  D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+  const wchar_t* Name = nullptr;
 };
 struct DepthBuffer
 {
@@ -909,30 +826,14 @@ struct DepthBuffer
       D3D12_RESOURCE_STATES before,
       D3D12_RESOURCE_STATES after,
       uint64_t arraySlice = uint64_t(-1)) const;
-  void makeReadable(
-      ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
-  void makeWritable(
-      ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
+  void makeReadable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
+  void makeWritable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice = uint64_t(-1)) const;
 
-  uint32_t getSrv() const
-  {
-    return Texture.SRV;
-  }
-  uint64_t getWidth() const
-  {
-    return Texture.Width;
-  }
-  uint64_t getHeight() const
-  {
-    return Texture.Height;
-  }
-  ID3D12Resource* getResource() const
-  {
-    return Texture.Resource;
-  }
+  uint32_t getSrv() const { return Texture.SRV; }
+  uint64_t getWidth() const { return Texture.Width; }
+  uint64_t getHeight() const { return Texture.Height; }
+  ID3D12Resource* getResource() const { return Texture.Resource; }
 
 private:
-  DepthBuffer(const DepthBuffer& other)
-  {
-  }
+  DepthBuffer(const DepthBuffer& other) {}
 };

@@ -8,6 +8,10 @@ uint64_t g_CurrentCPUFrame = 0;
 uint64_t g_CurrentGPUFrame = 0;
 uint64_t g_CurrFrameIdx = 0; // CurrentCPUFrame % RenderLatency
 
+ID3D12Device* g_Device = nullptr;
+
+static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
+
 size_t bitsPerPixel(DXGI_FORMAT fmt)
 {
   switch (static_cast<int>(fmt))
@@ -185,8 +189,8 @@ struct Fence
 
   void init(uint64_t p_InitialValue = 0)
   {
-    D3D_EXEC_CHECKED(g_Device->CreateFence(
-        p_InitialValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_D3DFence)));
+    D3D_EXEC_CHECKED(
+        g_Device->CreateFence(p_InitialValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_D3DFence)));
     m_FenceEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
     DEBUG_BREAK(m_FenceEvent != 0);
   }
@@ -199,19 +203,12 @@ struct Fence
   {
     if (m_D3DFence->GetCompletedValue() < p_FenceValue)
     {
-      D3D_EXEC_CHECKED(
-          m_D3DFence->SetEventOnCompletion(p_FenceValue, m_FenceEvent));
+      D3D_EXEC_CHECKED(m_D3DFence->SetEventOnCompletion(p_FenceValue, m_FenceEvent));
       WaitForSingleObject(m_FenceEvent, INFINITE);
     }
   }
-  bool signaled(uint64_t p_FenceValue)
-  {
-    return m_D3DFence->GetCompletedValue() >= p_FenceValue;
-  }
-  void clear(uint64_t p_FenceValue)
-  {
-    m_D3DFence->Signal(p_FenceValue);
-  }
+  bool signaled(uint64_t p_FenceValue) { return m_D3DFence->GetCompletedValue() >= p_FenceValue; }
+  void clear(uint64_t p_FenceValue) { m_D3DFence->Signal(p_FenceValue); }
 };
 //---------------------------------------------------------------------------//
 // static/internal variables
@@ -259,8 +256,7 @@ DescriptorHeap UAVDescriptorHeap;
 uint32_t NullTexture2DSRV = uint32_t(-1);
 
 static const uint64_t NumBlendStates = uint64_t(BlendState::NumValues);
-static const uint64_t NumRasterizerStates =
-    uint64_t(RasterizerState::NumValues);
+static const uint64_t NumRasterizerStates = uint64_t(RasterizerState::NumValues);
 static const uint64_t NumDepthStates = uint64_t(DepthState::NumValues);
 static const uint64_t NumSamplerStates = uint64_t(SamplerState::NumValues);
 
@@ -269,8 +265,7 @@ static D3D12_RASTERIZER_DESC RasterizerStateDescs[NumRasterizerStates] = {};
 static D3D12_DEPTH_STENCIL_DESC DepthStateDescs[NumBlendStates] = {};
 static D3D12_SAMPLER_DESC SamplerStateDescs[NumSamplerStates] = {};
 
-static D3D12_DESCRIPTOR_RANGE1
-    StandardDescriptorRangeDescs[NumStandardDescriptorRanges] = {};
+static D3D12_DESCRIPTOR_RANGE1 StandardDescriptorRangeDescs[NumStandardDescriptorRanges] = {};
 
 static void ClearFinishedUploads(uint64_t flushCount)
 {
@@ -292,15 +287,12 @@ static void ClearFinishedUploads(uint64_t flushCount)
 
     if (s_UploadFence.signaled(submission.FenceValue))
     {
-      UploadSubmissionStart =
-          (UploadSubmissionStart + 1) % MaxUploadSubmissions;
+      UploadSubmissionStart = (UploadSubmissionStart + 1) % MaxUploadSubmissions;
       UploadSubmissionUsed -= 1;
-      UploadBufferStart =
-          (UploadBufferStart + submission.Padding) % s_UploadBufferSize;
+      UploadBufferStart = (UploadBufferStart + submission.Padding) % s_UploadBufferSize;
       assert(submission.Offset == UploadBufferStart);
       assert(UploadBufferStart + submission.Size <= s_UploadBufferSize);
-      UploadBufferStart =
-          (UploadBufferStart + submission.Size) % s_UploadBufferSize;
+      UploadBufferStart = (UploadBufferStart + submission.Size) % s_UploadBufferSize;
       UploadBufferUsed -= (submission.Size + submission.Padding);
       submission.reset();
 
@@ -317,14 +309,12 @@ static void ClearFinishedUploads(uint64_t flushCount)
 void initializeHelpers()
 {
   RTVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, false);
-  SRVDescriptorHeap.Init(
-      1024, 1024, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+  SRVDescriptorHeap.Init(1024, 1024, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
   DSVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, false);
   UAVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, false);
 
   RTVDescriptorSize = RTVDescriptorHeap.DescriptorSize;
-  SRVDescriptorSize = UAVDescriptorSize = CBVDescriptorSize =
-      SRVDescriptorHeap.DescriptorSize;
+  SRVDescriptorSize = UAVDescriptorSize = CBVDescriptorSize = SRVDescriptorHeap.DescriptorSize;
   DSVDescriptorSize = DSVDescriptorHeap.DescriptorSize;
 
   // Standard descriptor ranges for binding to the arrays in
@@ -333,64 +323,55 @@ void initializeHelpers()
 
   // Blend state initialization
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::Disabled)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::Disabled)];
     blendDesc.RenderTarget[0].BlendEnable = false;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
   }
 
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::Additive)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::Additive)];
     blendDesc.RenderTarget[0].BlendEnable = true;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
   }
 
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::AlphaBlend)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::AlphaBlend)];
     blendDesc.RenderTarget[0].BlendEnable = true;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
   }
 
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::PreMultiplied)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::PreMultiplied)];
     blendDesc.RenderTarget[0].BlendEnable = false;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
   }
 
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::NoColorWrites)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::NoColorWrites)];
     blendDesc.RenderTarget[0].BlendEnable = false;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
@@ -402,23 +383,20 @@ void initializeHelpers()
   }
 
   {
-    D3D12_BLEND_DESC& blendDesc =
-        BlendStateDescs[uint64_t(BlendState::PreMultipliedRGB)];
+    D3D12_BLEND_DESC& blendDesc = BlendStateDescs[uint64_t(BlendState::PreMultipliedRGB)];
     blendDesc.RenderTarget[0].BlendEnable = true;
     blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC1_COLOR;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALL;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
   }
 
   // Rasterizer state initialization
   {
-    D3D12_RASTERIZER_DESC& rastDesc =
-        RasterizerStateDescs[uint64_t(RasterizerState::NoCull)];
+    D3D12_RASTERIZER_DESC& rastDesc = RasterizerStateDescs[uint64_t(RasterizerState::NoCull)];
     rastDesc.CullMode = D3D12_CULL_MODE_NONE;
     rastDesc.DepthClipEnable = true;
     rastDesc.FillMode = D3D12_FILL_MODE_SOLID;
@@ -435,8 +413,7 @@ void initializeHelpers()
   }
 
   {
-    D3D12_RASTERIZER_DESC& rastDesc =
-        RasterizerStateDescs[uint64_t(RasterizerState::BackFaceCull)];
+    D3D12_RASTERIZER_DESC& rastDesc = RasterizerStateDescs[uint64_t(RasterizerState::BackFaceCull)];
     rastDesc.CullMode = D3D12_CULL_MODE_BACK;
     rastDesc.DepthClipEnable = true;
     rastDesc.FillMode = D3D12_FILL_MODE_SOLID;
@@ -453,8 +430,7 @@ void initializeHelpers()
   }
 
   {
-    D3D12_RASTERIZER_DESC& rastDesc =
-        RasterizerStateDescs[uint64_t(RasterizerState::NoCullNoMS)];
+    D3D12_RASTERIZER_DESC& rastDesc = RasterizerStateDescs[uint64_t(RasterizerState::NoCullNoMS)];
     rastDesc.CullMode = D3D12_CULL_MODE_NONE;
     rastDesc.DepthClipEnable = true;
     rastDesc.FillMode = D3D12_FILL_MODE_SOLID;
@@ -462,8 +438,7 @@ void initializeHelpers()
   }
 
   {
-    D3D12_RASTERIZER_DESC& rastDesc =
-        RasterizerStateDescs[uint64_t(RasterizerState::Wireframe)];
+    D3D12_RASTERIZER_DESC& rastDesc = RasterizerStateDescs[uint64_t(RasterizerState::Wireframe)];
     rastDesc.CullMode = D3D12_CULL_MODE_NONE;
     rastDesc.DepthClipEnable = true;
     rastDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
@@ -472,40 +447,35 @@ void initializeHelpers()
 
   // Depth state initialization
   {
-    D3D12_DEPTH_STENCIL_DESC& dsDesc =
-        DepthStateDescs[uint64_t(DepthState::Disabled)];
+    D3D12_DEPTH_STENCIL_DESC& dsDesc = DepthStateDescs[uint64_t(DepthState::Disabled)];
     dsDesc.DepthEnable = false;
     dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
   }
 
   {
-    D3D12_DEPTH_STENCIL_DESC& dsDesc =
-        DepthStateDescs[uint64_t(DepthState::Enabled)];
+    D3D12_DEPTH_STENCIL_DESC& dsDesc = DepthStateDescs[uint64_t(DepthState::Enabled)];
     dsDesc.DepthEnable = true;
     dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
   }
 
   {
-    D3D12_DEPTH_STENCIL_DESC& dsDesc =
-        DepthStateDescs[uint64_t(DepthState::Reversed)];
+    D3D12_DEPTH_STENCIL_DESC& dsDesc = DepthStateDescs[uint64_t(DepthState::Reversed)];
     dsDesc.DepthEnable = true;
     dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
     dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
   }
 
   {
-    D3D12_DEPTH_STENCIL_DESC& dsDesc =
-        DepthStateDescs[uint64_t(DepthState::WritesEnabled)];
+    D3D12_DEPTH_STENCIL_DESC& dsDesc = DepthStateDescs[uint64_t(DepthState::WritesEnabled)];
     dsDesc.DepthEnable = true;
     dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
   }
 
   {
-    D3D12_DEPTH_STENCIL_DESC& dsDesc =
-        DepthStateDescs[uint64_t(DepthState::ReversedWritesEnabled)];
+    D3D12_DEPTH_STENCIL_DESC& dsDesc = DepthStateDescs[uint64_t(DepthState::ReversedWritesEnabled)];
     dsDesc.DepthEnable = true;
     dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
@@ -513,8 +483,7 @@ void initializeHelpers()
 
   // Sampler state initialization
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::Linear)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::Linear)];
 
     sampDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -523,15 +492,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::LinearClamp)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::LinearClamp)];
 
     sampDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -540,15 +508,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::LinearBorder)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::LinearBorder)];
 
     sampDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -557,15 +524,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::Point)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::Point)];
 
     sampDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -574,15 +540,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::Anisotropic)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::Anisotropic)];
 
     sampDesc.Filter = D3D12_FILTER_ANISOTROPIC;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -591,15 +556,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 16;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::ShadowMap)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::ShadowMap)];
 
     sampDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -608,15 +572,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::ShadowMapPCF)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::ShadowMapPCF)];
 
     sampDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -625,15 +588,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::ReversedShadowMap)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::ReversedShadowMap)];
 
     sampDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -642,15 +604,14 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
 
   {
-    D3D12_SAMPLER_DESC& sampDesc =
-        SamplerStateDescs[uint64_t(SamplerState::ReversedShadowMapPCF)];
+    D3D12_SAMPLER_DESC& sampDesc = SamplerStateDescs[uint64_t(SamplerState::ReversedShadowMapPCF)];
 
     sampDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -659,8 +620,8 @@ void initializeHelpers()
     sampDesc.MipLODBias = 0.0f;
     sampDesc.MaxAnisotropy = 1;
     sampDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] =
-        sampDesc.BorderColor[2] = sampDesc.BorderColor[3] = 0;
+    sampDesc.BorderColor[0] = sampDesc.BorderColor[1] = sampDesc.BorderColor[2] =
+        sampDesc.BorderColor[3] = 0;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D12_FLOAT32_MAX;
   }
@@ -677,8 +638,7 @@ void initializeHelpers()
 
     PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
     for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
-      g_Device->CreateShaderResourceView(
-          nullptr, &srvDesc, srvAlloc.Handles[i]);
+      g_Device->CreateShaderResourceView(nullptr, &srvDesc, srvAlloc.Handles[i]);
     NullTexture2DSRV = srvAlloc.Index;
   }
 }
@@ -719,27 +679,16 @@ void TransitionResource(
 }
 
 uint64_t GetResourceSize(
-    const D3D12_RESOURCE_DESC& desc,
-    uint32_t firstSubResource,
-    uint32_t numSubResources)
+    const D3D12_RESOURCE_DESC& desc, uint32_t firstSubResource, uint32_t numSubResources)
 {
   uint64_t size = 0;
   g_Device->GetCopyableFootprints(
-      &desc,
-      firstSubResource,
-      numSubResources,
-      0,
-      nullptr,
-      nullptr,
-      nullptr,
-      &size);
+      &desc, firstSubResource, numSubResources, 0, nullptr, nullptr, nullptr, &size);
   return size;
 }
 
-uint64_t GetResourceSize(
-    ID3D12Resource* resource,
-    uint32_t firstSubResource,
-    uint32_t numSubResources)
+uint64_t
+GetResourceSize(ID3D12Resource* resource, uint32_t firstSubResource, uint32_t numSubResources)
 {
   D3D12_RESOURCE_DESC desc = resource->GetDesc();
 
@@ -817,10 +766,7 @@ D3D12_STATIC_SAMPLER_DESC GetStaticSamplerState(
 {
   DEBUG_BREAK(uint64_t(samplerState) < arrayCount(SamplerStateDescs));
   return ConvertToStaticSampler(
-      SamplerStateDescs[uint64_t(samplerState)],
-      shaderRegister,
-      registerSpace,
-      visibility);
+      SamplerStateDescs[uint64_t(samplerState)], shaderRegister, registerSpace, visibility);
 }
 
 D3D12_STATIC_SAMPLER_DESC ConvertToStaticSampler(
@@ -848,12 +794,12 @@ D3D12_STATIC_SAMPLER_DESC ConvertToStaticSampler(
       samplerDesc.BorderColor[1],
       samplerDesc.BorderColor[2],
       samplerDesc.BorderColor[3]};
-  if (borderColor[0] == 1.0f && borderColor[1] == 1.0f &&
-      borderColor[2] == 1.0f && borderColor[3] == 1.0f)
+  if (borderColor[0] == 1.0f && borderColor[1] == 1.0f && borderColor[2] == 1.0f &&
+      borderColor[3] == 1.0f)
     staticDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
   else if (
-      borderColor[0] == 0.0f && borderColor[1] == 0.0f &&
-      borderColor[2] == 0.0f && borderColor[3] == 0.0f)
+      borderColor[0] == 0.0f && borderColor[1] == 0.0f && borderColor[2] == 0.0f &&
+      borderColor[3] == 0.0f)
     staticDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
   else
     staticDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
@@ -862,11 +808,7 @@ D3D12_STATIC_SAMPLER_DESC ConvertToStaticSampler(
 }
 
 void SetViewport(
-    ID3D12GraphicsCommandList* cmdList,
-    uint64_t width,
-    uint64_t height,
-    float zMin,
-    float zMax)
+    ID3D12GraphicsCommandList* cmdList, uint64_t width, uint64_t height, float zMin, float zMax)
 {
   D3D12_VIEWPORT viewport = {};
   viewport.Width = float(width);
@@ -895,18 +837,14 @@ void CreateRootSignature(
 
   ID3DBlobPtr signature;
   ID3DBlobPtr error;
-  HRESULT hr =
-      D3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
+  HRESULT hr = D3D12SerializeVersionedRootSignature(&versionedDesc, &signature, &error);
   if (FAILED(hr))
   {
     DEBUG_BREAK(false); // TODO: print out the error
   }
 
   D3D_EXEC_CHECKED(g_Device->CreateRootSignature(
-      0,
-      signature->GetBufferPointer(),
-      signature->GetBufferSize(),
-      IID_PPV_ARGS(rootSignature)));
+      0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(rootSignature)));
 }
 
 uint32_t DispatchSize(uint64_t numElements, uint64_t groupSize)
@@ -916,8 +854,7 @@ uint32_t DispatchSize(uint64_t numElements, uint64_t groupSize)
 }
 
 static const uint64_t MaxBindCount = 16;
-static const uint32_t DescriptorCopyRanges[] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+static const uint32_t DescriptorCopyRanges[] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 static_assert(arrayCount(DescriptorCopyRanges) == MaxBindCount);
 
 void SetDescriptorHeaps(ID3D12GraphicsCommandList* cmdList)
@@ -935,8 +872,7 @@ TempDescriptorTable(const D3D12_CPU_DESCRIPTOR_HANDLE* handles, uint64_t count)
   DEBUG_BREAK(count <= MaxBindCount);
   DEBUG_BREAK(count > 0);
 
-  TempDescriptorAlloc tempAlloc =
-      SRVDescriptorHeap.AllocateTemporary(uint32_t(count));
+  TempDescriptorAlloc tempAlloc = SRVDescriptorHeap.AllocateTemporary(uint32_t(count));
 
   uint32_t destRanges[1] = {uint32_t(count)};
   g_Device->CopyDescriptors(
@@ -976,13 +912,11 @@ void InsertStandardDescriptorRanges(D3D12_DESCRIPTOR_RANGE1* ranges)
   for (uint32_t i = 0; i < NumStandardDescriptorRanges; ++i)
   {
     StandardDescriptorRangeDescs[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    StandardDescriptorRangeDescs[i].NumDescriptors =
-        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    StandardDescriptorRangeDescs[i].NumDescriptors = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     StandardDescriptorRangeDescs[i].BaseShaderRegister = 0;
     StandardDescriptorRangeDescs[i].RegisterSpace = i;
     StandardDescriptorRangeDescs[i].OffsetInDescriptorsFromTableStart = 0;
-    StandardDescriptorRangeDescs[i].Flags =
-        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+    StandardDescriptorRangeDescs[i].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
     if (i >= userStart)
       StandardDescriptorRangeDescs[i].RegisterSpace = (i - userStart) + 100;
   }
@@ -995,8 +929,7 @@ void BindAsDescriptorTable(
     CmdListMode cmdListMode)
 {
   DEBUG_BREAK(descriptorIdx != uint32_t(-1));
-  D3D12_GPU_DESCRIPTOR_HANDLE handle =
-      SRVDescriptorHeap.GPUHandleFromIndex(descriptorIdx);
+  D3D12_GPU_DESCRIPTOR_HANDLE handle = SRVDescriptorHeap.GPUHandleFromIndex(descriptorIdx);
   if (cmdListMode == CmdListMode::Compute)
     cmdList->SetComputeRootDescriptorTable(rootParameter, handle);
   else
@@ -1004,12 +937,9 @@ void BindAsDescriptorTable(
 }
 
 void BindStandardDescriptorTable(
-    ID3D12GraphicsCommandList* cmdList,
-    uint32_t rootParameter,
-    CmdListMode cmdListMode)
+    ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter, CmdListMode cmdListMode)
 {
-  D3D12_GPU_DESCRIPTOR_HANDLE handle =
-      SRVDescriptorHeap.GPUStart[SRVDescriptorHeap.HeapIndex];
+  D3D12_GPU_DESCRIPTOR_HANDLE handle = SRVDescriptorHeap.GPUStart[SRVDescriptorHeap.HeapIndex];
   if (cmdListMode == CmdListMode::Compute)
     cmdList->SetComputeRootDescriptorTable(rootParameter, handle);
   else
@@ -1045,8 +975,7 @@ TempBuffer TempConstantBuffer(uint64_t cbSize, bool makeDescriptor)
     TempDescriptorAlloc cbvAlloc = SRVDescriptorHeap.AllocateTemporary(1);
     D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
     cbvDesc.BufferLocation = tempMem.GpuAddress;
-    cbvDesc.SizeInBytes =
-        alignUp<uint32_t>(uint32_t(cbSize), ConstantBufferAlignment);
+    cbvDesc.SizeInBytes = alignUp<uint32_t>(uint32_t(cbSize), ConstantBufferAlignment);
     g_Device->CreateConstantBufferView(&cbvDesc, cbvAlloc.StartCPUHandle);
     tempBuffer.DescriptorIndex = cbvAlloc.StartIndex;
   }
@@ -1065,17 +994,12 @@ void BindTempConstantBuffer(
   memcpy(tempBuffer.CPUAddress, cbData, cbSize);
 
   if (cmdListMode == CmdListMode::Graphics)
-    cmdList->SetGraphicsRootConstantBufferView(
-        rootParameter, tempBuffer.GPUAddress);
+    cmdList->SetGraphicsRootConstantBufferView(rootParameter, tempBuffer.GPUAddress);
   else
-    cmdList->SetComputeRootConstantBufferView(
-        rootParameter, tempBuffer.GPUAddress);
+    cmdList->SetComputeRootConstantBufferView(rootParameter, tempBuffer.GPUAddress);
 }
 
-DescriptorHeap::~DescriptorHeap()
-{
-  DEBUG_BREAK(Heaps[0] == nullptr);
-}
+DescriptorHeap::~DescriptorHeap() { DEBUG_BREAK(Heaps[0] == nullptr); }
 
 void DescriptorHeap::Init(
     uint32_t numPersistent,
@@ -1092,8 +1016,7 @@ void DescriptorHeap::Init(
   NumTemporary = numTemporary;
   HeapType = heapType;
   ShaderVisible = shaderVisible;
-  if (heapType == D3D12_DESCRIPTOR_HEAP_TYPE_RTV ||
-      heapType == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+  if (heapType == D3D12_DESCRIPTOR_HEAP_TYPE_RTV || heapType == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
     ShaderVisible = false;
 
   NumHeaps = ShaderVisible ? 2 : 1;
@@ -1111,8 +1034,7 @@ void DescriptorHeap::Init(
 
   for (uint32_t i = 0; i < NumHeaps; ++i)
   {
-    D3D_EXEC_CHECKED(
-        g_Device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&Heaps[i])));
+    D3D_EXEC_CHECKED(g_Device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&Heaps[i])));
     CPUStart[i] = Heaps[i]->GetCPUDescriptorHandleForHeapStart();
     if (ShaderVisible)
       GPUStart[i] = Heaps[i]->GetGPUDescriptorHandleForHeapStart();
@@ -1203,8 +1125,7 @@ TempDescriptorAlloc DescriptorHeap::AllocateTemporary(uint32_t count)
   DEBUG_BREAK(Heaps[0] != nullptr);
   DEBUG_BREAK(count > 0);
 
-  uint32_t tempIdx =
-      uint32_t(InterlockedAdd64(&TemporaryAllocated, count)) - count;
+  uint32_t tempIdx = uint32_t(InterlockedAdd64(&TemporaryAllocated, count)) - count;
   DEBUG_BREAK(tempIdx < NumTemporary);
 
   uint32_t finalIdx = tempIdx + NumPersistent;
@@ -1238,8 +1159,8 @@ DescriptorHeap::GPUHandleFromIndex(uint32_t descriptorIdx) const
   return GPUHandleFromIndex(descriptorIdx, HeapIndex);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::CPUHandleFromIndex(
-    uint32_t descriptorIdx, uint64_t heapIdx) const
+D3D12_CPU_DESCRIPTOR_HANDLE
+DescriptorHeap::CPUHandleFromIndex(uint32_t descriptorIdx, uint64_t heapIdx) const
 {
   DEBUG_BREAK(Heaps[0] != nullptr);
   DEBUG_BREAK(heapIdx < NumHeaps);
@@ -1249,8 +1170,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::CPUHandleFromIndex(
   return handle;
 }
 
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::GPUHandleFromIndex(
-    uint32_t descriptorIdx, uint64_t heapIdx) const
+D3D12_GPU_DESCRIPTOR_HANDLE
+DescriptorHeap::GPUHandleFromIndex(uint32_t descriptorIdx, uint64_t heapIdx) const
 {
   DEBUG_BREAK(Heaps[0] != nullptr);
   DEBUG_BREAK(heapIdx < NumHeaps);
@@ -1265,9 +1186,7 @@ uint32_t DescriptorHeap::IndexFromHandle(D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
   DEBUG_BREAK(Heaps[0] != nullptr);
   DEBUG_BREAK(handle.ptr >= CPUStart[HeapIndex].ptr);
-  DEBUG_BREAK(
-      handle.ptr <
-      CPUStart[HeapIndex].ptr + DescriptorSize * TotalNumDescriptors());
+  DEBUG_BREAK(handle.ptr < CPUStart[HeapIndex].ptr + DescriptorSize * TotalNumDescriptors());
   DEBUG_BREAK((handle.ptr - CPUStart[HeapIndex].ptr) % DescriptorSize == 0);
   return uint32_t(handle.ptr - CPUStart[HeapIndex].ptr) / DescriptorSize;
 }
@@ -1276,9 +1195,7 @@ uint32_t DescriptorHeap::IndexFromHandle(D3D12_GPU_DESCRIPTOR_HANDLE handle)
 {
   DEBUG_BREAK(Heaps[0] != nullptr);
   DEBUG_BREAK(handle.ptr >= GPUStart[HeapIndex].ptr);
-  DEBUG_BREAK(
-      handle.ptr <
-      GPUStart[HeapIndex].ptr + DescriptorSize * TotalNumDescriptors());
+  DEBUG_BREAK(handle.ptr < GPUStart[HeapIndex].ptr + DescriptorSize * TotalNumDescriptors());
   DEBUG_BREAK((handle.ptr - GPUStart[HeapIndex].ptr) % DescriptorSize == 0);
   return uint32_t(handle.ptr - GPUStart[HeapIndex].ptr) / DescriptorSize;
 }
@@ -1369,8 +1286,7 @@ void initializeUpload(ID3D12Device* dev)
   D3D12_COMMAND_QUEUE_DESC queueDesc = {};
   queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
   queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-  D3D_EXEC_CHECKED(g_Device->CreateCommandQueue(
-      &queueDesc, IID_PPV_ARGS(&s_UploadCmdQueue)));
+  D3D_EXEC_CHECKED(g_Device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&s_UploadCmdQueue)));
   s_UploadCmdQueue->SetName(L"Upload Copy Queue");
 
   s_UploadFence.init(0);
@@ -1397,8 +1313,8 @@ void initializeUpload(ID3D12Device* dev)
       IID_PPV_ARGS(&s_UploadBuffer)));
 
   D3D12_RANGE readRange = {};
-  D3D_EXEC_CHECKED(s_UploadBuffer->Map(
-      0, &readRange, reinterpret_cast<void**>(&s_UploadBufferCPUAddr)));
+  D3D_EXEC_CHECKED(
+      s_UploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&s_UploadBufferCPUAddr)));
 
   // Temporary buffer memory that swaps every frame
   resourceDesc.Width = uint32_t(TempBufferSize);
@@ -1413,8 +1329,8 @@ void initializeUpload(ID3D12Device* dev)
         nullptr,
         IID_PPV_ARGS(&TempFrameBuffers[i])));
 
-    D3D_EXEC_CHECKED(TempFrameBuffers[i]->Map(
-        0, &readRange, reinterpret_cast<void**>(&TempFrameCPUMem[i])));
+    D3D_EXEC_CHECKED(
+        TempFrameBuffers[i]->Map(0, &readRange, reinterpret_cast<void**>(&TempFrameCPUMem[i])));
     TempFrameGPUMem[i] = TempFrameBuffers[i]->GetGPUVirtualAddress();
   }
 
@@ -1491,8 +1407,7 @@ UploadContext resourceUploadBegin(uint64_t p_Size)
   }
 
   D3D_EXEC_CHECKED(submission->CmdAllocator->Reset());
-  D3D_EXEC_CHECKED(
-      submission->CmdList->Reset(submission->CmdAllocator, nullptr));
+  D3D_EXEC_CHECKED(submission->CmdList->Reset(submission->CmdAllocator, nullptr));
 
   UploadContext context;
   context.CmdList = submission->CmdList;
@@ -1508,8 +1423,7 @@ void resourceUploadEnd(UploadContext& context)
 {
   DEBUG_BREAK(context.CmdList != nullptr);
   DEBUG_BREAK(context.Submission != nullptr);
-  UploadSubmission* submission =
-      reinterpret_cast<UploadSubmission*>(context.Submission);
+  UploadSubmission* submission = reinterpret_cast<UploadSubmission*>(context.Submission);
 
   {
     AcquireSRWLockExclusive(&s_UploadQueueLock);
@@ -1565,8 +1479,8 @@ void Buffer::init(
   resourceDesc.DepthOrArraySize = 1;
   resourceDesc.MipLevels = 1;
   resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-  resourceDesc.Flags = p_AllowUav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-                                  : D3D12_RESOURCE_FLAG_NONE;
+  resourceDesc.Flags =
+      p_AllowUav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
   resourceDesc.SampleDesc.Count = 1;
   resourceDesc.SampleDesc.Quality = 0;
   resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -1585,12 +1499,7 @@ void Buffer::init(
     m_Heap = p_Heap;
     m_HeapOffset = p_HeapOffset;
     D3D_EXEC_CHECKED(g_Device->CreatePlacedResource(
-        p_Heap,
-        p_HeapOffset,
-        &resourceDesc,
-        resourceState,
-        nullptr,
-        IID_PPV_ARGS(&m_Resource)));
+        p_Heap, p_HeapOffset, &resourceDesc, resourceState, nullptr, IID_PPV_ARGS(&m_Resource)));
   }
   else
   {
@@ -1608,8 +1517,7 @@ void Buffer::init(
   if (p_CpuAccessible)
   {
     D3D12_RANGE readRange = {};
-    D3D_EXEC_CHECKED(m_Resource->Map(
-        0, &readRange, reinterpret_cast<void**>(&m_CpuAddress)));
+    D3D_EXEC_CHECKED(m_Resource->Map(0, &readRange, reinterpret_cast<void**>(&m_CpuAddress)));
   }
 
   if (p_InitData && p_CpuAccessible)
@@ -1629,11 +1537,7 @@ void Buffer::init(
       memcpy((uint8_t*)uploadContext.CpuAddress + p_Size, p_InitData, p_Size);
 
     uploadContext.CmdList->CopyBufferRegion(
-        m_Resource,
-        0,
-        uploadContext.Resource,
-        uploadContext.ResourceOffset,
-        p_Size);
+        m_Resource, 0, uploadContext.Resource, uploadContext.ResourceOffset, p_Size);
 
     resourceUploadEnd(uploadContext);
   }
@@ -1671,16 +1575,12 @@ MapResult Buffer::mapAndSetData(const void* p_Data, uint64_t p_DataSize)
   memcpy(result.CpuAddress, p_Data, p_DataSize);
   return result;
 }
-uint64_t Buffer::updateData(
-    const void* p_SrcData, uint64_t p_SrcSize, uint64_t p_DstOffset)
+uint64_t Buffer::updateData(const void* p_SrcData, uint64_t p_SrcSize, uint64_t p_DstOffset)
 {
   return multiUpdateData(&p_SrcData, &p_SrcSize, &p_DstOffset, 1);
 }
 uint64_t Buffer::multiUpdateData(
-    const void* p_SrcData[],
-    uint64_t p_SrcSize[],
-    uint64_t p_DstOffset[],
-    uint64_t p_NumUpdates)
+    const void* p_SrcData[], uint64_t p_SrcSize[], uint64_t p_DstOffset[], uint64_t p_NumUpdates)
 {
   DEBUG_BREAK(m_Dynamic);
   DEBUG_BREAK(m_CpuAccessible == false);
@@ -1763,9 +1663,7 @@ void Buffer::uavBarrier(ID3D12GraphicsCommandList* p_CmdList) const
 //---------------------------------------------------------------------------//
 // FormattedBuffer
 //---------------------------------------------------------------------------//
-FormattedBuffer::FormattedBuffer()
-{
-}
+FormattedBuffer::FormattedBuffer() {}
 
 FormattedBuffer::~FormattedBuffer()
 {
@@ -1804,8 +1702,7 @@ void FormattedBuffer::init(const FormattedBufferInit& init)
   // Start off all SRV's pointing to the first buffer
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(0);
   for (uint32_t i = 0; i < arrayCount32(srvAlloc.Handles); ++i)
-    g_Device->CreateShaderResourceView(
-        InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
+    g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
 
   if (init.CreateUAV)
   {
@@ -1821,8 +1718,7 @@ void FormattedBuffer::init(const FormattedBufferInit& init)
     uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     uavDesc.Buffer.NumElements = uint32_t(NumElements);
 
-    g_Device->CreateUnorderedAccessView(
-        InternalBuffer.m_Resource, nullptr, &uavDesc, UAV);
+    g_Device->CreateUnorderedAccessView(InternalBuffer.m_Resource, nullptr, &uavDesc, UAV);
   }
 }
 
@@ -1866,17 +1762,13 @@ void FormattedBuffer::mapAndSetData(const void* data, uint64_t numElements)
 void FormattedBuffer::updateData(
     const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset)
 {
-  GPUAddress = InternalBuffer.updateData(
-      srcData, srcNumElements * Stride, dstElemOffset * Stride);
+  GPUAddress = InternalBuffer.updateData(srcData, srcNumElements * Stride, dstElemOffset * Stride);
 
   updateDynamicSRV();
 }
 
 void FormattedBuffer::multiUpdateData(
-    const void* srcData[],
-    uint64_t srcNumElements[],
-    uint64_t dstElemOffset[],
-    uint64_t numUpdates)
+    const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates)
 {
   uint64_t srcSizes[16];
   uint64_t dstOffsets[16];
@@ -1887,8 +1779,7 @@ void FormattedBuffer::multiUpdateData(
     dstOffsets[i] = dstElemOffset[i] * Stride;
   }
 
-  GPUAddress =
-      InternalBuffer.multiUpdateData(srcData, srcSizes, dstOffsets, numUpdates);
+  GPUAddress = InternalBuffer.multiUpdateData(srcData, srcSizes, dstOffsets, numUpdates);
 
   updateDynamicSRV();
 }
@@ -1937,30 +1828,23 @@ void FormattedBuffer::updateDynamicSRV() const
   assert(InternalBuffer.m_Dynamic);
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(InternalBuffer.m_CurrBuffer);
 
-  D3D12_CPU_DESCRIPTOR_HANDLE handle =
-      SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
+  D3D12_CPU_DESCRIPTOR_HANDLE handle = SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
   g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
 
   for (uint64_t i = 1; i < RENDER_LATENCY; ++i)
   {
     uint64_t frameIdx = (g_CurrentCPUFrame + i) % RENDER_LATENCY;
-    D3D12_CPU_DESCRIPTOR_HANDLE handle =
-        SRVDescriptorHeap.CPUHandleFromIndex(SRV, frameIdx);
-    g_Device->CreateShaderResourceView(
-        InternalBuffer.m_Resource, &desc, handle);
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = SRVDescriptorHeap.CPUHandleFromIndex(SRV, frameIdx);
+    g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
   }
 }
 //---------------------------------------------------------------------------//
 // Uniform buffer
 //---------------------------------------------------------------------------//
 
-ConstantBuffer::ConstantBuffer()
-{
-}
+ConstantBuffer::ConstantBuffer() {}
 
-ConstantBuffer::~ConstantBuffer()
-{
-}
+ConstantBuffer::~ConstantBuffer() {}
 
 void ConstantBuffer::init(const ConstantBufferInit& init)
 {
@@ -1977,10 +1861,7 @@ void ConstantBuffer::init(const ConstantBufferInit& init)
       init.Name);
 }
 
-void ConstantBuffer::deinit()
-{
-  InternalBuffer.deinit();
-}
+void ConstantBuffer::deinit() { InternalBuffer.deinit(); }
 
 void ConstantBuffer::setAsGfxRootParameter(
     ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter) const
@@ -2010,20 +1891,15 @@ void ConstantBuffer::mapAndSetData(const void* data, uint64_t dataSize)
   memcpy(cpuAddr, data, dataSize);
 }
 
-void ConstantBuffer::updateData(
-    const void* srcData, uint64_t srcSize, uint64_t dstOffset)
+void ConstantBuffer::updateData(const void* srcData, uint64_t srcSize, uint64_t dstOffset)
 {
   CurrentGPUAddress = InternalBuffer.updateData(srcData, srcSize, dstOffset);
 }
 
 void ConstantBuffer::multiUpdateData(
-    const void* srcData[],
-    uint64_t srcSize[],
-    uint64_t dstOffset[],
-    uint64_t numUpdates)
+    const void* srcData[], uint64_t srcSize[], uint64_t dstOffset[], uint64_t numUpdates)
 {
-  CurrentGPUAddress =
-      InternalBuffer.multiUpdateData(srcData, srcSize, dstOffset, numUpdates);
+  CurrentGPUAddress = InternalBuffer.multiUpdateData(srcData, srcSize, dstOffset, numUpdates);
 }
 
 //---------------------------------------------------------------------------//
@@ -2054,8 +1930,7 @@ void StructuredBuffer::init(const StructuredBufferInit& p_Init)
   // Start off all SRV's pointing to the first buffer
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(0);
   for (uint32_t i = 0; i < arrayCount(srvAlloc.Handles); ++i)
-    g_Device->CreateShaderResourceView(
-        m_InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
+    g_Device->CreateShaderResourceView(m_InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
 
   if (p_Init.CreateUAV)
   {
@@ -2094,8 +1969,7 @@ void StructuredBuffer::init(const StructuredBufferInit& p_Init)
       uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
       uavDesc.Buffer.NumElements = 1;
       uavDesc.Buffer.StructureByteStride = sizeof(uint32_t);
-      g_Device->CreateUnorderedAccessView(
-          counterRes, nullptr, &uavDesc, m_CounterUAV);
+      g_Device->CreateUnorderedAccessView(counterRes, nullptr, &uavDesc, m_CounterUAV);
     }
 
     m_Uav = UAVDescriptorHeap.AllocatePersistent().Handles[0];
@@ -2108,8 +1982,7 @@ void StructuredBuffer::init(const StructuredBufferInit& p_Init)
     uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     uavDesc.Buffer.NumElements = uint32_t(m_NumElements);
     uavDesc.Buffer.StructureByteStride = uint32_t(m_Stride);
-    g_Device->CreateUnorderedAccessView(
-        m_InternalBuffer.m_Resource, counterRes, &uavDesc, m_Uav);
+    g_Device->CreateUnorderedAccessView(m_InternalBuffer.m_Resource, counterRes, &uavDesc, m_Uav);
   }
 }
 void StructuredBuffer::deinit()
@@ -2169,8 +2042,7 @@ void StructuredBuffer::multiUpdateData(
     dstOffsets[i] = p_DstElemOffset[i] * m_Stride;
   }
 
-  m_GpuAddress = m_InternalBuffer.multiUpdateData(
-      p_SrcData, srcSizes, dstOffsets, p_NumUpdates);
+  m_GpuAddress = m_InternalBuffer.multiUpdateData(p_SrcData, srcSizes, dstOffsets, p_NumUpdates);
 
   updateDynamicSRV();
 }
@@ -2214,8 +2086,7 @@ void StructuredBuffer::updateDynamicSRV() const
 
   D3D12_CPU_DESCRIPTOR_HANDLE handle =
       SRVDescriptorHeap.CPUHandleFromIndex(m_SrvIndex, g_CurrFrameIdx);
-  g_Device->CreateShaderResourceView(
-      m_InternalBuffer.m_Resource, &desc, handle);
+  g_Device->CreateShaderResourceView(m_InternalBuffer.m_Resource, &desc, handle);
 }
 //---------------------------------------------------------------------------//
 // Textures
@@ -2255,8 +2126,7 @@ void RenderTexture::init(const RenderTextureInit& p_Init)
   PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
   m_Texture.SRV = srvAlloc.Index;
   for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
-    g_Device->CreateShaderResourceView(
-        m_Texture.Resource, nullptr, srvAlloc.Handles[i]);
+    g_Device->CreateShaderResourceView(m_Texture.Resource, nullptr, srvAlloc.Handles[i]);
 
   m_Texture.Width = uint32_t(p_Init.Width);
   m_Texture.Height = uint32_t(p_Init.Height);
@@ -2286,16 +2156,14 @@ void RenderTexture::init(const RenderTextureInit& p_Init)
       rtvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
 
       m_ArrayRTVs[i] = RTVDescriptorHeap.AllocatePersistent().Handles[0];
-      g_Device->CreateRenderTargetView(
-          m_Texture.Resource, &rtvDesc, m_ArrayRTVs[i]);
+      g_Device->CreateRenderTargetView(m_Texture.Resource, &rtvDesc, m_ArrayRTVs[i]);
     }
   }
 
   if (p_Init.CreateUAV)
   {
     m_UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
-    g_Device->CreateUnorderedAccessView(
-        m_Texture.Resource, nullptr, nullptr, m_UAV);
+    g_Device->CreateUnorderedAccessView(m_Texture.Resource, nullptr, nullptr, m_UAV);
   }
 }
 void RenderTexture::deinit()
@@ -2315,22 +2183,17 @@ void RenderTexture::transition(
     uint64_t mipLevel,
     uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx =
-      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
-          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-          : uint32_t(subResourceIndex(mipLevel, arraySlice));
-  transitionResource(
-      cmdList, m_Texture.Resource, before, after, subResourceIdx);
+  uint32_t subResourceIdx = mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  transitionResource(cmdList, m_Texture.Resource, before, after, subResourceIdx);
 }
 void RenderTexture::makeReadable(
-    ID3D12GraphicsCommandList* cmdList,
-    uint64_t mipLevel,
-    uint64_t arraySlice) const
+    ID3D12GraphicsCommandList* cmdList, uint64_t mipLevel, uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx =
-      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
-          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-          : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  uint32_t subResourceIdx = mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(subResourceIndex(mipLevel, arraySlice));
   transitionResource(
       cmdList,
       m_Texture.Resource,
@@ -2339,14 +2202,11 @@ void RenderTexture::makeReadable(
       subResourceIdx);
 }
 void RenderTexture::makeWritable(
-    ID3D12GraphicsCommandList* cmdList,
-    uint64_t mipLevel,
-    uint64_t arraySlice) const
+    ID3D12GraphicsCommandList* cmdList, uint64_t mipLevel, uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx =
-      mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
-          ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-          : uint32_t(subResourceIndex(mipLevel, arraySlice));
+  uint32_t subResourceIdx = mipLevel == uint64_t(-1) || arraySlice == uint64_t(-1)
+                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
+                                : uint32_t(subResourceIndex(mipLevel, arraySlice));
   transitionResource(
       cmdList,
       m_Texture.Resource,
@@ -2366,9 +2226,7 @@ void RenderTexture::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
 //---------------------------------------------------------------------------//
 // Depth Buffers
 //---------------------------------------------------------------------------//
-DepthBuffer::DepthBuffer()
-{
-}
+DepthBuffer::DepthBuffer() {}
 
 DepthBuffer::~DepthBuffer()
 {
@@ -2476,8 +2334,7 @@ void DepthBuffer::init(const DepthBufferInit& init)
   }
 
   for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
-    g_Device->CreateShaderResourceView(
-        Texture.Resource, &srvDesc, srvAlloc.Handles[i]);
+    g_Device->CreateShaderResourceView(Texture.Resource, &srvDesc, srvAlloc.Handles[i]);
 
   Texture.Width = uint32_t(init.Width);
   Texture.Height = uint32_t(init.Height);
@@ -2547,8 +2404,7 @@ void DepthBuffer::init(const DepthBufferInit& init)
         dsvDesc.Texture2DArray.FirstArraySlice = uint32_t(i);
 
       ArrayDSVs[i] = DSVDescriptorHeap.AllocatePersistent().Handles[0];
-      g_Device->CreateDepthStencilView(
-          Texture.Resource, &dsvDesc, ArrayDSVs[i]);
+      g_Device->CreateDepthStencilView(Texture.Resource, &dsvDesc, ArrayDSVs[i]);
     }
   }
 
@@ -2572,41 +2428,34 @@ void DepthBuffer::transition(
     D3D12_RESOURCE_STATES after,
     uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
-                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-                                : uint32_t(arraySlice);
+  uint32_t subResourceIdx =
+      arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
   assert(Texture.Resource != nullptr);
   TransitionResource(cmdList, Texture.Resource, before, after, subResourceIdx);
 }
 
-void DepthBuffer::makeReadable(
-    ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
+void DepthBuffer::makeReadable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
-                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-                                : uint32_t(arraySlice);
+  uint32_t subResourceIdx =
+      arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
   assert(Texture.Resource != nullptr);
   TransitionResource(
       cmdList,
       Texture.Resource,
       D3D12_RESOURCE_STATE_DEPTH_WRITE,
-      D3D12_RESOURCE_STATE_DEPTH_READ |
-          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
       subResourceIdx);
 }
 
-void DepthBuffer::makeWritable(
-    ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
+void DepthBuffer::makeWritable(ID3D12GraphicsCommandList* cmdList, uint64_t arraySlice) const
 {
-  uint32_t subResourceIdx = arraySlice == uint64_t(-1)
-                                ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES
-                                : uint32_t(arraySlice);
+  uint32_t subResourceIdx =
+      arraySlice == uint64_t(-1) ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : uint32_t(arraySlice);
   assert(Texture.Resource != nullptr);
   TransitionResource(
       cmdList,
       Texture.Resource,
-      D3D12_RESOURCE_STATE_DEPTH_READ |
-          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
       D3D12_RESOURCE_STATE_DEPTH_WRITE,
       subResourceIdx);
 }

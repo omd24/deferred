@@ -8,7 +8,7 @@
 #include "Model.hpp"
 #include "PostProcessor.hpp"
 
-#define FRAME_COUNT 3
+#define FRAME_COUNT 2
 #define THREAD_COUNT 1
 
 //---------------------------------------------------------------------------//

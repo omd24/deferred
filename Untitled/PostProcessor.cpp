@@ -1,20 +1,14 @@
 
 #include "PostProcessor.hpp"
-#include "PostFxHelper.hpp"
 #include "pix3.h"
 
 namespace /*Internal*/
 {
-//---------------------------------------------------------------------------//
-ID3D12Fence* g_DX12ComputeFrameFence;
 PostFxHelper g_PostFxHelper;
-D3D12_SHADER_BYTECODE g_ToneMapShader;
-D3D12_SHADER_BYTECODE g_ScaleShader;
-D3D12_SHADER_BYTECODE g_BloomShader;
-D3D12_SHADER_BYTECODE g_BlurHShader;
-D3D12_SHADER_BYTECODE g_BlurVShader;
-//---------------------------------------------------------------------------//
-TempRenderTarget* bloom(ID3D12GraphicsCommandList* p_CmdList, const RenderTexture& p_Input)
+}
+
+TempRenderTarget*
+PostProcessor::bloom(ID3D12GraphicsCommandList* p_CmdList, const RenderTexture& p_Input)
 {
   PIXBeginEvent(p_CmdList, 0, "Bloom");
 
@@ -25,7 +19,7 @@ TempRenderTarget* bloom(ID3D12GraphicsCommandList* p_CmdList, const RenderTextur
       g_PostFxHelper.getTempRenderTarget(bloomWidth, bloomHeight, DXGI_FORMAT_R16G16B16A16_FLOAT);
   downscale1->m_RenderTarget.makeWritable(p_CmdList);
 
-  g_PostFxHelper.postProcess(g_BloomShader, "Bloom Initial Pass", p_Input, downscale1);
+  g_PostFxHelper.postProcess(m_BloomShader, "Bloom Initial Pass", p_Input, downscale1);
 
   TempRenderTarget* blurTemp =
       g_PostFxHelper.getTempRenderTarget(bloomWidth, bloomHeight, DXGI_FORMAT_R16G16B16A16_FLOAT);
@@ -36,12 +30,12 @@ TempRenderTarget* bloom(ID3D12GraphicsCommandList* p_CmdList, const RenderTextur
   {
     blurTemp->m_RenderTarget.makeWritable(p_CmdList);
 
-    g_PostFxHelper.postProcess(g_BlurHShader, "Horizontal Bloom Blur", downscale1, blurTemp);
+    g_PostFxHelper.postProcess(m_BlurHShader, "Horizontal Bloom Blur", downscale1, blurTemp);
 
     blurTemp->m_RenderTarget.makeReadable(p_CmdList);
     downscale1->m_RenderTarget.makeWritable(p_CmdList);
 
-    g_PostFxHelper.postProcess(g_BlurVShader, "Vertical Bloom Blur", blurTemp, downscale1);
+    g_PostFxHelper.postProcess(m_BlurVShader, "Vertical Bloom Blur", blurTemp, downscale1);
 
     downscale1->m_RenderTarget.makeReadable(p_CmdList);
   }
@@ -52,15 +46,12 @@ TempRenderTarget* bloom(ID3D12GraphicsCommandList* p_CmdList, const RenderTextur
   return downscale1;
 }
 //---------------------------------------------------------------------------//
-} // namespace
-
 void PostProcessor::init()
 {
   g_PostFxHelper.init();
 
   // Load and compile shaders:
   {
-    ID3DBlobPtr shaderBlob;
     ID3DBlobPtr errorBlob;
 
 #if defined(_DEBUG)
@@ -87,17 +78,15 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &shaderBlob,
+          &m_ToneMapShader,
           &errorBlob);
-      if (nullptr == shaderBlob)
+      if (nullptr == m_ToneMapShader)
       {
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         assert(false && "Shader compilation failed");
       }
       errorBlob = nullptr;
-      g_ToneMapShader.pShaderBytecode = shaderBlob->GetBufferPointer();
-      g_ToneMapShader.BytecodeLength = shaderBlob->GetBufferSize();
     }
 
     // Scale shader
@@ -110,17 +99,15 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &shaderBlob,
+          &m_ScaleShader,
           &errorBlob);
-      if (nullptr == shaderBlob)
+      if (nullptr == m_ScaleShader)
       {
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         assert(false && "Shader compilation failed");
       }
       errorBlob = nullptr;
-      g_ScaleShader.pShaderBytecode = shaderBlob->GetBufferPointer();
-      g_ScaleShader.BytecodeLength = shaderBlob->GetBufferSize();
     }
 
     // BlurH shader
@@ -133,17 +120,15 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &shaderBlob,
+          &m_BlurHShader,
           &errorBlob);
-      if (nullptr == shaderBlob)
+      if (nullptr == m_BlurHShader)
       {
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         assert(false && "Shader compilation failed");
       }
       errorBlob = nullptr;
-      g_BlurHShader.pShaderBytecode = shaderBlob->GetBufferPointer();
-      g_BlurHShader.BytecodeLength = shaderBlob->GetBufferSize();
     }
 
     // BlurV shader
@@ -156,17 +141,15 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &shaderBlob,
+          &m_BlurVShader,
           &errorBlob);
-      if (nullptr == shaderBlob)
+      if (nullptr == m_BlurVShader)
       {
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         assert(false && "Shader compilation failed");
       }
       errorBlob = nullptr;
-      g_BlurVShader.pShaderBytecode = shaderBlob->GetBufferPointer();
-      g_BlurVShader.BytecodeLength = shaderBlob->GetBufferSize();
     }
 
     // Bloom shader
@@ -179,17 +162,15 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &shaderBlob,
+          &m_BloomShader,
           &errorBlob);
-      if (nullptr == shaderBlob)
+      if (nullptr == m_BloomShader)
       {
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         assert(false && "Shader compilation failed");
       }
       errorBlob = nullptr;
-      g_BloomShader.pShaderBytecode = shaderBlob->GetBufferPointer();
-      g_BloomShader.BytecodeLength = shaderBlob->GetBufferSize();
     }
   }
 }
@@ -207,7 +188,7 @@ void PostProcessor::render(
   uint32_t inputs[2] = {p_Input.srv(), bloomTarget->m_RenderTarget.srv()};
   const RenderTexture* outputs[1] = {&p_Output};
   g_PostFxHelper.postProcess(
-      g_ToneMapShader,
+      m_ToneMapShader,
       "Tone Mapping",
       inputs,
       arrayCount32(inputs),

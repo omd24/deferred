@@ -26,28 +26,28 @@ struct PostFxHelper
   void end();
 
   void postProcess(
-      D3D12_SHADER_BYTECODE p_PixelShader,
+      ID3DBlobPtr p_PixelShader,
       const char* p_Name,
       const RenderTexture& p_Input,
       const RenderTexture& p_Output);
   void postProcess(
-      D3D12_SHADER_BYTECODE p_PixelShader,
+      ID3DBlobPtr p_PixelShader,
       const char* p_Name,
       const RenderTexture& p_Input,
       const TempRenderTarget* p_Output);
   void postProcess(
-      D3D12_SHADER_BYTECODE p_PixelShader,
+      ID3DBlobPtr p_PixelShader,
       const char* p_Name,
       const TempRenderTarget* p_Input,
       const RenderTexture& p_Output);
   void postProcess(
-      D3D12_SHADER_BYTECODE p_PixelShader,
+      ID3DBlobPtr p_PixelShader,
       const char* p_Name,
       const TempRenderTarget* p_Input,
       const TempRenderTarget* p_Output);
 
   void postProcess(
-      D3D12_SHADER_BYTECODE p_PixelShader,
+      ID3DBlobPtr p_PixelShader,
       const char* p_Name,
       const uint32_t* p_Inputs,
       uint64_t p_NumInputs,
@@ -57,7 +57,7 @@ struct PostFxHelper
 private:
   std::vector<TempRenderTarget*> m_TempRenderTargets;
   std::vector<ID3D12PipelineState*> m_PSOs;
-  D3D12_SHADER_BYTECODE m_FullscreenTriangleVS;
+  ID3DBlobPtr m_FullscreenTriangleVS = nullptr;
   ID3D12GraphicsCommandList* m_CmdList = nullptr;
   ID3D12RootSignature* m_RootSig = nullptr;
 };

@@ -155,20 +155,36 @@ void RenderManager::loadD3D12Pipeline()
     m_RtvDescriptorSize = m_Dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   }
 
+  // Init uploads and other helpers
+  initializeUpload(m_Dev);
+  initializeHelpers();
+
   // Create frame resources.
   {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RtvHeap->GetCPUDescriptorHandleForHeapStart());
-
     // Create a RTV and a command allocator for each frame.
     for (UINT n = 0; n < FRAME_COUNT; n++)
     {
+      m_RenderTargets[n].m_RTV = RTVDescriptorHeap.AllocatePersistent().Handles[0];
       D3D_EXEC_CHECKED(m_Swc->GetBuffer(n, IID_PPV_ARGS(&m_RenderTargets[n].m_Texture.Resource)));
-      m_Dev->CreateRenderTargetView(m_RenderTargets[n].m_Texture.Resource, nullptr, rtvHandle);
-      rtvHandle.Offset(1, m_RtvDescriptorSize);
+
+      D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+      rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+      rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      rtvDesc.Texture2D.MipSlice = 0;
+      rtvDesc.Texture2D.PlaneSlice = 0;
+      m_Dev->CreateRenderTargetView(
+          m_RenderTargets[n].m_Texture.Resource, &rtvDesc, m_RenderTargets[n].m_RTV);
 
       std::wstring rtName = L"Swapchain backbuffer #";
       rtName += std::to_wstring(n);
       m_RenderTargets[n].m_Texture.Resource->SetName(rtName.c_str());
+
+      m_RenderTargets[n].m_Texture.Width = m_Info.m_Width;
+      m_RenderTargets[n].m_Texture.Height = m_Info.m_Height;
+      m_RenderTargets[n].m_Texture.ArraySize = 1;
+      m_RenderTargets[n].m_Texture.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      m_RenderTargets[n].m_Texture.NumMips = 1;
+      m_RenderTargets[n].m_MSAASamples = 1;
 
       D3D_EXEC_CHECKED(m_Dev->CreateCommandAllocator(
           D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocs[n])));
@@ -336,10 +352,6 @@ bool RenderManager::createPSOs()
 //---------------------------------------------------------------------------//
 void RenderManager::loadAssets()
 {
-  // Init uploads and other helpers
-  initializeUpload(m_Dev);
-  initializeHelpers();
-
   // set up camera
   float aspect = float(m_Info.m_Width) / m_Info.m_Height;
   camera.Initialize(aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
@@ -795,9 +807,6 @@ void RenderManager::renderDeferred()
         m_CmdList,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  else
-    deferredTarget.transition(
-        m_CmdList, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   firstAccess = false;
 
   m_CmdList->SetComputeRootSignature(deferredRootSig);
@@ -848,7 +857,7 @@ void RenderManager::renderDeferred()
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
 
   // Copy deferred target to backbuffer:
-#if 1
+#if 0
   PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Copy to Backbuffer");
 
   deferredTarget.transition(
@@ -880,7 +889,7 @@ void RenderManager::populateCommandList()
 
   renderDeferred();
 
-  // m_PostFx.render(m_CmdList, deferredTarget, wrapp swapchain backbuffers);
+  m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()
@@ -1020,17 +1029,19 @@ void RenderManager::onDestroy()
   deferredTarget.deinit();
   spotLightBuffer.deinit();
 
+  // Release swc backbuffers
+  for (UINT n = 0; n < FRAME_COUNT; n++)
+  {
+    m_RenderTargets[n].m_Texture.Resource->Release();
+    RTVDescriptorHeap.FreePersistent(m_RenderTargets[n].m_RTV);
+  }
+
+  m_PostFx.deinit();
+  ImGuiHelper::deinit();
+
   // Shudown uploads and other helpers
   shutdownHelpers();
   shutdownUpload();
-
-  // Release swc backbuffers
-  for (UINT n = 0; n < FRAME_COUNT; n++)
-    m_RenderTargets[n].m_Texture.Resource->Release();
-
-  ImGuiHelper::deinit();
-
-  m_PostFx.deinit();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
@@ -1091,7 +1102,7 @@ void RenderManager::onRender()
       D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
       D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
 
-      // Swc begin-frame backbuffer transition
+      // Swc begin-frame backbuffer transition:
       m_CmdList->ResourceBarrier(
           1,
           &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -1105,19 +1116,18 @@ void RenderManager::onRender()
 
       PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
 
-      // Internal rendering code
+      // Internal rendering code:
       populateCommandList();
 
       // Imgui rendering:
       {
         PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
-        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-            m_RtvHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex, m_RtvDescriptorSize);
-        ImGuiHelper::endFrame(m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
+        ImGuiHelper::endFrame(
+            m_CmdList, m_RenderTargets[m_FrameIndex].m_RTV, m_Info.m_Width, m_Info.m_Height);
         PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render Imgui
       }
 
-      // Swc end-frame backbuffer transition
+      // Swc end-frame backbuffer transition:
       m_CmdList->ResourceBarrier(
           1,
           &CD3DX12_RESOURCE_BARRIER::Transition(

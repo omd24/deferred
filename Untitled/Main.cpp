@@ -7,24 +7,20 @@
 RenderManager* g_Renderer;
 std::unique_ptr<FileWatcher> g_FileWatcher;
 
-static LRESULT CALLBACK
-msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
+static LRESULT CALLBACK msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
 {
   if (g_ImguiCallback != nullptr)
     g_ImguiCallback(nullptr, p_Wnd, p_Message, p_WParam, p_LParam);
 
-  CallBackRegistery* funcRegPtr = reinterpret_cast<CallBackRegistery*>(
-      GetWindowLongPtr(p_Wnd, GWLP_USERDATA));
+  CallBackRegistery* funcRegPtr =
+      reinterpret_cast<CallBackRegistery*>(GetWindowLongPtr(p_Wnd, GWLP_USERDATA));
   switch (p_Message)
   {
-  case WM_CREATE:
-  {
+  case WM_CREATE: {
     // Save the data passed in to CreateWindow.
     LPCREATESTRUCT createStruct = reinterpret_cast<LPCREATESTRUCT>(p_LParam);
     SetWindowLongPtr(
-        p_Wnd,
-        GWLP_USERDATA,
-        reinterpret_cast<LONG_PTR>(createStruct->lpCreateParams));
+        p_Wnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(createStruct->lpCreateParams));
   }
     return 0;
 
@@ -36,8 +32,7 @@ msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
     g_Renderer->onKeyUp(static_cast<UINT8>(p_WParam));
     return 0;
 
-  case WM_PAINT:
-  {
+  case WM_PAINT: {
     // Shader Reload:
     if (g_FileWatcher)
     {
@@ -72,8 +67,7 @@ msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
 //---------------------------------------------------------------------------//
 // Execute the application:
 //---------------------------------------------------------------------------//
-inline int
-appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
+inline int appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
 {
   // Parse the command line parameters
   int argc;
@@ -148,8 +142,7 @@ appExec(HINSTANCE p_Instance, int p_CmdShow, CallBackRegistery* p_CallbackReg)
 }
 //---------------------------------------------------------------------------//
 
-_Use_decl_annotations_ int WINAPI
-WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
+_Use_decl_annotations_ int WINAPI WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
 {
   // Set up the renderer
   void* rendererMem = reinterpret_cast<void*>(::malloc(sizeof(*g_Renderer)));
@@ -174,6 +167,7 @@ WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR, int p_CmdShow)
 
   // Run the application:
   int ret = appExec(p_Instance, p_CmdShow, nullptr);
+
   ::free(shadersPath);
   return ret;
 }

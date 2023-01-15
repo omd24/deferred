@@ -89,8 +89,7 @@ void RenderManager::loadD3D12Pipeline()
 #endif
 
   IDXGIFactory4Ptr factory;
-  D3D_EXEC_CHECKED(
-      CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
+  D3D_EXEC_CHECKED(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
 
   if (m_Info.m_UseWarpDevice)
   {
@@ -98,9 +97,7 @@ void RenderManager::loadD3D12Pipeline()
     D3D_EXEC_CHECKED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter)));
 
     D3D_EXEC_CHECKED(D3D12CreateDevice(
-        warpAdapter.GetInterfacePtr(),
-        D3D_FEATURE_LEVEL_11_0,
-        IID_PPV_ARGS(&m_Dev)));
+        warpAdapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Dev)));
   }
   else
   {
@@ -108,18 +105,14 @@ void RenderManager::loadD3D12Pipeline()
     getHardwareAdapter(factory.GetInterfacePtr(), &hardwareAdapter, true);
 
     D3D_EXEC_CHECKED(D3D12CreateDevice(
-        hardwareAdapter.GetInterfacePtr(),
-        D3D_FEATURE_LEVEL_11_0,
-        IID_PPV_ARGS(&m_Dev)));
+        hardwareAdapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Dev)));
   }
 
   // Describe and create the command queue.
   D3D12_COMMAND_QUEUE_DESC queueDesc = {
-      .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
-      .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE};
+      .Type = D3D12_COMMAND_LIST_TYPE_DIRECT, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE};
 
-  D3D_EXEC_CHECKED(
-      m_Dev->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_CmdQue)));
+  D3D_EXEC_CHECKED(m_Dev->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_CmdQue)));
   D3D_NAME_OBJECT(m_CmdQue);
 
   // Describe and create the swap chain.
@@ -143,8 +136,7 @@ void RenderManager::loadD3D12Pipeline()
       &swapChain));
 
   // This sample does not support fullscreen transitions.
-  D3D_EXEC_CHECKED(
-      factory->MakeWindowAssociation(g_WinHandle, DXGI_MWA_NO_ALT_ENTER));
+  D3D_EXEC_CHECKED(factory->MakeWindowAssociation(g_WinHandle, DXGI_MWA_NO_ALT_ENTER));
 
   D3D_EXEC_CHECKED(swapChain->QueryInterface(IID_PPV_ARGS(&m_Swc)));
 
@@ -158,24 +150,20 @@ void RenderManager::loadD3D12Pipeline()
     rtvHeapDesc.NumDescriptors = FRAME_COUNT;
     rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    D3D_EXEC_CHECKED(
-        m_Dev->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RtvHeap)));
+    D3D_EXEC_CHECKED(m_Dev->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_RtvHeap)));
 
-    m_RtvDescriptorSize =
-        m_Dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    m_RtvDescriptorSize = m_Dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
   }
 
   // Create frame resources.
   {
-    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-        m_RtvHeap->GetCPUDescriptorHandleForHeapStart());
+    CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_RtvHeap->GetCPUDescriptorHandleForHeapStart());
 
     // Create a RTV and a command allocator for each frame.
     for (UINT n = 0; n < FRAME_COUNT; n++)
     {
       D3D_EXEC_CHECKED(m_Swc->GetBuffer(n, IID_PPV_ARGS(&m_RenderTargets[n])));
-      m_Dev->CreateRenderTargetView(
-          m_RenderTargets[n].GetInterfacePtr(), nullptr, rtvHandle);
+      m_Dev->CreateRenderTargetView(m_RenderTargets[n].GetInterfacePtr(), nullptr, rtvHandle);
       rtvHandle.Offset(1, m_RtvDescriptorSize);
 
       D3D_NAME_OBJECT_INDEXED(m_RenderTargets, n);
@@ -257,13 +245,7 @@ bool RenderManager::createPSOs()
          12,
          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
          0},
-        {"UV",
-         0,
-         DXGI_FORMAT_R32G32_FLOAT,
-         0,
-         24,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
+        {"UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"TANGENT",
          0,
          DXGI_FORMAT_R32G32B32_FLOAT,
@@ -358,8 +340,7 @@ void RenderManager::loadAssets()
 
   // set up camera
   float aspect = float(m_Info.m_Width) / m_Info.m_Height;
-  camera.Initialize(
-      aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
+  camera.Initialize(aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
   camera.SetPosition(glm::vec3(-11.5f, 1.85f, -0.45f));
   camera.SetXRotation(0.0f);
   camera.SetYRotation(1.544f);
@@ -390,14 +371,17 @@ void RenderManager::loadAssets()
       spotLight.Position = srcLight.Position;
       spotLight.Direction = -srcLight.Direction;
       spotLight.Intensity = srcLight.Intensity * SpotLightIntensityFactor;
-      spotLight.AngularAttenuationX =
-          std::cos(srcLight.AngularAttenuation.x * 0.5f);
-      spotLight.AngularAttenuationY =
-          std::cos(srcLight.AngularAttenuation.y * 0.5f);
+      spotLight.AngularAttenuationX = std::cos(srcLight.AngularAttenuation.x * 0.5f);
+      spotLight.AngularAttenuationY = std::cos(srcLight.AngularAttenuation.y * 0.5f);
       spotLight.Range = 7.5f;
     }
 
     MaxLightClamp = static_cast<uint32_t>(numSpotLights);
+  }
+
+  // Init post fx
+  {
+    m_PostFx.init();
   }
 
   // Create a structured buffer containing texture indices per-material:
@@ -411,14 +395,10 @@ void RenderManager::loadAssets()
     MaterialTextureIndices& matIndices = textureIndices[i];
     const MeshMaterial& material = materials[i];
 
-    matIndices.Albedo =
-        material.Textures[uint64_t(MaterialTextures::Albedo)]->SRV;
-    matIndices.Normal =
-        material.Textures[uint64_t(MaterialTextures::Normal)]->SRV;
-    matIndices.Roughness =
-        material.Textures[uint64_t(MaterialTextures::Roughness)]->SRV;
-    matIndices.Metallic =
-        material.Textures[uint64_t(MaterialTextures::Metallic)]->SRV;
+    matIndices.Albedo = material.Textures[uint64_t(MaterialTextures::Albedo)]->SRV;
+    matIndices.Normal = material.Textures[uint64_t(MaterialTextures::Normal)]->SRV;
+    matIndices.Roughness = material.Textures[uint64_t(MaterialTextures::Roughness)]->SRV;
+    matIndices.Metallic = material.Textures[uint64_t(MaterialTextures::Metallic)]->SRV;
   }
   StructuredBufferInit sbInit;
   sbInit.Stride = sizeof(MaterialTextureIndices);
@@ -435,8 +415,8 @@ void RenderManager::loadAssets()
     dbInit.Height = m_Info.m_Height;
     dbInit.Format = DXGI_FORMAT_D32_FLOAT;
     dbInit.MSAASamples = 1;
-    dbInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
-                          D3D12_RESOURCE_STATE_DEPTH_READ;
+    dbInit.InitialState =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
     dbInit.Name = L"Main Depth Buffer";
     depthBuffer.init(dbInit);
   }
@@ -528,8 +508,7 @@ void RenderManager::loadAssets()
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.NumStaticSamplers = 0;
     rootSignatureDesc.pStaticSamplers = nullptr;
-    rootSignatureDesc.Flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     createRootSignature(m_Dev, &gbufferRootSignature, rootSignatureDesc);
     gbufferRootSignature->SetName(L"Gbuffer Root Sig");
@@ -550,47 +529,38 @@ void RenderManager::loadAssets()
         D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[DeferredParams_StandardDescriptors].ShaderVisibility =
         D3D12_SHADER_VISIBILITY_ALL;
-    rootParameters[DeferredParams_StandardDescriptors]
-        .DescriptorTable.pDescriptorRanges = StandardDescriptorRanges();
-    rootParameters[DeferredParams_StandardDescriptors]
-        .DescriptorTable.NumDescriptorRanges = NumStandardDescriptorRanges;
+    rootParameters[DeferredParams_StandardDescriptors].DescriptorTable.pDescriptorRanges =
+        StandardDescriptorRanges();
+    rootParameters[DeferredParams_StandardDescriptors].DescriptorTable.NumDescriptorRanges =
+        NumStandardDescriptorRanges;
 
     // PSCBuffer
-    rootParameters[DeferredParams_PSCBuffer].ParameterType =
-        D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[DeferredParams_PSCBuffer].ShaderVisibility =
-        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_PSCBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_PSCBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[DeferredParams_PSCBuffer].Descriptor.RegisterSpace = 0;
     rootParameters[DeferredParams_PSCBuffer].Descriptor.ShaderRegister = 0;
     rootParameters[DeferredParams_PSCBuffer].Descriptor.Flags =
         D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 
     // DeferredCBuffer
-    rootParameters[DeferredParams_DeferredCBuffer].ParameterType =
-        D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[DeferredParams_DeferredCBuffer].ShaderVisibility =
-        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_DeferredCBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_DeferredCBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[DeferredParams_DeferredCBuffer].Descriptor.RegisterSpace = 0;
-    rootParameters[DeferredParams_DeferredCBuffer].Descriptor.ShaderRegister =
-        2;
+    rootParameters[DeferredParams_DeferredCBuffer].Descriptor.ShaderRegister = 2;
     rootParameters[DeferredParams_DeferredCBuffer].Descriptor.Flags =
         D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 
     // LightCBuffer
-    rootParameters[DeferredParams_LightCBuffer].ParameterType =
-        D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[DeferredParams_LightCBuffer].ShaderVisibility =
-        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_LightCBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_LightCBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[DeferredParams_LightCBuffer].Descriptor.RegisterSpace = 0;
     rootParameters[DeferredParams_LightCBuffer].Descriptor.ShaderRegister = 3;
     rootParameters[DeferredParams_LightCBuffer].Descriptor.Flags =
         D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 
     // SRV Indices
-    rootParameters[DeferredParams_SRVIndices].ParameterType =
-        D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[DeferredParams_SRVIndices].ShaderVisibility =
-        D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_SRVIndices].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_SRVIndices].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[DeferredParams_SRVIndices].Descriptor.RegisterSpace = 0;
     rootParameters[DeferredParams_SRVIndices].Descriptor.ShaderRegister = 4;
     rootParameters[DeferredParams_SRVIndices].Descriptor.Flags =
@@ -599,18 +569,17 @@ void RenderManager::loadAssets()
     // UAV's
     rootParameters[DeferredParams_UAVDescriptors].ParameterType =
         D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[DeferredParams_UAVDescriptors].ShaderVisibility =
-        D3D12_SHADER_VISIBILITY_ALL;
-    rootParameters[DeferredParams_UAVDescriptors]
-        .DescriptorTable.pDescriptorRanges = descriptorRanges;
-    rootParameters[DeferredParams_UAVDescriptors]
-        .DescriptorTable.NumDescriptorRanges = arrayCount32(descriptorRanges);
+    rootParameters[DeferredParams_UAVDescriptors].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_UAVDescriptors].DescriptorTable.pDescriptorRanges =
+        descriptorRanges;
+    rootParameters[DeferredParams_UAVDescriptors].DescriptorTable.NumDescriptorRanges =
+        arrayCount32(descriptorRanges);
 
     // AppSettings
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
-    staticSamplers[0] = GetStaticSamplerState(
-        SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[0] =
+        GetStaticSamplerState(SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -643,9 +612,7 @@ void RenderManager::loadAssets()
   // to the GPU.
   {
     D3D_EXEC_CHECKED(m_Dev->CreateFence(
-        m_RenderContextFenceValue,
-        D3D12_FENCE_FLAG_NONE,
-        IID_PPV_ARGS(&m_RenderContextFence)));
+        m_RenderContextFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_RenderContextFence)));
     m_RenderContextFenceValue++;
 
     m_RenderContextFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -721,32 +688,28 @@ void RenderManager::renderDeferred()
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[0].Transition.pResource = depthBuffer.getResource();
     barriers[0].Transition.StateBefore =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
-        D3D12_RESOURCE_STATE_DEPTH_READ;
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.Subresource = 0;
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[1].Transition.pResource = tangentFrameTarget.resource();
-    barriers[1].Transition.StateBefore =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.Subresource = 0;
 
     barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[2].Transition.pResource = uvTarget.resource();
-    barriers[2].Transition.StateBefore =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[2].Transition.Subresource = 0;
 
     barriers[3].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[3].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[3].Transition.pResource = materialIDTarget.resource();
-    barriers[3].Transition.StateBefore =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[3].Transition.Subresource = 0;
 
@@ -759,18 +722,12 @@ void RenderManager::renderDeferred()
       uvTarget.m_RTV,
       materialIDTarget.m_RTV,
   };
-  m_CmdList->OMSetRenderTargets(
-      arrayCount32(rtvHandles), rtvHandles, false, &depthBuffer.DSV);
+  m_CmdList->OMSetRenderTargets(arrayCount32(rtvHandles), rtvHandles, false, &depthBuffer.DSV);
   const float clearColor[] = {0.0f, 0.0f, 0.0f, 0.0f};
   for (uint64_t i = 0; i < arrayCount(rtvHandles); ++i)
     m_CmdList->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
   m_CmdList->ClearDepthStencilView(
-      depthBuffer.DSV,
-      D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
-      1.0f,
-      0,
-      0,
-      nullptr);
+      depthBuffer.DSV, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
   setViewport(m_CmdList, m_Info.m_Width, m_Info.m_Height);
 
   //
@@ -786,8 +743,7 @@ void RenderManager::renderDeferred()
     MeshVSConstants vsConstants;
     vsConstants.World = world;
     vsConstants.View = glm::transpose(camera.ViewMatrix());
-    vsConstants.WorldViewProjection =
-        glm::transpose(world * camera.ViewProjectionMatrix());
+    vsConstants.WorldViewProjection = glm::transpose(world * camera.ViewProjectionMatrix());
     vsConstants.NearClip = camera.NearClip();
     vsConstants.FarClip = camera.FarClip();
     BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
@@ -825,11 +781,7 @@ void RenderManager::renderDeferred()
         currMaterial = part.MaterialIdx;
       }
       m_CmdList->DrawIndexedInstanced(
-          part.IndexCount,
-          1,
-          mesh.IndexOffset() + part.IndexStart,
-          mesh.VertexOffset(),
-          0);
+          part.IndexCount, 1, mesh.IndexOffset() + part.IndexStart, mesh.VertexOffset(), 0);
     }
   }
 
@@ -842,32 +794,28 @@ void RenderManager::renderDeferred()
     barriers[0].Transition.pResource = depthBuffer.getResource();
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
-        D3D12_RESOURCE_STATE_DEPTH_READ;
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
     barriers[0].Transition.Subresource = 0;
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[1].Transition.pResource = tangentFrameTarget.resource();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[1].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.Subresource = 0;
 
     barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[2].Transition.pResource = uvTarget.resource();
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[2].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[2].Transition.Subresource = 0;
 
     barriers[3].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[3].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[3].Transition.pResource = materialIDTarget.resource();
     barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[3].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.Subresource = 0;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
@@ -881,10 +829,8 @@ void RenderManager::renderDeferred()
   //
   PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Deferred");
 
-  const uint32_t numComputeTilesX =
-      alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
-  const uint32_t numComputeTilesY =
-      alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
+  const uint32_t numComputeTilesX = alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
+  const uint32_t numComputeTilesY = alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
 
   static bool firstAccess = true;
   if (firstAccess)
@@ -894,31 +840,24 @@ void RenderManager::renderDeferred()
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   else
     deferredTarget.transition(
-        m_CmdList,
-        D3D12_RESOURCE_STATE_COPY_SOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        m_CmdList, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   firstAccess = false;
 
   m_CmdList->SetComputeRootSignature(deferredRootSig);
   m_CmdList->SetPipelineState(deferredPSO);
 
-  BindStandardDescriptorTable(
-      m_CmdList, DeferredParams_StandardDescriptors, CmdListMode::Compute);
+  BindStandardDescriptorTable(m_CmdList, DeferredParams_StandardDescriptors, CmdListMode::Compute);
 
   // Set constant buffers
   {
     DeferredConstants deferredConstants;
-    deferredConstants.InvViewProj =
-        glm::transpose(glm::inverse(camera.ViewProjectionMatrix()));
+    deferredConstants.InvViewProj = glm::transpose(glm::inverse(camera.ViewProjectionMatrix()));
     deferredConstants.Projection = camera.ProjectionMatrix();
-    deferredConstants.RTSize = glm::vec2(
-        float(deferredTarget.width()), float(deferredTarget.height()));
+    deferredConstants.RTSize =
+        glm::vec2(float(deferredTarget.width()), float(deferredTarget.height()));
     deferredConstants.NumComputeTilesX = numComputeTilesX;
     BindTempConstantBuffer(
-        m_CmdList,
-        deferredConstants,
-        DeferredParams_DeferredCBuffer,
-        CmdListMode::Compute);
+        m_CmdList, deferredConstants, DeferredParams_DeferredCBuffer, CmdListMode::Compute);
 
     uint32_t srvIndices[] = {
         materialTextureIndices.m_SrvIndex,
@@ -926,8 +865,7 @@ void RenderManager::renderDeferred()
         uvTarget.srv(),
         depthBuffer.getSrv(),
         tangentFrameTarget.srv()};
-    BindTempConstantBuffer(
-        m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
+    BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
 
   {
@@ -939,34 +877,25 @@ void RenderManager::renderDeferred()
     shadingConstants.FarClip = camera.FarClip();
 
     BindTempConstantBuffer(
-        m_CmdList,
-        shadingConstants,
-        DeferredParams_PSCBuffer,
-        CmdListMode::Compute);
+        m_CmdList, shadingConstants, DeferredParams_PSCBuffer, CmdListMode::Compute);
   }
 
-  spotLightBuffer.setAsComputeRootParameter(
-      m_CmdList, DeferredParams_LightCBuffer);
+  spotLightBuffer.setAsComputeRootParameter(m_CmdList, DeferredParams_LightCBuffer);
 
   D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {deferredTarget.m_UAV};
   BindTempDescriptorTable(
-      m_CmdList,
-      uavs,
-      arrayCount(uavs),
-      DeferredParams_UAVDescriptors,
-      CmdListMode::Compute);
+      m_CmdList, uavs, arrayCount(uavs), DeferredParams_UAVDescriptors, CmdListMode::Compute);
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
 
   // Copy deferred target to backbuffer:
+#if 1
   PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Copy to Backbuffer");
 
   deferredTarget.transition(
-      m_CmdList,
-      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-      D3D12_RESOURCE_STATE_COPY_SOURCE);
+      m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
   m_CmdList->ResourceBarrier(
       1,
       &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -975,8 +904,7 @@ void RenderManager::renderDeferred()
           D3D12_RESOURCE_STATE_COPY_DEST));
 
   m_CmdList->CopyResource(
-      m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-      deferredTarget.resource());
+      m_RenderTargets[m_FrameIndex].GetInterfacePtr(), deferredTarget.resource());
 
   m_CmdList->ResourceBarrier(
       1,
@@ -986,6 +914,7 @@ void RenderManager::renderDeferred()
           D3D12_RESOURCE_STATE_PRESENT));
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Copy to Backbuffer
+#endif // 0
 }
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
@@ -1000,21 +929,22 @@ void RenderManager::populateCommandList()
   // However, when ExecuteCommandList() is called on a particular command
   // list, that command list can then be reset at any time and must be before
   // re-recording.
-  D3D_EXEC_CHECKED(m_CmdList->Reset(
-      m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
+  D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
 
   SetDescriptorHeaps(m_CmdList);
 
   renderForward();
 
   renderDeferred();
+
+  // m_PostFx.render(m_CmdList, deferredTarget, wrapp swapchain backbuffers);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()
 {
   // Add a signal command to the queue.
-  D3D_EXEC_CHECKED(m_CmdQue->Signal(
-      m_RenderContextFence.GetInterfacePtr(), m_RenderContextFenceValue));
+  D3D_EXEC_CHECKED(
+      m_CmdQue->Signal(m_RenderContextFence.GetInterfacePtr(), m_RenderContextFenceValue));
 
   // Instruct the fence to set the event obj when the signal command
   // completes.
@@ -1032,8 +962,8 @@ void RenderManager::moveToNextFrame()
   m_FrameFenceValues[m_FrameIndex] = m_RenderContextFenceValue;
 
   // Signal and increment the fence value.
-  D3D_EXEC_CHECKED(m_CmdQue->Signal(
-      m_RenderContextFence.GetInterfacePtr(), m_RenderContextFenceValue));
+  D3D_EXEC_CHECKED(
+      m_CmdQue->Signal(m_RenderContextFence.GetInterfacePtr(), m_RenderContextFenceValue));
   m_RenderContextFenceValue++;
 
   // Update the frame index.
@@ -1041,8 +971,7 @@ void RenderManager::moveToNextFrame()
 
   // If the next frame is not ready to be rendered yet, wait until it is
   // ready.
-  if (m_RenderContextFence->GetCompletedValue() <
-      m_FrameFenceValues[m_FrameIndex])
+  if (m_RenderContextFence->GetCompletedValue() < m_FrameFenceValues[m_FrameIndex])
   {
     D3D_EXEC_CHECKED(m_RenderContextFence->SetEventOnCompletion(
         m_FrameFenceValues[m_FrameIndex], m_RenderContextFenceEvent));
@@ -1087,8 +1016,7 @@ void RenderManager::OnInit(UINT p_Width, UINT p_Height, std::wstring p_Name)
   getAssetsPath(assetsPath, _countof(assetsPath));
   m_Info.m_AssetsPath = assetsPath;
 
-  m_Info.m_AspectRatio =
-      static_cast<float>(p_Width) / static_cast<float>(p_Height);
+  m_Info.m_AspectRatio = static_cast<float>(p_Width) / static_cast<float>(p_Height);
 
   m_Info.m_IsInitialized = true;
 }
@@ -1099,10 +1027,8 @@ void RenderManager::onLoad()
 
   UINT width = m_Info.m_Width;
   UINT height = m_Info.m_Height;
-  m_Viewport = CD3DX12_VIEWPORT(
-      0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
-  m_ScissorRect =
-      CD3DX12_RECT(0, 0, static_cast<LONG>(width), static_cast<LONG>(height));
+  m_Viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+  m_ScissorRect = CD3DX12_RECT(0, 0, static_cast<LONG>(width), static_cast<LONG>(height));
 
   setArrayToZero(m_FrameFenceValues);
 
@@ -1155,6 +1081,8 @@ void RenderManager::onDestroy()
   shutdownUpload();
 
   ImGuiHelper::deinit();
+
+  m_PostFx.deinit();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
@@ -1194,8 +1122,7 @@ void RenderManager::onUpdate()
     const void* srcData[1] = {spotLights.data()};
     uint64_t sizes[1] = {spotLights.size() * sizeof(SpotLight)};
     uint64_t offsets[1] = {0};
-    spotLightBuffer.multiUpdateData(
-        srcData, sizes, offsets, arrayCount(srcData));
+    spotLightBuffer.multiUpdateData(srcData, sizes, offsets, arrayCount(srcData));
   }
 
   // Imgui begin frame:
@@ -1225,11 +1152,8 @@ void RenderManager::onRender()
               D3D12_RESOURCE_STATE_PRESENT,
               D3D12_RESOURCE_STATE_RENDER_TARGET));
       CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-          m_RtvHeap->GetCPUDescriptorHandleForHeapStart(),
-          m_FrameIndex,
-          m_RtvDescriptorSize);
-      ImGuiHelper::endFrame(
-          m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
+          m_RtvHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex, m_RtvDescriptorSize);
+      ImGuiHelper::endFrame(m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
       m_CmdList->ResourceBarrier(
           1,
           &CD3DX12_RESOURCE_BARRIER::Transition(
@@ -1241,8 +1165,7 @@ void RenderManager::onRender()
       // Execute the command list.
       D3D_EXEC_CHECKED(m_CmdList->Close());
       ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
-      m_CmdQue->ExecuteCommandLists(
-          arrayCount32(ppCommandLists), ppCommandLists);
+      m_CmdQue->ExecuteCommandLists(arrayCount32(ppCommandLists), ppCommandLists);
 
       PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render
 
@@ -1256,8 +1179,7 @@ void RenderManager::onRender()
     }
     catch (HrException& e)
     {
-      if (e.Error() == DXGI_ERROR_DEVICE_REMOVED ||
-          e.Error() == DXGI_ERROR_DEVICE_RESET)
+      if (e.Error() == DXGI_ERROR_DEVICE_REMOVED || e.Error() == DXGI_ERROR_DEVICE_RESET)
       {
         restoreD3DResources();
       }
@@ -1276,43 +1198,35 @@ void RenderManager::onKeyDown(UINT8 p_Key)
 
   switch (p_Key)
   {
-  case 'W':
-  {
+  case 'W': {
     camPos += camera.Forward() * CamMoveSpeed;
   }
   break;
-  case 'A':
-  {
+  case 'A': {
     camPos += camera.Left() * CamMoveSpeed;
   }
   break;
-  case 'S':
-  {
+  case 'S': {
     camPos += camera.Back() * CamMoveSpeed;
   }
   break;
-  case 'D':
-  {
+  case 'D': {
     camPos += camera.Right() * CamMoveSpeed;
   }
   break;
-  case VK_LEFT:
-  {
+  case VK_LEFT: {
     camPos += camera.Left() * CamMoveSpeed;
   }
   break;
-  case VK_RIGHT:
-  {
+  case VK_RIGHT: {
     camPos += camera.Right() * CamMoveSpeed;
   }
   break;
-  case VK_UP:
-  {
+  case VK_UP: {
     camPos += camera.Up() * CamMoveSpeed;
   }
   break;
-  case VK_DOWN:
-  {
+  case VK_DOWN: {
     camPos += camera.Down() * CamMoveSpeed;
   }
   break;
@@ -1321,17 +1235,11 @@ void RenderManager::onKeyDown(UINT8 p_Key)
   camera.SetPosition(camPos);
 }
 //---------------------------------------------------------------------------//
-void RenderManager::onKeyUp(UINT8 p_Key)
-{
-}
+void RenderManager::onKeyUp(UINT8 p_Key) {}
 //---------------------------------------------------------------------------//
-void RenderManager::onResize()
-{
-}
+void RenderManager::onResize() {}
 //---------------------------------------------------------------------------//
-void RenderManager::onCodeChange()
-{
-}
+void RenderManager::onCodeChange() {}
 //---------------------------------------------------------------------------//
 void RenderManager::onShaderChange()
 {

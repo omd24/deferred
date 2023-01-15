@@ -6,6 +6,7 @@
 #include "d3dx12.h"
 #include "D3D12Wrapper.hpp"
 #include "Model.hpp"
+#include "PostProcessor.hpp"
 
 #define FRAME_COUNT 3
 #define THREAD_COUNT 1
@@ -49,15 +50,15 @@ struct SpotLight
 };
 struct ShadingConstants
 {
-    Float4Align glm::vec3 CameraPosWS;
+  Float4Align glm::vec3 CameraPosWS;
 
-    uint32_t NumXTiles = 0;
-    uint32_t NumXYTiles = 0;
-    float NearClip = 0.0f;
-    float FarClip = 0.0f;
+  uint32_t NumXTiles = 0;
+  uint32_t NumXYTiles = 0;
+  float NearClip = 0.0f;
+  float FarClip = 0.0f;
 };
 static_assert(sizeof(ShadingConstants) == 32);
-    //---------------------------------------------------------------------------//
+//---------------------------------------------------------------------------//
 // RenderManager Manager:
 //---------------------------------------------------------------------------//
 struct RenderManager
@@ -142,6 +143,7 @@ private:
   ID3D12GraphicsCommandListPtr m_CmdList;
 
   FirstPersonCamera camera;
+  PostProcessor m_PostFx;
   Timer m_Timer;
 
   // Synchronization objects.

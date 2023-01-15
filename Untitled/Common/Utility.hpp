@@ -26,7 +26,7 @@
 //#define NOMINMAX
 //#endif
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 
@@ -87,36 +87,36 @@ using U64 = uint64_t;
 //---------------------------------------------------------------------------//
 //
 //---------------------------------------------------------------------------//
-#define WIN32_MSG_BOX(x)                                                       \
-  {                                                                            \
-    MessageBoxA(g_WinHandle, x, "Error", MB_OK);                               \
+#define WIN32_MSG_BOX(x)                         \
+  {                                              \
+    MessageBoxA(g_WinHandle, x, "Error", MB_OK); \
   }
 
-#define D3D_SAFE_RELEASE(p)                                                    \
-  {                                                                            \
-    if (p.GetInterfacePtr())                                                   \
-      (p).Release();                                                           \
+#define D3D_SAFE_RELEASE(p)  \
+  {                          \
+    if (p.GetInterfacePtr()) \
+      (p).Release();         \
   }
 
-#define D3D_ASSERT_HRESULT(x)                                                  \
-  {                                                                            \
-    assert(SUCCEEDED(x) && "HRESULT != SUCCEEDED");                            \
+#define D3D_ASSERT_HRESULT(x)                       \
+  {                                                 \
+    assert(SUCCEEDED(x) && "HRESULT != SUCCEEDED"); \
   }
 
-#define D3D_EXEC_CHECKED(x)                                                    \
-  {                                                                            \
-    HRESULT hr_ = x;                                                           \
-    if (FAILED(hr_))                                                           \
-    {                                                                          \
-      traceHr(#x, hr_);                                                        \
-      DEBUG_BREAK(0);                                                          \
-    }                                                                          \
+#define D3D_EXEC_CHECKED(x) \
+  {                         \
+    HRESULT hr_ = x;        \
+    if (FAILED(hr_))        \
+    {                       \
+      traceHr(#x, hr_);     \
+      DEBUG_BREAK(0);       \
+    }                       \
   }
 
-#define DEBUG_BREAK(expr)                                                      \
-  if (!(expr))                                                                 \
-  {                                                                            \
-    __debugbreak();                                                            \
+#define DEBUG_BREAK(expr) \
+  if (!(expr))            \
+  {                       \
+    __debugbreak();       \
   }
 
 // TODO: use unique name generator or redesign!
@@ -125,8 +125,7 @@ using U64 = uint64_t;
 // Naming helpers for COM ptrs:
 // The indexed variant will include the index in the name of the object.
 #define D3D_NAME_OBJECT(x) setName((x).GetInterfacePtr(), L#x)
-#define D3D_NAME_OBJECT_INDEXED(x, n)                                          \
-  setNameIndexed((x)[n].GetInterfacePtr(), L#x, n)
+#define D3D_NAME_OBJECT_INDEXED(x, n) setNameIndexed((x)[n].GetInterfacePtr(), L#x, n)
 
 // For aligning to float4 boundaries
 #define Float4Align __declspec(align(16))
@@ -159,8 +158,7 @@ template <typename T> inline T alignDown(T p_Val, T p_Alignment)
 inline UINT calculateConstantBufferByteSize(UINT p_ByteSize)
 {
   // Constant buffer size is required to be aligned:
-  return alignUp<UINT>(
-      p_ByteSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+  return alignUp<UINT>(p_ByteSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 }
 //---------------------------------------------------------------------------//
 template <typename T> inline T divideRoundingUp(T p_Value1, T p_Value2)
@@ -168,11 +166,9 @@ template <typename T> inline T divideRoundingUp(T p_Value1, T p_Value2)
   return (p_Value1 + p_Value2 - (T)1) / p_Value2;
 }
 //---------------------------------------------------------------------------//
-template <typename T>
-inline T lerp(const T& p_Begin, const T& p_End, float p_InterpolationValue)
+template <typename T> inline T lerp(const T& p_Begin, const T& p_End, float p_InterpolationValue)
 {
-  return (T)(
-      p_Begin * (1 - p_InterpolationValue) + p_End * p_InterpolationValue);
+  return (T)(p_Begin * (1 - p_InterpolationValue) + p_End * p_InterpolationValue);
 }
 //---------------------------------------------------------------------------//
 template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
@@ -224,17 +220,14 @@ inline std::string MakeString(const char* format, ...)
 //---------------------------------------------------------------------------//
 // Alternative methods for string conversion
 template <typename CharSource, typename CharDest>
-inline size_t
-StringConvert(const CharSource* p_Src, CharDest* p_Dst, int p_DstSize);
-template <>
-inline size_t StringConvert(const wchar_t* p_Src, char* p_Dst, int p_DstSize)
+inline size_t StringConvert(const CharSource* p_Src, CharDest* p_Dst, int p_DstSize);
+template <> inline size_t StringConvert(const wchar_t* p_Src, char* p_Dst, int p_DstSize)
 {
   size_t converted = 0;
   wcstombs_s(&converted, p_Dst, p_DstSize, p_Src, p_DstSize);
   return converted;
 }
-template <>
-inline size_t StringConvert(const char* p_Src, wchar_t* p_Dst, int p_DstSize)
+template <> inline size_t StringConvert(const char* p_Src, wchar_t* p_Dst, int p_DstSize)
 {
   size_t converted = 0;
   mbstowcs_s(&converted, p_Dst, p_DstSize, p_Src, p_DstSize);
@@ -251,15 +244,9 @@ template <typename BlobType> std::string convertBlobToString(BlobType* p_Blob)
 }
 //---------------------------------------------------------------------------//
 // Counts the elements of an array:
-template <typename T, size_t N> constexpr size_t arrayCount(T (&)[N])
-{
-  return N;
-}
+template <typename T, size_t N> constexpr size_t arrayCount(T (&)[N]) { return N; }
 //---------------------------------------------------------------------------//
-template <typename T, U32 N> constexpr U32 arrayCount32(T (&)[N])
-{
-  return N;
-}
+template <typename T, U32 N> constexpr U32 arrayCount32(T (&)[N]) { return N; }
 //---------------------------------------------------------------------------//
 template <typename T, U32 N> constexpr void setArrayToZero(T (&p_Array)[N])
 {
@@ -270,20 +257,12 @@ template <typename T, U32 N> constexpr void setArrayToZero(T (&p_Array)[N])
 inline void traceHr(const std::string& p_Msg, HRESULT p_Hr)
 {
   char hrMsg[512];
-  FormatMessageA(
-      FORMAT_MESSAGE_FROM_SYSTEM,
-      nullptr,
-      p_Hr,
-      0,
-      hrMsg,
-      arrayCount32(hrMsg),
-      nullptr);
+  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, p_Hr, 0, hrMsg, arrayCount32(hrMsg), nullptr);
   std::string errMsg = p_Msg + ".\nError! " + hrMsg;
   WIN32_MSG_BOX(errMsg.c_str());
 }
 //---------------------------------------------------------------------------//
-inline void
-getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
+inline void getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
 {
   DEBUG_BREAK(p_Path);
 
@@ -296,8 +275,7 @@ getAssetsPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
     *(lastSlash + 1) = L'\0';
   }
 }
-inline void
-getShadersPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
+inline void getShadersPath(_Out_writes_(p_PathSize) WCHAR* p_Path, UINT p_PathSize)
 {
   getAssetsPath(p_Path, p_PathSize);
   wcscat_s(p_Path, 512, L"Shaders\\");
@@ -316,12 +294,8 @@ inline HRESULT readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size)
   extendedParams.lpSecurityAttributes = nullptr;
   extendedParams.hTemplateFile = nullptr;
 
-  Wrappers::FileHandle file(CreateFile2(
-      p_Filename,
-      GENERIC_READ,
-      FILE_SHARE_READ,
-      OPEN_EXISTING,
-      &extendedParams));
+  Wrappers::FileHandle file(
+      CreateFile2(p_Filename, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, &extendedParams));
 #else
   Wrappers::FileHandle file(CreateFile(
       filename,
@@ -329,8 +303,8 @@ inline HRESULT readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size)
       FILE_SHARE_READ,
       nullptr,
       OPEN_EXISTING,
-      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN |
-          SECURITY_SQOS_PRESENT | SECURITY_ANONYMOUS,
+      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | SECURITY_SQOS_PRESENT |
+          SECURITY_ANONYMOUS,
       nullptr));
 #endif
   if (file.Get() == INVALID_HANDLE_VALUE)
@@ -339,22 +313,20 @@ inline HRESULT readDataFromFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Size)
   }
 
   FILE_STANDARD_INFO fileInfo = {};
-  DEBUG_BREAK(!GetFileInformationByHandleEx(
-      file.Get(), FileStandardInfo, &fileInfo, sizeof(fileInfo)));
+  DEBUG_BREAK(
+      !GetFileInformationByHandleEx(file.Get(), FileStandardInfo, &fileInfo, sizeof(fileInfo)));
 
   DEBUG_BREAK(fileInfo.EndOfFile.HighPart != 0);
 
   *p_Data = reinterpret_cast<byte*>(malloc(fileInfo.EndOfFile.LowPart));
   *p_Size = fileInfo.EndOfFile.LowPart;
 
-  DEBUG_BREAK(!ReadFile(
-      file.Get(), *p_Data, fileInfo.EndOfFile.LowPart, nullptr, nullptr));
+  DEBUG_BREAK(!ReadFile(file.Get(), *p_Data, fileInfo.EndOfFile.LowPart, nullptr, nullptr));
 
   return S_OK;
 }
 //---------------------------------------------------------------------------//
-inline HRESULT readDataFromDDSFile(
-    LPCWSTR p_Filename, byte** p_Data, UINT* p_Offset, UINT* p_Size)
+inline HRESULT readDataFromDDSFile(LPCWSTR p_Filename, byte** p_Data, UINT* p_Offset, UINT* p_Size)
 {
   D3D_ASSERT_HRESULT(readDataFromFile(p_Filename, p_Data, p_Size));
 
@@ -412,10 +384,7 @@ inline HRESULT readDataFromDDSFile(
 //---------------------------------------------------------------------------//
 // Assigns a name to the object to aid with debugging.
 #if defined(_DEBUG) || defined(DBG)
-inline void setName(ID3D12Object* p_Object, LPCWSTR p_Name)
-{
-  p_Object->SetName(p_Name);
-}
+inline void setName(ID3D12Object* p_Object, LPCWSTR p_Name) { p_Object->SetName(p_Name); }
 inline void setNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index)
 {
   WCHAR fullName[50];
@@ -425,12 +394,8 @@ inline void setNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index)
   }
 }
 #else
-inline void setName(ID3D12Object*, LPCWSTR)
-{
-}
-inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT)
-{
-}
+inline void setName(ID3D12Object*, LPCWSTR) {}
+inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT) {}
 #endif
 //---------------------------------------------------------------------------//
 #ifdef D3D_COMPILE_STANDARD_FILE_INCLUDE
@@ -441,9 +406,9 @@ inline ID3DBlobPtr compileShader(
     const std::string& p_Target)
 {
   UINT compileFlags = 0;
-#if defined(_DEBUG) || defined(DBG)
+#  if defined(_DEBUG) || defined(DBG)
   compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif
+#  endif
 
   HRESULT hr;
   ID3DBlobPtr byteCode = nullptr;
@@ -501,9 +466,8 @@ inline void getHardwareAdapter(
   {
     for (UINT adapterIndex = 0; SUCCEEDED(factory6->EnumAdapterByGpuPreference(
              adapterIndex,
-             p_RequestHighPerformanceAdapter == true
-                 ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
-                 : DXGI_GPU_PREFERENCE_UNSPECIFIED,
+             p_RequestHighPerformanceAdapter == true ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+                                                     : DXGI_GPU_PREFERENCE_UNSPECIFIED,
              IID_PPV_ARGS(&adapter)));
          ++adapterIndex)
     {
@@ -520,10 +484,7 @@ inline void getHardwareAdapter(
       // Check to see whether the adapter supports Direct3D 12, but don't create
       // the actual device yet.
       if (SUCCEEDED(D3D12CreateDevice(
-              adapter.GetInterfacePtr(),
-              D3D_FEATURE_LEVEL_11_0,
-              _uuidof(ID3D12Device),
-              nullptr)))
+              adapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
       {
         break;
       }
@@ -532,8 +493,7 @@ inline void getHardwareAdapter(
 
   if (adapter.GetInterfacePtr() == nullptr)
   {
-    for (UINT adapterIndex = 0;
-         SUCCEEDED(p_Factory->EnumAdapters1(adapterIndex, &adapter));
+    for (UINT adapterIndex = 0; SUCCEEDED(p_Factory->EnumAdapters1(adapterIndex, &adapter));
          ++adapterIndex)
     {
       DXGI_ADAPTER_DESC1 desc;
@@ -549,10 +509,7 @@ inline void getHardwareAdapter(
       // Check to see whether the adapter supports Direct3D 12, but don't create
       // the actual device yet.
       if (SUCCEEDED(D3D12CreateDevice(
-              adapter.GetInterfacePtr(),
-              D3D_FEATURE_LEVEL_11_0,
-              _uuidof(ID3D12Device),
-              nullptr)))
+              adapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr)))
       {
         break;
       }
@@ -567,18 +524,13 @@ inline void getHardwareAdapter(
 //---------------------------------------------------------------------------//
 template <typename F> struct Deferrer
 {
-  Deferrer(F&& p_Func) : m_Func(std::move(p_Func))
-  {
-  }
+  Deferrer(F&& p_Func) : m_Func(std::move(p_Func)) {}
   ~Deferrer() noexcept
   {
     if (!m_Canceled)
       m_Func();
   }
-  void cancel() noexcept
-  {
-    m_Canceled = true;
-  }
+  void cancel() noexcept { m_Canceled = true; }
 
 private:
   bool m_Canceled = false;
@@ -591,8 +543,7 @@ template <typename F> Deferrer<F> makeDeferrer(F&& p_Func)
 }
 struct DeferHelper
 {
-  template <typename F>
-  friend Deferrer<F> operator+(DeferHelper const&, F&& p_Func)
+  template <typename F> friend Deferrer<F> operator+(DeferHelper const&, F&& p_Func)
   {
     return makeDeferrer(std::move(p_Func));
   }
@@ -609,13 +560,8 @@ inline std::string HrToString(HRESULT hr)
 class HrException : public std::runtime_error
 {
 public:
-  HrException(HRESULT hr) : std::runtime_error(HrToString(hr)), m_hr(hr)
-  {
-  }
-  HRESULT Error() const
-  {
-    return m_hr;
-  }
+  HrException(HRESULT hr) : std::runtime_error(HrToString(hr)), m_hr(hr) {}
+  HRESULT Error() const { return m_hr; }
 
 private:
   const HRESULT m_hr;
@@ -629,4 +575,7 @@ inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title)
 //---------------------------------------------------------------------------//
 typedef void (*MsgFunction)(void*, HWND, UINT, WPARAM, LPARAM);
 inline MsgFunction g_ImguiCallback;
+//---------------------------------------------------------------------------//
+// TODO: appsettings
+constexpr uint32_t g_AppSettingsCBufferRegister = 12u;
 //---------------------------------------------------------------------------//

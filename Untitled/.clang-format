@@ -5,7 +5,6 @@ BreakBeforeBraces: Custom
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 BraceWrapping:
   AfterClass:      true
-  AfterCaseLabel:  true
   AfterControlStatement: true
   AfterEnum:       true
   AfterFunction:   true
@@ -18,10 +17,14 @@ BraceWrapping:
   IndentBraces:    false
 SortIncludes: false
 PointerAlignment: Left
-AllowShortBlocksOnASingleLine: false
-AllowShortFunctionsOnASingleLine: false
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: true
 NamespaceIndentation: None
 AlignAfterOpenBracket: AlwaysBreak
 BinPackArguments: false
 BinPackParameters: false
 FixNamespaceComments: true
+IndentPPDirectives: AfterHash
+AlignEscapedNewlines: true
+ColumnLimit: 100
+

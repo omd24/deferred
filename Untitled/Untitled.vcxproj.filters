@@ -17,7 +17,6 @@
     <ClCompile Include="Common\FileWatcher.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="Common\D3D12Wrapper.cpp" />
     <ClCompile Include="Common\Model.cpp">
       <Filter>Common</Filter>
     </ClCompile>
@@ -41,6 +40,13 @@
     </ClCompile>
     <ClCompile Include="..\Externals\ImGui\imgui_widgets.cpp">
       <Filter>Common\Imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\D3D12Wrapper.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="PostProcessor.cpp" />
+    <ClCompile Include="Common\PostFxHelper.cpp">
+      <Filter>Common</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -90,11 +96,12 @@
     <ClInclude Include="..\Externals\ImGui\imstb_truetype.h">
       <Filter>Common\Imgui</Filter>
     </ClInclude>
+    <ClInclude Include="PostProcessor.hpp" />
+    <ClInclude Include="Common\PostFxHelper.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="Shaders\TriangleDraw.hlsl" />
   </ItemGroup>
 </Project>

@@ -132,7 +132,7 @@ private:
   CD3DX12_VIEWPORT m_Viewport;
   CD3DX12_RECT m_ScissorRect;
   IDXGISwapChain3Ptr m_Swc;
-  ID3D12ResourcePtr m_RenderTargets[FRAME_COUNT];
+  RenderTexture m_RenderTargets[FRAME_COUNT]; // swc backbuffers
   UINT m_FrameIndex;
   ID3D12CommandAllocatorPtr m_CmdAllocs[FRAME_COUNT];
   ID3D12CommandQueuePtr m_CmdQue;

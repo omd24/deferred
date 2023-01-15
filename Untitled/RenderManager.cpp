@@ -162,11 +162,13 @@ void RenderManager::loadD3D12Pipeline()
     // Create a RTV and a command allocator for each frame.
     for (UINT n = 0; n < FRAME_COUNT; n++)
     {
-      D3D_EXEC_CHECKED(m_Swc->GetBuffer(n, IID_PPV_ARGS(&m_RenderTargets[n])));
-      m_Dev->CreateRenderTargetView(m_RenderTargets[n].GetInterfacePtr(), nullptr, rtvHandle);
+      D3D_EXEC_CHECKED(m_Swc->GetBuffer(n, IID_PPV_ARGS(&m_RenderTargets[n].m_Texture.Resource)));
+      m_Dev->CreateRenderTargetView(m_RenderTargets[n].m_Texture.Resource, nullptr, rtvHandle);
       rtvHandle.Offset(1, m_RtvDescriptorSize);
 
-      D3D_NAME_OBJECT_INDEXED(m_RenderTargets, n);
+      std::wstring rtName = L"Swapchain backbuffer #";
+      rtName += std::to_wstring(n);
+      m_RenderTargets[n].m_Texture.Resource->SetName(rtName.c_str());
 
       D3D_EXEC_CHECKED(m_Dev->CreateCommandAllocator(
           D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_CmdAllocs[n])));
@@ -626,53 +628,8 @@ void RenderManager::loadAssets()
 }
 void RenderManager::renderForward()
 {
-#if 0
-  // Set necessary state.
-  m_CmdList->SetPipelineState(m_Pso.GetInterfacePtr());
-  m_CmdList->SetGraphicsRootSignature(m_RootSig.GetInterfacePtr());
-
-  m_CmdList->SetGraphicsRootConstantBufferView(
-      GraphicsRootCBV,
-      m_FrameUniforms->GetGPUVirtualAddress() +
-          m_FrameIndex * sizeof(FrameParams));
-
-  // ID3D12DescriptorHeap* ppHeaps[] = {/*m_SrvUavHeap.GetInterfacePtr()*/};
-  // m_CmdList->SetDescriptorHeaps(arrayCount32(ppHeaps), ppHeaps);
-
-  m_CmdList->IASetVertexBuffers(0, 1, &m_VtxBufferView);
-  m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  m_CmdList->RSSetScissorRects(1, &m_ScissorRect);
-
-  // Indicate that the back buffer will be used as a render target.
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_PRESENT,
-          D3D12_RESOURCE_STATE_RENDER_TARGET));
-
-  CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-      m_RtvHeap->GetCPUDescriptorHandleForHeapStart(),
-      m_FrameIndex,
-      m_RtvDescriptorSize);
-  m_CmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-
-  // Record commands.
-  const float clearValue[] = {0.0f, 0.2f, 0.4f, 1.0f};
-  m_CmdList->ClearRenderTargetView(rtvHandle, clearValue, 0, nullptr);
-
-  m_CmdList->RSSetViewports(1, &m_Viewport);
-
-  m_CmdList->DrawInstanced(3, 1, 0, 0);
-
-  // Indicate that the back buffer will now be used to present.
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_RENDER_TARGET,
-          D3D12_RESOURCE_STATE_PRESENT));
-#endif // 0
+  // TODO:
+  assert(false);
 }
 void RenderManager::renderDeferred()
 {
@@ -899,19 +856,19 @@ void RenderManager::renderDeferred()
   m_CmdList->ResourceBarrier(
       1,
       &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
-          D3D12_RESOURCE_STATE_PRESENT,
+          m_RenderTargets[m_FrameIndex].m_Texture.Resource,
+          D3D12_RESOURCE_STATE_RENDER_TARGET,
           D3D12_RESOURCE_STATE_COPY_DEST));
 
   m_CmdList->CopyResource(
-      m_RenderTargets[m_FrameIndex].GetInterfacePtr(), deferredTarget.resource());
+      m_RenderTargets[m_FrameIndex].m_Texture.Resource, deferredTarget.resource());
 
   m_CmdList->ResourceBarrier(
       1,
       &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+          m_RenderTargets[m_FrameIndex].m_Texture.Resource,
           D3D12_RESOURCE_STATE_COPY_DEST,
-          D3D12_RESOURCE_STATE_PRESENT));
+          D3D12_RESOURCE_STATE_RENDER_TARGET));
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Copy to Backbuffer
 #endif // 0
@@ -919,21 +876,7 @@ void RenderManager::renderDeferred()
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
 {
-  endFrameHelpers();
-
-  // Command list allocators can only be reset when the associated
-  // command lists have finished execution on the GPU; apps should use
-  // fences to determine GPU execution progress.
-  D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
-
-  // However, when ExecuteCommandList() is called on a particular command
-  // list, that command list can then be reset at any time and must be before
-  // re-recording.
-  D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
-
   SetDescriptorHeaps(m_CmdList);
-
-  renderForward();
 
   renderDeferred();
 
@@ -997,7 +940,8 @@ void RenderManager::restoreD3DResources()
 void RenderManager::releaseD3DResources()
 {
   m_RenderContextFence = nullptr;
-  resetComPtrArray(&m_RenderTargets);
+  for (UINT n = 0; n < FRAME_COUNT; n++)
+    m_RenderTargets[n].m_Texture.Resource->Release();
   m_CmdQue = nullptr;
   m_Swc = nullptr;
   m_Dev = nullptr;
@@ -1080,6 +1024,10 @@ void RenderManager::onDestroy()
   shutdownHelpers();
   shutdownUpload();
 
+  // Release swc backbuffers
+  for (UINT n = 0; n < FRAME_COUNT; n++)
+    m_RenderTargets[n].m_Texture.Resource->Release();
+
   ImGuiHelper::deinit();
 
   m_PostFx.deinit();
@@ -1136,31 +1084,46 @@ void RenderManager::onRender()
   {
     try
     {
-      PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
-
+      // Wait for frame:
       waitForRenderContext();
-      populateCommandList();
 
-      EndFrame_Upload(m_CmdQue);
+      // Prepare for [re]-recording commands:
+      D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
+      D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
 
-      // Imgui rendering:
-      PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
+      // Swc begin-frame backbuffer transition
       m_CmdList->ResourceBarrier(
           1,
           &CD3DX12_RESOURCE_BARRIER::Transition(
-              m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+              m_RenderTargets[m_FrameIndex].m_Texture.Resource,
               D3D12_RESOURCE_STATE_PRESENT,
               D3D12_RESOURCE_STATE_RENDER_TARGET));
-      CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
-          m_RtvHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex, m_RtvDescriptorSize);
-      ImGuiHelper::endFrame(m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
+
+      // TODO: move this stuff to the correct location!
+      endFrameHelpers();
+      EndFrame_Upload(m_CmdQue);
+
+      PIXBeginEvent(m_CmdQue.GetInterfacePtr(), 0, L"Render");
+
+      // Internal rendering code
+      populateCommandList();
+
+      // Imgui rendering:
+      {
+        PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
+        CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(
+            m_RtvHeap->GetCPUDescriptorHandleForHeapStart(), m_FrameIndex, m_RtvDescriptorSize);
+        ImGuiHelper::endFrame(m_CmdList, rtvHandle, m_Info.m_Width, m_Info.m_Height);
+        PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render Imgui
+      }
+
+      // Swc end-frame backbuffer transition
       m_CmdList->ResourceBarrier(
           1,
           &CD3DX12_RESOURCE_BARRIER::Transition(
-              m_RenderTargets[m_FrameIndex].GetInterfacePtr(),
+              m_RenderTargets[m_FrameIndex].m_Texture.Resource,
               D3D12_RESOURCE_STATE_RENDER_TARGET,
               D3D12_RESOURCE_STATE_PRESENT));
-      PIXEndEvent(m_CmdQue.GetInterfacePtr()); // Render Imgui
 
       // Execute the command list.
       D3D_EXEC_CHECKED(m_CmdList->Close());

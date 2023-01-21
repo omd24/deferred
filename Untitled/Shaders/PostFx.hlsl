@@ -23,6 +23,10 @@ struct PSInput
 };
 
 #define BLOOM_BLUR_SIGMA 2.5f
+#define BLOOM_EXPOSURE -4.0f
+#define BLOOM_MAGNITURE 1.0f
+#define EXPOSURE -14.0f
+#define FP16Scale 0.0009765625f // -10 EV (i.e., 2^-10) shift of light values
 
 //=================================================================================================
 // Helper Functions
@@ -64,7 +68,8 @@ float4 Blur(in PSInput input, float2 texScale, float sigma, bool nrmlize)
     return color;
 }
 
-// Applies the approximated version of HP Duiker's film stock curve
+// Jim Hejl approximation of filmic tonemapping
+// Refer to John Hable - Uncharted2 HDR Lighting slide140
 float3 ToneMapFilmicALU(in float3 color)
 {
     color = max(0, color - 0.004f);
@@ -127,12 +132,12 @@ float4 ToneMap(in PSInput input) : SV_Target0
 
     float3 color = inputTexture0.Sample(PointSampler, input.TexCoord).xyz;
 
-#if 0
+#if 1
     // Add bloom
-    color += inputTexture1.Sample(LinearSampler, input.TexCoord).xyz * AppSettings.BloomMagnitude * exp2(AppSettings.BloomExposure);
+    color += inputTexture1.Sample(LinearSampler, input.TexCoord).xyz * BLOOM_MAGNITURE * exp2(BLOOM_EXPOSURE);
 
     // Apply exposure (accounting for the FP16 scale used for lighting and emissive sources)
-    color *= exp2(AppSettings.Exposure) / FP16Scale;
+    color *= exp2(EXPOSURE) / FP16Scale;
 
     // Tone map to sRGB color space with the appropriate transfer function applied
     color = ToneMapFilmicALU(color);

@@ -3,13 +3,9 @@
 // DirectX Tex
 #include "..\\Externals\\DirectXTex July 2017\\Include\\DirectXTex.h"
 #ifdef _DEBUG
-#pragma comment(                                                               \
-    lib,                                                                       \
-    "..\\Externals\\DirectXTex July 2017\\Lib 2017\\Debug\\DirectXTex.lib")
+#  pragma comment(lib, "..\\Externals\\DirectXTex July 2017\\Lib 2017\\Debug\\DirectXTex.lib")
 #else
-#pragma comment(                                                               \
-    lib,                                                                       \
-    "..\\Externals\\DirectXTex July 2017\\Lib 2017\\Release\\DirectXTex.lib")
+#  pragma comment(lib, "..\\Externals\\DirectXTex July 2017\\Lib 2017\\Release\\DirectXTex.lib")
 #endif
 
 // Assimp
@@ -24,8 +20,7 @@ static const wchar_t* DefaultTextures[] = {
     L"..\\Content\\Textures\\DefaultRoughness.dds", // Roughness
     L"..\\Content\\Textures\\DefaultBlack.dds",     // Metallic
 };
-static_assert(
-    arrayCount32(DefaultTextures) == uint32_t(MaterialTextures::Count));
+static_assert(arrayCount32(DefaultTextures) == uint32_t(MaterialTextures::Count));
 
 //---------------------------------------------------------------------------//
 // Helpers
@@ -34,17 +29,14 @@ static_assert(
 static constexpr float maxFloat = std::numeric_limits<float>::max();
 
 // Scale factor used for storing physical light units in fp16 floats (equal to 2^-10).
+// https://www.reedbeta.com/blog/artist-friendly-hdr-with-exposure-values/#fitting-into-half-float
+// We basically shift input light values by -10EV (i.e., 2^-10) here and reapply the scale factor
+// during exposure/tone-mapping to get back the real values.
 const float FP16Scale = 0.0009765625f;
 
-static glm::vec3 convertVector(const aiVector3D& vec)
-{
-  return glm::vec3(vec.x, vec.y, vec.z);
-}
+static glm::vec3 convertVector(const aiVector3D& vec) { return glm::vec3(vec.x, vec.y, vec.z); }
 
-static glm::vec3 convertColor(const aiColor3D& clr)
-{
-  return glm::vec3(clr.r, clr.g, clr.b);
-}
+static glm::vec3 convertColor(const aiColor3D& clr) { return glm::vec3(clr.r, clr.g, clr.b); }
 
 static glm::mat4 convertMatrix(const aiMatrix4x4& mat)
 {
@@ -65,11 +57,7 @@ static glm::mat3 convertMatrix4To3(const aiMatrix4x4& mat)
 
   return glm::transpose(ret);
 }
-void loadTexture(
-    ID3D12Device* dev,
-    Texture& texture,
-    const wchar_t* filePath,
-    bool forceSRGB)
+void loadTexture(ID3D12Device* dev, Texture& texture, const wchar_t* filePath, bool forceSRGB)
 {
   g_Device = dev;
 
@@ -89,23 +77,15 @@ void loadTexture(
     DirectX::ScratchImage tempImage;
     D3D_EXEC_CHECKED(DirectX::LoadFromTGAFile(filePath, nullptr, tempImage));
     DirectX::GenerateMipMaps(
-        *tempImage.GetImage(0, 0, 0),
-        DirectX::TEX_FILTER_DEFAULT,
-        0,
-        image,
-        false);
+        *tempImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_DEFAULT, 0, image, false);
   }
   else
   {
     DirectX::ScratchImage tempImage;
-    D3D_EXEC_CHECKED(DirectX::LoadFromWICFile(
-        filePath, DirectX::WIC_FLAGS_NONE, nullptr, tempImage));
+    D3D_EXEC_CHECKED(
+        DirectX::LoadFromWICFile(filePath, DirectX::WIC_FLAGS_NONE, nullptr, tempImage));
     DirectX::GenerateMipMaps(
-        *tempImage.GetImage(0, 0, 0),
-        DirectX::TEX_FILTER_DEFAULT,
-        0,
-        image,
-        false);
+        *tempImage.GetImage(0, 0, 0), DirectX::TEX_FILTER_DEFAULT, 0, image, false);
   }
 
   const DirectX::TexMetadata& metaData = image.GetMetadata();
@@ -121,12 +101,11 @@ void loadTexture(
   textureDesc.Width = uint32_t(metaData.width);
   textureDesc.Height = uint32_t(metaData.height);
   textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-  textureDesc.DepthOrArraySize =
-      is3D ? uint16_t(metaData.depth) : uint16_t(metaData.arraySize);
+  textureDesc.DepthOrArraySize = is3D ? uint16_t(metaData.depth) : uint16_t(metaData.arraySize);
   textureDesc.SampleDesc.Count = 1;
   textureDesc.SampleDesc.Quality = 0;
-  textureDesc.Dimension = is3D ? D3D12_RESOURCE_DIMENSION_TEXTURE3D
-                               : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  textureDesc.Dimension =
+      is3D ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
   textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
   textureDesc.Alignment = 0;
 
@@ -157,26 +136,17 @@ void loadTexture(
   }
 
   for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
-    device->CreateShaderResourceView(
-        texture.Resource, srvDescPtr, srvAlloc.Handles[i]);
+    device->CreateShaderResourceView(texture.Resource, srvDescPtr, srvAlloc.Handles[i]);
 
   const uint64_t numSubResources = metaData.mipLevels * metaData.arraySize;
-  D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts =
-      (D3D12_PLACED_SUBRESOURCE_FOOTPRINT*)_alloca(
-          sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * numSubResources);
+  D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT*)_alloca(
+      sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * numSubResources);
   uint32_t* numRows = (uint32_t*)_alloca(sizeof(uint32_t) * numSubResources);
   uint64_t* rowSizes = (uint64_t*)_alloca(sizeof(uint64_t) * numSubResources);
 
   uint64_t textureMemSize = 0;
   device->GetCopyableFootprints(
-      &textureDesc,
-      0,
-      uint32_t(numSubResources),
-      0,
-      layouts,
-      numRows,
-      rowSizes,
-      &textureMemSize);
+      &textureDesc, 0, uint32_t(numSubResources), 0, layouts, numRows, rowSizes, &textureMemSize);
 
   // Get a GPU upload buffer
   UploadContext uploadContext = resourceUploadBegin(textureMemSize);
@@ -189,13 +159,11 @@ void loadTexture(
     {
       const uint64_t subResourceIdx = mipIdx + (arrayIdx * metaData.mipLevels);
 
-      const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout =
-          layouts[subResourceIdx];
+      const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[subResourceIdx];
       const uint64_t subResourceHeight = numRows[subResourceIdx];
       const uint64_t subResourcePitch = subResourceLayout.Footprint.RowPitch;
       const uint64_t subResourceDepth = subResourceLayout.Footprint.Depth;
-      uint8_t* dstSubResourceMem =
-          reinterpret_cast<uint8_t*>(uploadMem) + subResourceLayout.Offset;
+      uint8_t* dstSubResourceMem = reinterpret_cast<uint8_t*>(uploadMem) + subResourceLayout.Offset;
 
       for (uint64_t z = 0; z < subResourceDepth; ++z)
       {
@@ -206,9 +174,7 @@ void loadTexture(
         for (uint64_t y = 0; y < subResourceHeight; ++y)
         {
           memcpy(
-              dstSubResourceMem,
-              srcSubResourceMem,
-              std::min(subResourcePitch, subImage->rowPitch));
+              dstSubResourceMem, srcSubResourceMem, std::min(subResourcePitch, subImage->rowPitch));
           dstSubResourceMem += subResourcePitch;
           srcSubResourceMem += subImage->rowPitch;
         }
@@ -216,8 +182,7 @@ void loadTexture(
     }
   }
 
-  for (uint64_t subResourceIdx = 0; subResourceIdx < numSubResources;
-       ++subResourceIdx)
+  for (uint64_t subResourceIdx = 0; subResourceIdx < numSubResources; ++subResourceIdx)
   {
     D3D12_TEXTURE_COPY_LOCATION dst = {};
     dst.pResource = texture.Resource;
@@ -252,14 +217,12 @@ void loadMaterialResources(
   for (uint64_t matIdx = 0; matIdx < numMaterials; ++matIdx)
   {
     MeshMaterial& material = materials[matIdx];
-    for (uint64_t texType = 0; texType < uint64_t(MaterialTextures::Count);
-         ++texType)
+    for (uint64_t texType = 0; texType < uint64_t(MaterialTextures::Count); ++texType)
     {
       material.Textures[texType] = nullptr;
 
       std::wstring path = directory + material.TextureNames[texType];
-      if (material.TextureNames[texType].length() == 0 ||
-          fileExists(path.c_str()) == false)
+      if (material.TextureNames[texType].length() == 0 || fileExists(path.c_str()) == false)
         path = DefaultTextures[texType];
 
       const uint64_t numLoaded = materialTextures.size();
@@ -277,10 +240,8 @@ void loadMaterialResources(
       {
         MaterialTexture* newMatTexture = new MaterialTexture();
         newMatTexture->Name = path;
-        bool useSRGB =
-            forceSRGB && texType == uint64_t(MaterialTextures::Albedo);
-        loadTexture(
-            dev, newMatTexture->Texture, path.c_str(), useSRGB ? true : false);
+        bool useSRGB = forceSRGB && texType == uint64_t(MaterialTextures::Albedo);
+        loadTexture(dev, newMatTexture->Texture, path.c_str(), useSRGB ? true : false);
         materialTextures.push_back(newMatTexture);
         uint64_t idx = materialTextures.size() - 1;
 
@@ -296,10 +257,7 @@ void loadMaterialResources(
 //---------------------------------------------------------------------------//
 // Init from loaded files
 void Mesh::InitFromAssimpMesh(
-    const aiMesh& assimpMesh,
-    float sceneScale,
-    MeshVertex* dstVertices,
-    uint16_t* dstIndices)
+    const aiMesh& assimpMesh, float sceneScale, MeshVertex* dstVertices, uint16_t* dstIndices)
 {
   numVertices = assimpMesh.mNumVertices;
   numIndices = assimpMesh.mNumFaces * 3;
@@ -353,8 +311,7 @@ void Mesh::InitFromAssimpMesh(
     for (uint64_t i = 0; i < numVertices; ++i)
     {
       dstVertices[i].Tangent = convertVector(assimpMesh.mTangents[i]);
-      dstVertices[i].Bitangent =
-          convertVector(assimpMesh.mBitangents[i]) * -1.0f;
+      dstVertices[i].Bitangent = convertVector(assimpMesh.mBitangents[i]) * -1.0f;
     }
   }
 
@@ -362,12 +319,9 @@ void Mesh::InitFromAssimpMesh(
   const uint64_t numTriangles = assimpMesh.mNumFaces;
   for (uint64_t triIdx = 0; triIdx < numTriangles; ++triIdx)
   {
-    dstIndices[triIdx * 3 + 0] =
-        uint16_t(assimpMesh.mFaces[triIdx].mIndices[0]);
-    dstIndices[triIdx * 3 + 1] =
-        uint16_t(assimpMesh.mFaces[triIdx].mIndices[1]);
-    dstIndices[triIdx * 3 + 2] =
-        uint16_t(assimpMesh.mFaces[triIdx].mIndices[2]);
+    dstIndices[triIdx * 3 + 0] = uint16_t(assimpMesh.mFaces[triIdx].mIndices[0]);
+    dstIndices[triIdx * 3 + 1] = uint16_t(assimpMesh.mFaces[triIdx].mIndices[1]);
+    dstIndices[triIdx * 3 + 2] = uint16_t(assimpMesh.mFaces[triIdx].mIndices[2]);
   }
 
   meshParts.resize(1);
@@ -657,9 +611,7 @@ void Mesh::InitPlane(
 
   for (uint64_t i = 0; i < NumPlaneVerts; ++i)
     dstVertices[i].Transform(
-        position,
-        glm::vec3(dimensions.x, 1.0f, dimensions.y) * 0.5f,
-        orientation);
+        position, glm::vec3(dimensions.x, 1.0f, dimensions.y) * 0.5f, orientation);
 
   uint64_t iIdx = 0;
   dstIndices[iIdx++] = 0;
@@ -750,8 +702,7 @@ static const wchar_t* SponzaRoughnessMaps[] = {
     L"Lion_Roughness.png",
     L"Sponza_Roof_roughness.png"};
 
-void Model::CreateWithAssimp(
-    ID3D12Device* dev, const ModelLoadSettings& settings)
+void Model::CreateWithAssimp(ID3D12Device* dev, const ModelLoadSettings& settings)
 {
 
   const wchar_t* filePath = settings.FilePath;
@@ -792,34 +743,28 @@ void Model::CreateWithAssimp(
       // Assimp seems to mess up when importing spot light transforms for FBX
       std::string translationName =
           MakeString("%s_$AssimpFbx$_Translation", srcLight.mName.C_Str());
-      const aiNode* translationNode =
-          scene->mRootNode->FindNode(translationName.c_str());
+      const aiNode* translationNode = scene->mRootNode->FindNode(translationName.c_str());
       if (translationNode == nullptr)
         continue;
 
-      std::string rotationName =
-          MakeString("%s_$AssimpFbx$_Rotation", srcLight.mName.C_Str());
-      const aiNode* rotationNode =
-          translationNode->FindNode(rotationName.c_str());
+      std::string rotationName = MakeString("%s_$AssimpFbx$_Rotation", srcLight.mName.C_Str());
+      const aiNode* rotationNode = translationNode->FindNode(rotationName.c_str());
       if (rotationNode == nullptr)
         continue;
 
       ModelSpotLight& dstLight = spotLights[numSpotLights++];
 
-      glm::mat4x4 translation =
-          (convertMatrix(translationNode->mTransformation));
+      glm::mat4x4 translation = (convertMatrix(translationNode->mTransformation));
       dstLight.Position = translation[3] * settings.SceneScale;
       dstLight.Position.z *= -1.0f;
       dstLight.Intensity = convertColor(srcLight.mColorDiffuse) * FP16Scale;
       dstLight.AngularAttenuation.x = srcLight.mAngleInnerCone;
       dstLight.AngularAttenuation.y = srcLight.mAngleOuterCone;
 
-      glm::mat3x3 rot =
-          glm::transpose(convertMatrix4To3(rotationNode->mTransformation));
+      glm::mat3x3 rot = glm::transpose(convertMatrix4To3(rotationNode->mTransformation));
       glm::mat3x3 rotation = glm::mat3x3(rot[0], rot[1], rot[2]);
       dstLight.Orientation = glm::normalize((glm::quat(rotation)));
-      dstLight.Direction = glm::normalize(
-          glm::vec3(rotation[2].x, rotation[2].y, rotation[2].z));
+      dstLight.Direction = glm::normalize(glm::vec3(rotation[2].x, rotation[2].y, rotation[2].z));
     }
     else if (srcLight.mType == aiLightSource_POINT)
     {
@@ -855,15 +800,12 @@ void Model::CreateWithAssimp(
     aiString normalMapPath;
     aiString roughnessMapPath;
     aiString metallicMapPath;
-    if (mat.GetTexture(aiTextureType_DIFFUSE, 0, &diffuseTexPath) ==
-        aiReturn_SUCCESS)
+    if (mat.GetTexture(aiTextureType_DIFFUSE, 0, &diffuseTexPath) == aiReturn_SUCCESS)
       material.TextureNames[uint64_t(MaterialTextures::Albedo)] =
           getFileName(strToWideStr(diffuseTexPath.C_Str()).c_str());
 
-    if (mat.GetTexture(aiTextureType_NORMALS, 0, &normalMapPath) ==
-            aiReturn_SUCCESS ||
-        mat.GetTexture(aiTextureType_HEIGHT, 0, &normalMapPath) ==
-            aiReturn_SUCCESS)
+    if (mat.GetTexture(aiTextureType_NORMALS, 0, &normalMapPath) == aiReturn_SUCCESS ||
+        mat.GetTexture(aiTextureType_HEIGHT, 0, &normalMapPath) == aiReturn_SUCCESS)
       material.TextureNames[uint64_t(MaterialTextures::Normal)] =
           getFileName(strToWideStr(normalMapPath.C_Str()).c_str());
 
@@ -878,14 +820,12 @@ void Model::CreateWithAssimp(
       material.TextureNames[uint64_t(MaterialTextures::Roughness)] =
           getFileName(SponzaRoughnessMaps[i]);
 
-    if (mat.GetTexture(aiTextureType_AMBIENT, 0, &metallicMapPath) ==
-        aiReturn_SUCCESS)
+    if (mat.GetTexture(aiTextureType_AMBIENT, 0, &metallicMapPath) == aiReturn_SUCCESS)
       material.TextureNames[uint64_t(MaterialTextures::Metallic)] =
           getFileName(strToWideStr(metallicMapPath.C_Str()).c_str());
   }
 
-  loadMaterialResources(
-      dev, meshMaterials, fileDirectory, settings.ForceSRGB, materialTextures);
+  loadMaterialResources(dev, meshMaterials, fileDirectory, settings.ForceSRGB, materialTextures);
 
   aabbMin = glm::vec3(maxFloat);
   aabbMax = glm::vec3(-maxFloat);
@@ -911,10 +851,7 @@ void Model::CreateWithAssimp(
   for (uint64_t i = 0; i < numMeshes; ++i)
   {
     meshes[i].InitFromAssimpMesh(
-        *scene->mMeshes[i],
-        settings.SceneScale,
-        &vertices[vtxOffset],
-        &indices[idxOffset]);
+        *scene->mMeshes[i], settings.SceneScale, &vertices[vtxOffset], &indices[idxOffset]);
 
     aabbMin.x = std::min(aabbMin.x, meshes[i].AABBMin().x);
     aabbMin.y = std::min(aabbMin.y, meshes[i].AABBMin().y);
@@ -942,8 +879,7 @@ void Model::CreateFromMeshData(ID3D12Device* dev, const wchar_t* filePath)
 
   CreateBuffers();
 
-  loadMaterialResources(
-      dev, meshMaterials, fileDirectory, forceSRGB, materialTextures);
+  loadMaterialResources(dev, meshMaterials, fileDirectory, forceSRGB, materialTextures);
 }
 
 // Procedural generation
@@ -960,15 +896,13 @@ void Model::GenerateBoxScene(
   material.TextureNames[uint64_t(MaterialTextures::Albedo)] = colorMap;
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
   fileDirectory = L"..\\Content\\Textures\\";
-  loadMaterialResources(
-      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+  loadMaterialResources(dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumBoxVerts);
   indices.resize(NumBoxIndices);
 
   meshes.resize(1);
-  meshes[0].InitBox(
-      dimensions, position, orientation, 0, vertices.data(), indices.data());
+  meshes[0].InitBox(dimensions, position, orientation, 0, vertices.data(), indices.data());
 
   CreateBuffers();
 }
@@ -979,8 +913,7 @@ void Model::GenerateBoxTestScene(ID3D12Device* dev)
   material.TextureNames[uint64_t(MaterialTextures::Albedo)] = L"White.png";
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = L"Hex.png";
   fileDirectory = L"..\\Content\\Textures\\";
-  loadMaterialResources(
-      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+  loadMaterialResources(dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumBoxVerts * 2);
   indices.resize(NumBoxIndices * 2);
@@ -1016,15 +949,13 @@ void Model::GeneratePlaneScene(
   material.TextureNames[uint64_t(MaterialTextures::Albedo)] = colorMap;
   material.TextureNames[uint64_t(MaterialTextures::Normal)] = normalMap;
   fileDirectory = L"..\\Content\\Textures\\";
-  loadMaterialResources(
-      dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
+  loadMaterialResources(dev, meshMaterials, L"..\\Content\\Textures\\", false, materialTextures);
 
   vertices.resize(NumPlaneVerts);
   indices.resize(NumPlaneIndices);
 
   meshes.resize(1);
-  meshes[0].InitPlane(
-      dimensions, position, orientation, 0, vertices.data(), indices.data());
+  meshes[0].InitPlane(dimensions, position, orientation, 0, vertices.data(), indices.data());
 
   CreateBuffers();
 }

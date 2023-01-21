@@ -159,7 +159,7 @@ float3 ShadePixel(in ShadingInput input)
     output = clamp(output, 0.0f, FP16Max);
 
     // DEBUG:
-    // return albedoMap.xyz;
+    //return albedoMap.xyz;
 
     return output;
 }

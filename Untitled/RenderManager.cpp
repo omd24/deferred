@@ -478,8 +478,7 @@ void RenderManager::loadAssets()
     RenderTextureInit rtInit;
     rtInit.Width = m_Info.m_Width;
     rtInit.Height = m_Info.m_Height;
-    // rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    rtInit.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
@@ -1223,6 +1222,8 @@ void RenderManager::onShaderChange()
   if (createPSOs())
   {
     OutputDebugStringA("[RenderManager] Shaders loaded\n");
+    m_PostFx.deinit();
+    m_PostFx.init();
     return;
   }
   else

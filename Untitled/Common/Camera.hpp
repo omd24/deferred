@@ -1,12 +1,12 @@
 #pragma once
 
 #ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 
 #ifndef GLM_FORCE_RADIANS
-#define GLM_FORCE_RADIANS
+#  define GLM_FORCE_RADIANS
 #endif
 
 #include <glm/glm.hpp>
@@ -47,38 +47,14 @@ public:
     orientation = glm::identity<glm::quat>();
   }
 
-  const glm::mat4& ViewMatrix() const
-  {
-    return view;
-  };
-  const glm::mat4& ProjectionMatrix() const
-  {
-    return projection;
-  };
-  const glm::mat4& ViewProjectionMatrix() const
-  {
-    return viewProjection;
-  };
-  const glm::mat4& WorldMatrix() const
-  {
-    return world;
-  };
-  const glm::vec3& Position() const
-  {
-    return position;
-  };
-  const glm::quat& Orientation() const
-  {
-    return orientation;
-  };
-  float NearClip() const
-  {
-    return nearZ;
-  };
-  float FarClip() const
-  {
-    return farZ;
-  };
+  const glm::mat4& ViewMatrix() const { return view; };
+  const glm::mat4& ProjectionMatrix() const { return projection; };
+  const glm::mat4& ViewProjectionMatrix() const { return viewProjection; };
+  const glm::mat4& WorldMatrix() const { return world; };
+  const glm::vec3& Position() const { return position; };
+  const glm::quat& Orientation() const { return orientation; };
+  float NearClip() const { return nearZ; };
+  float FarClip() const { return farZ; };
 
   glm::vec3 Forward() const
   {
@@ -111,8 +87,7 @@ public:
     return -transposed[0];
   }
 
-  void
-  SetLookAt(const glm::vec3& eye, const glm::vec3& lookAt, const glm::vec3& up)
+  void SetLookAt(const glm::vec3& eye, const glm::vec3& lookAt, const glm::vec3& up)
   {
     view = glm::transpose(glm::lookAtLH(eye, lookAt, up));
     world = glm::transpose(glm::inverse(view));
@@ -167,10 +142,7 @@ public:
     viewProjection = view * projection;
   }
 
-  virtual bool IsOrthographic() const
-  {
-    return false;
-  }
+  virtual bool IsOrthographic() const { return false; }
 };
 
 // Camera with an orthographic projection
@@ -185,20 +157,13 @@ protected:
 
   virtual void CreateProjection() override
   {
-    projection =
-        glm::mat4(glm::orthoLH_ZO(xMin, xMax, yMin, yMax, nearZ, farZ));
+    projection = glm::mat4(glm::orthoLH_ZO(xMin, xMax, yMin, yMax, nearZ, farZ));
     projection = glm::transpose(projection);
     viewProjection = view * projection;
   }
 
 public:
-  void Initialize(
-      float minX,
-      float minY,
-      float maxX,
-      float maxY,
-      float nearClip,
-      float farClip)
+  void Initialize(float minX, float minY, float maxX, float maxY, float nearClip, float farClip)
   {
     CameraBase::Initialize(nearClip, farClip);
 
@@ -214,22 +179,10 @@ public:
     CreateProjection();
   }
 
-  float MinX() const
-  {
-    return xMin;
-  };
-  float MinY() const
-  {
-    return yMin;
-  };
-  float MaxX() const
-  {
-    return xMax;
-  };
-  float MaxY() const
-  {
-    return yMax;
-  };
+  float MinX() const { return xMin; };
+  float MinY() const { return yMin; };
+  float MaxX() const { return xMax; };
+  float MaxY() const { return yMax; };
 
   void SetMinX(float minX)
   {
@@ -252,10 +205,7 @@ public:
     CreateProjection();
   }
 
-  bool IsOrthographic() const override
-  {
-    return true;
-  }
+  bool IsOrthographic() const override { return true; }
 };
 
 // Camera with a perspective projection
@@ -270,19 +220,13 @@ protected:
 
   virtual void CreateProjection() override
   {
-    projection = glm::mat4(
-        glm::perspectiveFovLH_ZO(fov, width, width / aspect, nearZ, farZ));
+    projection = glm::mat4(glm::perspectiveFovLH_ZO(fov, width, width / aspect, nearZ, farZ));
     projection = glm::transpose(projection);
     viewProjection = view * projection;
   }
 
 public:
-  void Initialize(
-      float aspectRatio,
-      float fieldOfView,
-      float nearClip,
-      float farClip,
-      float w)
+  void Initialize(float aspectRatio, float fieldOfView, float nearClip, float farClip, float w)
   {
     CameraBase::Initialize(nearClip, farClip);
     assert(aspectRatio > 0);
@@ -295,14 +239,8 @@ public:
     CreateProjection();
   }
 
-  float AspectRatio() const
-  {
-    return aspect;
-  };
-  float FieldOfView() const
-  {
-    return fov;
-  };
+  float AspectRatio() const { return aspect; };
+  float FieldOfView() const { return fov; };
 
   void SetAspectRatio(float aspectRatio)
   {
@@ -332,26 +270,18 @@ public:
       float farClip = 100.0f,
       float width = 1024.0f)
   {
-    PerspectiveCamera::Initialize(
-        aspectRatio, fieldOfView, nearClip, farClip, width);
+    PerspectiveCamera::Initialize(aspectRatio, fieldOfView, nearClip, farClip, width);
     xRot = 0.0f;
     yRot = 0.0f;
   }
 
-  float XRotation() const
-  {
-    return xRot;
-  };
-  float YRotation() const
-  {
-    return yRot;
-  };
+  float XRotation() const { return xRot; };
+  float YRotation() const { return yRot; };
 
   void SetXRotation(float xRotation)
   {
     xRot = glm::clamp(xRotation, -glm::half_pi<float>(), glm::half_pi<float>());
-    glm::quat myquaternion =
-        glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
+    glm::quat myquaternion = glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
     SetOrientation(myquaternion);
   }
 
@@ -365,8 +295,7 @@ public:
     // Perform the modulo, unsigned
     float fTemp = fabsf(Angle);
     fTemp = fTemp - (2.0f * glm::pi<float>() *
-                     static_cast<float>(
-                         static_cast<int32_t>(fTemp / glm::two_pi<float>())));
+                     static_cast<float>(static_cast<int32_t>(fTemp / glm::two_pi<float>())));
     // Restore the number to the range of -XM_PI to XM_PI-epsilon
     fTemp = fTemp - glm::pi<float>();
     // If the modulo'd value was negative, restore negation
@@ -380,8 +309,7 @@ public:
   void SetYRotation(float yRotation)
   {
     yRot = XMScalarModAngle(yRotation);
-    glm::quat myquaternion =
-        glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
+    glm::quat myquaternion = glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
     SetOrientation(myquaternion);
   }
 };

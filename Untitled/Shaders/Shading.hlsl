@@ -67,6 +67,7 @@ float3 CalcLighting(in float3 normal, in float3 lightDir, in float3 peakIrradian
         const float nDotV = saturate(dot(normal, view));
         float3 h = normalize(view + lightDir);
         float specular = GGX_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
+        // float specular = Beckmann_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
         lighting += specular;
     }
 

@@ -711,7 +711,7 @@ void RenderManager::renderDeferred()
     MeshVSConstants vsConstants;
     vsConstants.World = world;
     vsConstants.View = glm::transpose(camera.ViewMatrix());
-    vsConstants.WorldViewProjection = glm::transpose(world * camera.ViewProjectionMatrix());
+    vsConstants.WorldViewProjection = world * glm::transpose(camera.ViewProjectionMatrix());
     vsConstants.NearClip = camera.NearClip();
     vsConstants.FarClip = camera.FarClip();
     BindTempConstantBuffer(m_CmdList, vsConstants, 0, CmdListMode::Graphics);
@@ -986,7 +986,7 @@ void RenderManager::onLoad()
 
   D3D_EXEC_CHECKED(DXGIDeclareAdapterRemovalSupport());
 
-  timerInit(&m_Timer);
+  m_Timer.init();
 
   // Load pipeline
   loadD3D12Pipeline();
@@ -1003,6 +1003,8 @@ void RenderManager::onLoad()
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
 {
+  m_Timer.deinit();
+
   // Ensure that the GPU is no longer referencing resources that are about to
   // be cleaned up by the destructor.
   waitForRenderContext();
@@ -1045,13 +1047,14 @@ void RenderManager::onDestroy()
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
 {
+  m_Timer.update();
+
   // Wait for the previous Present to complete.
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
 
-  timerTick(&m_Timer, nullptr);
-
   // TODO: Better camera input handling
-  static float CamRotSpeed = 0.005f;
+  // static float CamRotSpeed = 0.0005f * m_Timer.m_DeltaSecondsF;
+  static float CamRotSpeed = 0.001f;
 
   // Rotate the camera with the mouse
   {
@@ -1063,7 +1066,7 @@ void RenderManager::onUpdate()
     float dy = static_cast<float>(pos.y - prevMousePos.y);
     bool rbPressed = (GetKeyState(VK_RBUTTON) & 0x8000) > 0;
     // bool lbPressed = (GetKeyState(VK_LBUTTON) & 0x8000) > 0;
-    if (rbPressed)
+    if (rbPressed && isMouseOverWindow(pos))
     {
       float xRot = camera.XRotation();
       float yRot = camera.YRotation();
@@ -1165,7 +1168,8 @@ void RenderManager::onRender()
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyDown(UINT8 p_Key)
 {
-  float CamMoveSpeed = 0.1f;
+  // float CamMoveSpeed = 0.1f;
+  float CamMoveSpeed = 5.5f * m_Timer.m_DeltaSecondsF;
   glm::vec3 camPos = camera.Position();
 
   switch (p_Key)

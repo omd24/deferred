@@ -579,3 +579,16 @@ inline MsgFunction g_ImguiCallback;
 // TODO: appsettings
 constexpr uint32_t g_AppSettingsCBufferRegister = 12u;
 //---------------------------------------------------------------------------//
+inline bool isMouseOverWindow(POINT p_MousePos)
+{
+  bool ret = false;
+  if (g_WinHandle != NULL && GetForegroundWindow() == g_WinHandle)
+  {
+    RECT clientRect;
+    GetClientRect(g_WinHandle, &clientRect);
+    ret =
+        (p_MousePos.x >= 0 && p_MousePos.x < clientRect.right && p_MousePos.y >= 0 &&
+         p_MousePos.y < clientRect.bottom);
+  }
+  return ret;
+}

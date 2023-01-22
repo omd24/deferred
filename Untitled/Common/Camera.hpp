@@ -32,7 +32,7 @@ protected:
   virtual void CreateProjection() = 0;
   void WorldMatrixChanged()
   {
-    view = (glm::inverse(world));
+    view = glm::inverse(world);
     viewProjection = view * projection;
   }
 
@@ -122,7 +122,6 @@ public:
     world[0][3] = position[0];
     world[1][3] = position[1];
     world[2][3] = position[2];
-    // world = glm::transpose(world);
     WorldMatrixChanged();
   }
   void SetNearClip(float newNearClip)
@@ -137,8 +136,7 @@ public:
   }
   void SetProjection(const glm::mat4& newProjection)
   {
-    projection = newProjection;
-    projection = glm::transpose(projection);
+    projection = glm::transpose(newProjection);
     viewProjection = view * projection;
   }
 

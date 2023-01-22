@@ -103,7 +103,8 @@ float3 GGX_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 float Beckmann_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 {
     float nDotL = saturate(dot(n, l));
-    float nDotV = saturate(dot(n, v));
+    // clamping nDotV to zero causes black pixel artifacts :sweat:
+    float nDotV = max(dot(n, v), 0.0001f);
 
     // distribution term:
     float d = Beckmann_D(alpha, n, h, v, l);

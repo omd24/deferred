@@ -87,7 +87,7 @@ float3 GGX_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
     float alpha2 = alpha * alpha;
 
     // The distribution term (eq rearranged to avoid extra cos4 computation)
-    float d = alpha2 / (Pi * pow(nDotH4 * (alpha2 - 1) + 1, 2.0f));
+    float d = alpha2 / (Pi * pow(nDotH2 * (alpha2 - 1) + 1, 2.0f));
     return d;
 }
 
@@ -100,7 +100,7 @@ float3 GGX_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 //-------------------------------------------------------------------------------------------------
 // Beckmann specular Brdf
 //-------------------------------------------------------------------------------------------------
-float Beckmann_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
+float3 Beckmann_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 {
     float nDotL = saturate(dot(n, l));
     // clamping nDotV to zero causes black pixel artifacts :sweat:
@@ -122,7 +122,7 @@ float Beckmann_Specular(in float3 specularAlbedo, in float alpha, in float3 n, i
 //-------------------------------------------------------------------------------------------------
 // GGX specular Brdf
 //-------------------------------------------------------------------------------------------------
-float GGX_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
+float3 GGX_Specular(in float3 specularAlbedo, in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 {
     float nDotL = saturate(dot(n, l));
     // clamping nDotV to zero causes black pixel artifacts :sweat:

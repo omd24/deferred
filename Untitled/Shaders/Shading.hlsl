@@ -58,20 +58,24 @@ float3 CalcLighting(in float3 normal, in float3 lightDir, in float3 peakIrradian
                     in float3 diffuseAlbedo, in float3 specularAlbedo, in float roughness,
                     in float3 positionWS, in float3 cameraPosWS)
 {
-    float3 lighting = diffuseAlbedo * (1.0f / 3.14159f);
+    // diffuse term of BRDF model (Lambertian)
+    float3 diffuse = diffuseAlbedo * (1.0f / Pi);
 
     float3 view = normalize(cameraPosWS - positionWS);
+    float3 h = normalize(view + lightDir);
     const float nDotL = saturate(dot(normal, lightDir));
+    float nDotV = saturate(dot(normal, view));
+
     if(nDotL > 0.0f)
     {
-        const float nDotV = saturate(dot(normal, view));
-        float3 h = normalize(view + lightDir);
-        float specular = GGX_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
-        // float specular = Beckmann_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
-        lighting += specular;
+        float3 specular = GGX_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
+        // float3 specular = Beckmann_Specular(specularAlbedo, roughness, normal, h, view, lightDir);
+        return (specular + diffuse) * nDotL * peakIrradiance;
     }
-
-    return lighting * nDotL * peakIrradiance;
+    else
+    {
+        return diffuse * nDotL * peakIrradiance;
+    }
 }
 //-------------------------------------------------------------------------------------------------
 // Calculates the full shading result for a single pixel.
@@ -152,15 +156,9 @@ float3 ShadePixel(in ShadingInput input)
         }
     }
 
-    // return albedoMap.xyz;
-
     float3 ambient = 1.0f; // TODO!
     output += ambient * diffuseAlbedo;
 
     output = clamp(output, 0.0f, FP16Max);
-
-    // DEBUG:
-    //return albedoMap.xyz;
-
     return output;
 }

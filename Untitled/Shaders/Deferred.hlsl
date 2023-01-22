@@ -236,11 +236,5 @@ void CS(in uint3 DispatchID : SV_DispatchThreadID, in uint GroupIndex : SV_Group
 {
 
     const uint2 pixelPos = DispatchID.xy;
-
-    float3 inp = float3(1.0f, 1.0f, 1.0f);
-    float3 temp = CalcLighting(inp, inp, inp,
-                    inp, inp, 1.0f,
-                    inp, inp);
-
     ShadeSample(pixelPos);
 }

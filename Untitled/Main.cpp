@@ -25,11 +25,11 @@ static LRESULT CALLBACK msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPA
     return 0;
 
   case WM_KEYDOWN:
-    g_Renderer->onKeyDown(static_cast<UINT8>(p_WParam));
+    // Now handling this manually
+    // g_Renderer->onKeyDown(static_cast<UINT8>(p_WParam));
     return 0;
 
   case WM_KEYUP:
-    g_Renderer->onKeyUp(static_cast<UINT8>(p_WParam));
     return 0;
 
   case WM_PAINT: {

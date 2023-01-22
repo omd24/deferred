@@ -579,6 +579,7 @@ inline MsgFunction g_ImguiCallback;
 // TODO: appsettings
 constexpr uint32_t g_AppSettingsCBufferRegister = 12u;
 //---------------------------------------------------------------------------//
+// TODO: move this to input system:
 inline bool isMouseOverWindow(POINT p_MousePos)
 {
   bool ret = false;
@@ -592,3 +593,4 @@ inline bool isMouseOverWindow(POINT p_MousePos)
   }
   return ret;
 }
+//---------------------------------------------------------------------------//

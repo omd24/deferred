@@ -2,6 +2,7 @@
 #include "ImguiHelper.hpp"
 #include <pix3.h>
 #include <algorithm>
+#include "Common/Input.hpp"
 
 //---------------------------------------------------------------------------//
 // Internal variables
@@ -1052,12 +1053,10 @@ void RenderManager::onUpdate()
   // Wait for the previous Present to complete.
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
 
-  // TODO: Better camera input handling
-  // static float CamRotSpeed = 0.0005f * m_Timer.m_DeltaSecondsF;
-  static float CamRotSpeed = 0.001f;
-
   // Rotate the camera with the mouse
   {
+    // static float CamRotSpeed = 0.0005f * m_Timer.m_DeltaSecondsF;
+    static float CamRotSpeed = 0.001f;
     POINT pos;
     GetCursorPos(&pos);
     if (g_WinHandle)
@@ -1076,6 +1075,30 @@ void RenderManager::onUpdate()
       camera.SetYRotation(yRot);
     }
     prevMousePos = pos;
+  }
+
+  // Keyboard input handling
+  {
+    float CamMoveSpeed = 5.0f * m_Timer.m_DeltaSecondsF;
+    KeyboardState kbState = KeyboardState::GetKeyboardState(g_WinHandle);
+    // Move the camera with keyboard input
+    if (kbState.IsKeyDown(KeyboardState::LeftShift))
+      CamMoveSpeed *= 0.25f;
+
+    glm::vec3 camPos = camera.Position();
+    if (kbState.IsKeyDown(KeyboardState::W))
+      camPos += camera.Forward() * CamMoveSpeed;
+    else if (kbState.IsKeyDown(KeyboardState::S))
+      camPos += camera.Back() * CamMoveSpeed;
+    if (kbState.IsKeyDown(KeyboardState::A))
+      camPos += camera.Left() * CamMoveSpeed;
+    else if (kbState.IsKeyDown(KeyboardState::D))
+      camPos += camera.Right() * CamMoveSpeed;
+    if (kbState.IsKeyDown(KeyboardState::Q))
+      camPos += camera.Up() * CamMoveSpeed;
+    else if (kbState.IsKeyDown(KeyboardState::E))
+      camPos += camera.Down() * CamMoveSpeed;
+    camera.SetPosition(camPos);
   }
 
   // Update light uniforms

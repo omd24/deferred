@@ -100,6 +100,9 @@
     <ClInclude Include="Common\PostFxHelper.hpp">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="Common\Input.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

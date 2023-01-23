@@ -129,9 +129,7 @@ private:
   ID3D12PipelineState* deferredPSO = nullptr;
 
   // Pipeline objects.
-  CD3DX12_VIEWPORT m_Viewport;
-  CD3DX12_RECT m_ScissorRect;
-  IDXGISwapChain3Ptr m_Swc;
+  IDXGISwapChain4Ptr m_Swc;
   RenderTexture m_RenderTargets[FRAME_COUNT]; // swc backbuffers
   UINT m_FrameIndex;
   ID3D12CommandAllocatorPtr m_CmdAllocs[FRAME_COUNT];
@@ -166,6 +164,7 @@ private:
   void releaseD3DResources();
   void renderForward();
   void renderDeferred();
+  void createRenderTargets();
 };
 
 //---------------------------------------------------------------------------//

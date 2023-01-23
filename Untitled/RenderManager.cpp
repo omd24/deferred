@@ -117,29 +117,31 @@ void RenderManager::loadD3D12Pipeline()
   D3D_NAME_OBJECT(m_CmdQue);
 
   // Describe and create the swap chain.
-  DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+  DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
+  swapChainDesc.OutputWindow = g_WinHandle;
   swapChainDesc.BufferCount = FRAME_COUNT;
-  swapChainDesc.Width = m_Info.m_Width;
-  swapChainDesc.Height = m_Info.m_Height;
-  swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  swapChainDesc.BufferDesc.Width = m_Info.m_Width;
+  swapChainDesc.BufferDesc.Height = m_Info.m_Height;
+  swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
   swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
   swapChainDesc.SampleDesc.Count = 1;
-  swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+  swapChainDesc.Windowed = true;
+  swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH |
+                        DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
+                        DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
-  IDXGISwapChain1Ptr swapChain;
-  D3D_EXEC_CHECKED(factory->CreateSwapChainForHwnd(
+  IDXGISwapChain* tempSwapChain;
+  D3D_EXEC_CHECKED(factory->CreateSwapChain(
       m_CmdQue.GetInterfacePtr(), // Swc needs the queue to force a flush on it.
-      g_WinHandle,
       &swapChainDesc,
-      nullptr,
-      nullptr,
-      &swapChain));
+      &tempSwapChain));
 
   // This sample does not support fullscreen transitions.
   D3D_EXEC_CHECKED(factory->MakeWindowAssociation(g_WinHandle, DXGI_MWA_NO_ALT_ENTER));
 
-  D3D_EXEC_CHECKED(swapChain->QueryInterface(IID_PPV_ARGS(&m_Swc)));
+  D3D_EXEC_CHECKED(tempSwapChain->QueryInterface(IID_PPV_ARGS(&m_Swc)));
+  tempSwapChain->Release();
 
   m_FrameIndex = m_Swc->GetCurrentBackBufferIndex();
   m_SwapChainEvent = m_Swc->GetFrameLatencyWaitableObject();
@@ -351,6 +353,74 @@ bool RenderManager::createPSOs()
   return true;
 }
 //---------------------------------------------------------------------------//
+void RenderManager::createRenderTargets()
+{
+  // Depth buffer
+  {
+    DepthBufferInit dbInit;
+    dbInit.Width = m_Info.m_Width;
+    dbInit.Height = m_Info.m_Height;
+    dbInit.Format = DXGI_FORMAT_D32_FLOAT;
+    dbInit.MSAASamples = 1;
+    dbInit.InitialState =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
+    dbInit.Name = L"Main Depth Buffer";
+    depthBuffer.init(dbInit);
+  }
+
+  // Create gbuffers:
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Tangent Frame Target";
+    tangentFrameTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_SNORM;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"UV Target";
+    uvTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R8_UINT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Material ID Target";
+    materialIDTarget.init(rtInit);
+  }
+
+  // Create deferred target:
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = m_Info.m_Width;
+    rtInit.Height = m_Info.m_Height;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = true;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"Main Target";
+    deferredTarget.init(rtInit);
+  }
+}
+//---------------------------------------------------------------------------//
 void RenderManager::loadAssets()
 {
   // set up camera
@@ -423,69 +493,9 @@ void RenderManager::loadAssets()
   materialTextureIndices.init(sbInit);
   materialTextureIndices.resource()->SetName(L"Material Texture Indices");
 
-  // Depth buffer
+  // Create render targets:
   {
-    DepthBufferInit dbInit;
-    dbInit.Width = m_Info.m_Width;
-    dbInit.Height = m_Info.m_Height;
-    dbInit.Format = DXGI_FORMAT_D32_FLOAT;
-    dbInit.MSAASamples = 1;
-    dbInit.InitialState =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
-    dbInit.Name = L"Main Depth Buffer";
-    depthBuffer.init(dbInit);
-  }
-
-  // Create gbuffers:
-  {
-    RenderTextureInit rtInit;
-    rtInit.Width = m_Info.m_Width;
-    rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
-    rtInit.MSAASamples = 1;
-    rtInit.ArraySize = 1;
-    rtInit.CreateUAV = false;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"Tangent Frame Target";
-    tangentFrameTarget.init(rtInit);
-  }
-  {
-    RenderTextureInit rtInit;
-    rtInit.Width = m_Info.m_Width;
-    rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R16G16B16A16_SNORM;
-    rtInit.MSAASamples = 1;
-    rtInit.ArraySize = 1;
-    rtInit.CreateUAV = false;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"UV Target";
-    uvTarget.init(rtInit);
-  }
-  {
-    RenderTextureInit rtInit;
-    rtInit.Width = m_Info.m_Width;
-    rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R8_UINT;
-    rtInit.MSAASamples = 1;
-    rtInit.ArraySize = 1;
-    rtInit.CreateUAV = false;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"Material ID Target";
-    materialIDTarget.init(rtInit);
-  }
-
-  // Create deferred target:
-  {
-    RenderTextureInit rtInit;
-    rtInit.Width = m_Info.m_Width;
-    rtInit.Height = m_Info.m_Height;
-    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    rtInit.MSAASamples = 1;
-    rtInit.ArraySize = 1;
-    rtInit.CreateUAV = true;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"Main Target";
-    deferredTarget.init(rtInit);
+    createRenderTargets();
   }
 
   {
@@ -980,8 +990,6 @@ void RenderManager::onLoad()
 
   UINT width = m_Info.m_Width;
   UINT height = m_Info.m_Height;
-  m_Viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
-  m_ScissorRect = CD3DX12_RECT(0, 0, static_cast<LONG>(width), static_cast<LONG>(height));
 
   setArrayToZero(m_FrameFenceValues);
 
@@ -1236,7 +1244,92 @@ void RenderManager::onKeyDown(UINT8 p_Key)
 //---------------------------------------------------------------------------//
 void RenderManager::onKeyUp(UINT8 p_Key) {}
 //---------------------------------------------------------------------------//
-void RenderManager::onResize() {}
+void RenderManager::onResize()
+{
+  RECT clientRect;
+  ::GetClientRect(g_WinHandle, &clientRect);
+  m_Info.m_Width = clientRect.right;
+  m_Info.m_Height = clientRect.bottom;
+
+  // flush gpu before resizing swapchain
+  waitForRenderContext();
+
+  D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), nullptr));
+
+  // release all PSOs:
+  gbufferPSO->Release();
+  // m_PostFx.deinit();
+  deferredPSO->Release();
+
+  // Release all references
+  for (UINT i = 0; i < FRAME_COUNT; ++i)
+  {
+    m_RenderTargets[i].m_Texture.Resource->Release();
+    RTVDescriptorHeap.FreePersistent(m_RenderTargets[i].m_RTV);
+  }
+
+  DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  DXGI_RATIONAL refreshRate = {};
+  refreshRate.Numerator = 60;
+  refreshRate.Denominator = 1;
+
+  m_Swc->ResizeBuffers(
+      FRAME_COUNT,
+      m_Info.m_Width,
+      m_Info.m_Height,
+      format,
+      DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
+          DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+
+  // Re-create an RTV for each back buffer
+  for (UINT i = 0; i < FRAME_COUNT; i++)
+  {
+    m_RenderTargets[i].m_RTV = RTVDescriptorHeap.AllocatePersistent().Handles[0];
+    D3D_EXEC_CHECKED(
+        m_Swc->GetBuffer(uint32_t(i), IID_PPV_ARGS(&m_RenderTargets[i].m_Texture.Resource)));
+
+    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    rtvDesc.Format = format;
+    rtvDesc.Texture2D.MipSlice = 0;
+    rtvDesc.Texture2D.PlaneSlice = 0;
+    m_Dev->CreateRenderTargetView(
+        m_RenderTargets[i].m_Texture.Resource, &rtvDesc, m_RenderTargets[i].m_RTV);
+
+    m_RenderTargets[i].m_Texture.Resource->SetName(MakeString(L"Back Buffer %u", i).c_str());
+
+    m_RenderTargets[i].m_Texture.Width = m_Info.m_Width;
+    m_RenderTargets[i].m_Texture.Height = m_Info.m_Height;
+    m_RenderTargets[i].m_Texture.ArraySize = 1;
+    m_RenderTargets[i].m_Texture.Format = format;
+    m_RenderTargets[i].m_Texture.NumMips = 1;
+    m_RenderTargets[i].m_MSAASamples = 1;
+  }
+  m_FrameIndex = m_Swc->GetCurrentBackBufferIndex();
+
+  float aspect = float(m_Info.m_Width) / m_Info.m_Height;
+  camera.SetAspectRatio(aspect);
+
+  // Deinit render target(s):
+  // depthBuffer.deinit();
+  // uvTarget.deinit();
+  // tangentFrameTarget.deinit();
+  // materialIDTarget.deinit();
+  // deferredTarget.deinit();
+
+  createRenderTargets();
+
+  // Re-create psos:
+  createPSOs();
+  // m_PostFx.init();
+
+  // Execute the resize commands.
+  D3D_EXEC_CHECKED(m_CmdList->Close());
+  ID3D12CommandList* cmdsLists[] = {m_CmdList.GetInterfacePtr()};
+  m_CmdQue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
+
+  waitForRenderContext();
+}
 //---------------------------------------------------------------------------//
 void RenderManager::onCodeChange() {}
 //---------------------------------------------------------------------------//

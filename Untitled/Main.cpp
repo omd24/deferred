@@ -6,6 +6,7 @@
 
 RenderManager* g_Renderer;
 std::unique_ptr<FileWatcher> g_FileWatcher;
+bool g_Resizing = false;
 
 static LRESULT CALLBACK msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPARAM p_LParam)
 {
@@ -58,6 +59,33 @@ static LRESULT CALLBACK msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPA
     return 0;
   }
 
+  case WM_SIZE: {
+    // TODO: handle user dragging resize bars
+    // TODO: handle minimize/maximize/pause!
+    // TODO: handle fullscreen!
+    // g_Renderer->m_Info.m_Width = LOWORD(p_LParam);
+    // g_Renderer->m_Info.m_Height = HIWORD(p_LParam);
+    if (g_Resizing)
+    {
+      return 0;
+    }
+    else
+    {
+      g_Renderer->onResize();
+      return 0;
+    }
+  }
+  // WM_EXITSIZEMOVE is sent when the user grabs the resize bars.
+  case WM_ENTERSIZEMOVE:
+    g_Resizing = true;
+    return 0;
+
+  // WM_EXITSIZEMOVE is sent when the user releases the resize bars.
+  // Here we reset everything based on the new window dimensions.
+  case WM_EXITSIZEMOVE:
+    g_Resizing = false;
+    g_Renderer->onResize();
+    return 0;
   case WM_DESTROY:
     PostQuitMessage(0);
     return 0;

@@ -9,8 +9,7 @@ namespace ImGuiHelper
 
 static ID3D12DescriptorHeap* g_ImguiHeap = nullptr;
 
-static void WindowMessageCallback(
-    void* context, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+static void WindowMessageCallback(void* context, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
   ImGuiIO& io = ImGui::GetIO();
   switch (msg)
@@ -55,6 +54,62 @@ static void WindowMessageCallback(
   }
 }
 
+static void renderInternal()
+{
+  // Rendering
+  {
+
+    static float f = 0.0f;
+    static int counter = 0;
+    // Our state
+    bool show_demo_window = true;
+    bool show_another_window = false;
+
+    ImGuiWindowFlags window_flags = 0;
+    // window_flags |= ImGuiWindowFlags_NoTitleBar;
+    // window_flags |= ImGuiWindowFlags_NoScrollbar;
+    // window_flags |= ImGuiWindowFlags_MenuBar;
+    // window_flags |= ImGuiWindowFlags_NoMove;
+    // window_flags |= ImGuiWindowFlags_NoResize;
+    // window_flags |= ImGuiWindowFlags_NoCollapse;
+    // window_flags |= ImGuiWindowFlags_NoNav;
+    // window_flags |= ImGuiWindowFlags_NoBackground;
+    // window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
+
+    // Note! to disable close button, pass NULL
+    static bool open = true;
+    ImGui::Begin("Hello, world!", &open, window_flags); // Create a window called "Hello,
+                                                        // world!" and append into it.
+
+    // if (!open)
+    //  ImGui::SetWindowCollapsed(true);
+    // else
+    //  ImGui::SetWindowCollapsed(false);
+
+    ImGui::Text("This is some useful text."); // Display some text (you can use
+                                              // a format strings too)
+    ImGui::Checkbox(
+        "Demo Window",
+        &show_demo_window); // Edit bools storing our window open/close state
+    ImGui::Checkbox("Another Window", &show_another_window);
+
+    ImGui::SliderFloat("float", &f, 0.0f,
+                       1.0f); // Edit 1 float using a slider from 0.0f to 1.0f
+
+    if (ImGui::Button("Button")) // Buttons return true when clicked (most
+                                 // widgets return true when edited/activated)
+      counter++;
+    ImGui::SameLine();
+    ImGui::Text("counter = %d", counter);
+
+    ImGui::Text(
+        "Application average %.3f ms/frame (%.1f FPS)",
+        1000.0f / ImGui::GetIO().Framerate,
+        ImGui::GetIO().Framerate);
+    ImGui::End();
+  }
+}
+
 void init(HWND& window, ID3D12Device* dev)
 {
   g_ImguiCallback = WindowMessageCallback;
@@ -84,9 +139,33 @@ void init(HWND& window, ID3D12Device* dev)
 
   io.ImeWindowHandle = window;
 
-  // Setup Dear ImGui style
-  ImGui::StyleColorsDark();
-  // ImGui::StyleColorsLight();
+  // Styling imgui:
+  {
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.FrameBorderSize = 1.0f;
+    // ImGui::StyleColorsClassic();
+    ImGui::StyleColorsDark();
+    // ImGui::StyleColorsLight();
+    ImVec4 pitchBlack = {.0f, .0f, .0f, 1.0f};
+    ImVec4 black = {.10f, .10f, .10f, 1.0f};
+    ImVec4 darkGray = {.20f, .20f, .20f, 1.0f};
+    ImVec4 gray = {.30f, .30f, .30f, 1.0f};
+    ImVec4 lightGray = {.45f, .45f, .45f, 1.0f};
+    ImVec4 paleGray = {.75f, .75f, .75f, 1.0f};
+    ImVec4 white = {1.0f, 1.0f, 1.0f, 1.0f};
+    memcpy(&style.Colors[ImGuiCol_WindowBg], &pitchBlack, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_FrameBg], &darkGray, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_FrameBgActive], &pitchBlack, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_FrameBgHovered], &gray, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_TitleBg], &pitchBlack, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_TitleBgActive], &pitchBlack, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_SliderGrab], &paleGray, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_SliderGrabActive], &gray, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_Button], &black, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_ButtonActive], &darkGray, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_ButtonHovered], &pitchBlack, sizeof(ImVec4));
+    memcpy(&style.Colors[ImGuiCol_CheckMark], &paleGray, sizeof(ImVec4));
+  }
 
   // Create a dedicated descriptor heap for imgui
   {
@@ -119,11 +198,7 @@ void deinit()
   }
 }
 
-void beginFrame(
-    uint32_t displayWidth,
-    uint32_t displayHeight,
-    float timeDelta,
-    ID3D12Device* dev)
+void beginFrame(uint32_t displayWidth, uint32_t displayHeight, float timeDelta, ID3D12Device* dev)
 {
   ImGuiIO& io = ImGui::GetIO();
   io.DisplaySize = ImVec2(float(displayWidth), float(displayHeight));
@@ -145,42 +220,7 @@ void endFrame(
     uint32_t displayWidth,
     uint32_t displayHeight)
 {
-  // Rendering
-  {
-    static float f = 0.0f;
-    static int counter = 0;
-    // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
-    ImGui::Begin("Hello, world!"); // Create a window called "Hello, world!" and
-                                   // append into it.
-
-    ImGui::Text("This is some useful text."); // Display some text (you can use
-                                              // a format strings too)
-    ImGui::Checkbox(
-        "Demo Window",
-        &show_demo_window); // Edit bools storing our window open/close state
-    ImGui::Checkbox("Another Window", &show_another_window);
-
-    ImGui::SliderFloat(
-        "float",
-        &f,
-        0.0f,
-        1.0f); // Edit 1 float using a slider from 0.0f to 1.0f
-
-    if (ImGui::Button("Button")) // Buttons return true when clicked (most
-                                 // widgets return true when edited/activated)
-      counter++;
-    ImGui::SameLine();
-    ImGui::Text("counter = %d", counter);
-
-    ImGui::Text(
-        "Application average %.3f ms/frame (%.1f FPS)",
-        1000.0f / ImGui::GetIO().Framerate,
-        ImGui::GetIO().Framerate);
-    ImGui::End();
-  }
-
+  renderInternal();
   ImGui::Render();
 
   // Render Dear ImGui graphics

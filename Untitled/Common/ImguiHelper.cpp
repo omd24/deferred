@@ -4,6 +4,8 @@
 #include "ImGui/imgui_impl_win32.h"
 #include "ImGui/imgui_impl_dx12.h"
 
+#include "../AppSettings.hpp"
+
 namespace ImGuiHelper
 {
 
@@ -58,13 +60,6 @@ static void renderInternal()
 {
   // Rendering
   {
-
-    static float f = 0.0f;
-    static int counter = 0;
-    // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
-
     ImGuiWindowFlags window_flags = 0;
     // window_flags |= ImGuiWindowFlags_NoTitleBar;
     // window_flags |= ImGuiWindowFlags_NoScrollbar;
@@ -78,29 +73,21 @@ static void renderInternal()
 
     // Note! to disable close button, pass NULL
     static bool open = true;
-    ImGui::Begin("Hello, world!", &open, window_flags); // Create a window called "Hello,
-                                                        // world!" and append into it.
+    ImGui::Begin("App Settings:", &open, window_flags);
 
-    // if (!open)
-    //  ImGui::SetWindowCollapsed(true);
-    // else
-    //  ImGui::SetWindowCollapsed(false);
-
-    ImGui::Text("This is some useful text."); // Display some text (you can use
-                                              // a format strings too)
-    ImGui::Checkbox(
-        "Demo Window",
-        &show_demo_window); // Edit bools storing our window open/close state
-    ImGui::Checkbox("Another Window", &show_another_window);
-
-    ImGui::SliderFloat("float", &f, 0.0f,
-                       1.0f); // Edit 1 float using a slider from 0.0f to 1.0f
-
-    if (ImGui::Button("Button")) // Buttons return true when clicked (most
-                                 // widgets return true when edited/activated)
-      counter++;
-    ImGui::SameLine();
-    ImGui::Text("counter = %d", counter);
+    // App settings controls:
+    ImGui::Checkbox("Render Lights", (bool*)&AppSettings::RenderLights);
+    // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
+    ImGui::SliderFloat("Exposure", &AppSettings::Exposure, -24.0f, 24.0f);
+    ImGui::SliderFloat("Bloom-Xps", &AppSettings::BloomExposure, -10.0f, 0.0f);
+    ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f);
+    ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f);
+    // ImGui::Checkbox("Show Albedo", &AppSettings::ShowAlbedoMaps);
+    // ImGui::Checkbox("Show Normals", &AppSettings::ShowNormalMaps);
+    // ImGui::Checkbox("Show Specular", &AppSettings::ShowSpecular);
+    // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
+    // ImGui::Checkbox("Show UV Gradients", &AppSettings::ShowUVGradients);
+    // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
 
     ImGui::Text(
         "Application average %.3f ms/frame (%.1f FPS)",

@@ -3,6 +3,8 @@ Texture2D Tex2DTable[] : register(t0, space0);
 SamplerState PointSampler : register(s0);
 SamplerState LinearSampler : register(s1);
 
+#include "AppSettings.hlsl"
+
 struct SRVIndicesLayout
 {
     uint Idx0;
@@ -22,10 +24,6 @@ struct PSInput
     float2 TexCoord : TEXCOORD;
 };
 
-#define BLOOM_BLUR_SIGMA 2.5f
-#define BLOOM_EXPOSURE -4.0f
-#define BLOOM_MAGNITURE 1.0f
-#define EXPOSURE -14.0f
 #define FP16Scale 0.0009765625f // -10 EV (i.e., 2^-10) shift of light values
 
 //=================================================================================================
@@ -115,13 +113,13 @@ float4 Scale(in PSInput input) : SV_Target
 // Horizontal gaussian blur
 float4 BlurH(in PSInput input) : SV_Target
 {
-    return Blur(input, float2(1, 0), BLOOM_BLUR_SIGMA, false);
+    return Blur(input, float2(1, 0), AppSettings.BloomBlurSigma, false);
 }
 
 // Vertical gaussian blur
 float4 BlurV(in PSInput input) : SV_Target
 {
-    return Blur(input, float2(0, 1), BLOOM_BLUR_SIGMA, false);
+    return Blur(input, float2(0, 1), AppSettings.BloomBlurSigma, false);
 }
 
 // Applies exposure and tone mapping to the input
@@ -134,10 +132,10 @@ float4 ToneMap(in PSInput input) : SV_Target0
 
 #if 1
     // Add bloom
-    color += inputTexture1.Sample(LinearSampler, input.TexCoord).xyz * BLOOM_MAGNITURE * exp2(BLOOM_EXPOSURE);
+    color += inputTexture1.Sample(LinearSampler, input.TexCoord).xyz * AppSettings.BloomMagnitude * exp2(AppSettings.BloomExposure);
 
     // Apply exposure (accounting for the FP16 scale used for lighting and emissive sources)
-    color *= exp2(EXPOSURE) / FP16Scale;
+    color *= exp2(AppSettings.Exposure) / FP16Scale;
 
     // Tone map to sRGB color space with the appropriate transfer function applied
     color = ToneMapFilmicALU(color);

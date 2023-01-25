@@ -189,6 +189,7 @@
     <ClCompile Include="..\Externals\ImGui\imgui_impl_win32.cpp" />
     <ClCompile Include="..\Externals\ImGui\imgui_tables.cpp" />
     <ClCompile Include="..\Externals\ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="Common\D3D12Wrapper.cpp" />
     <ClCompile Include="Common\FileWatcher.cpp" />
     <ClCompile Include="Common\ImguiHelper.cpp" />
@@ -206,6 +207,7 @@
     <ClInclude Include="..\Externals\ImGui\imstb_rectpack.h" />
     <ClInclude Include="..\Externals\ImGui\imstb_textedit.h" />
     <ClInclude Include="..\Externals\ImGui\imstb_truetype.h" />
+    <ClInclude Include="AppSettings.hpp" />
     <ClInclude Include="Common\Camera.hpp" />
     <ClInclude Include="Common\D3D12Wrapper.hpp" />
     <ClInclude Include="Common\FileWatcher.hpp" />

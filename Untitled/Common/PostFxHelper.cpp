@@ -1,8 +1,15 @@
 #include "PostFxHelper.hpp"
 #include "d3dx12.h"
 #include "pix3.h"
+#include "../AppSettings.hpp"
 
 static const uint32_t MaxInputs = 8;
+
+namespace AppSettings
+{
+const extern uint32_t CBufferRegister;
+void bindCBufferGfx(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter);
+} // namespace AppSettings
 
 enum RootParams : uint32_t
 {
@@ -76,7 +83,7 @@ void PostFxHelper::init()
       rootParameters[RootParam_AppSettings].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
       rootParameters[RootParam_AppSettings].Descriptor.RegisterSpace = 0;
       rootParameters[RootParam_AppSettings].Descriptor.ShaderRegister =
-          g_AppSettingsCBufferRegister;
+          AppSettings::CBufferRegister;
 
       D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
       staticSamplers[0] = GetStaticSamplerState(SamplerState::Point, 0);
@@ -246,8 +253,7 @@ void PostFxHelper::postProcess(
 
   BindStandardDescriptorTable(m_CmdList, RootParam_StandardDescriptors, CmdListMode::Graphics);
 
-  // TODO: appsettings
-  // AppSettings::BindCBufferGfx(m_CmdList, RootParam_AppSettings);
+  AppSettings::bindCBufferGfx(m_CmdList, RootParam_AppSettings);
 
   uint32_t srvIndices[MaxInputs] = {};
   for (uint64_t i = 0; i < p_NumInputs; ++i)

@@ -46,6 +46,14 @@
 #include <thread>
 #include <mutex>
 
+#ifndef GLM_FORCE_RADIANS
+#  define GLM_FORCE_RADIANS
+#endif
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 //---------------------------------------------------------------------------//
 // Smart COM ptr definitions:
 //---------------------------------------------------------------------------//
@@ -576,9 +584,6 @@ inline void setWindowTitle(LPCWSTR p_Text, const std::wstring& p_Title)
 //---------------------------------------------------------------------------//
 typedef void (*MsgFunction)(void*, HWND, UINT, WPARAM, LPARAM);
 inline MsgFunction g_ImguiCallback;
-//---------------------------------------------------------------------------//
-// TODO: appsettings
-constexpr uint32_t g_AppSettingsCBufferRegister = 12u;
 //---------------------------------------------------------------------------//
 // TODO: move this to input system:
 inline bool isMouseOverWindow(POINT p_MousePos)

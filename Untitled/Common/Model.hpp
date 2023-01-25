@@ -8,14 +8,6 @@
 #include <string>
 #include <vector>
 
-#ifndef GLM_FORCE_RADIANS
-#define GLM_FORCE_RADIANS
-#endif
-
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/quaternion.hpp>
-
 struct aiMesh;
 
 struct MeshVertex
@@ -26,9 +18,7 @@ struct MeshVertex
   glm::vec3 Tangent;
   glm::vec3 Bitangent;
 
-  MeshVertex()
-  {
-  }
+  MeshVertex() {}
 
   MeshVertex(
       const glm::vec3& p,
@@ -88,14 +78,7 @@ struct MeshPart
   uint32_t IndexCount;
   uint32_t MaterialIdx;
 
-  MeshPart()
-      : VertexStart(0),
-        VertexCount(0),
-        IndexStart(0),
-        IndexCount(0),
-        MaterialIdx(0)
-  {
-  }
+  MeshPart() : VertexStart(0), VertexCount(0), IndexStart(0), IndexCount(0), MaterialIdx(0) {}
 };
 
 enum class IndexType
@@ -138,13 +121,7 @@ static const D3D12_INPUT_ELEMENT_DESC StandardInputElements[5] = {
      12,
      D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
      0},
-    {"UV",
-     0,
-     DXGI_FORMAT_R32G32_FLOAT,
-     0,
-     24,
-     D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-     0},
+    {"UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     {"TANGENT",
      0,
      DXGI_FORMAT_R32G32B32_FLOAT,
@@ -187,17 +164,11 @@ class Mesh
   friend class Model;
 
 public:
-  ~Mesh()
-  {
-    assert(numVertices == 0);
-  }
+  ~Mesh() { assert(numVertices == 0); }
 
   // Init from loaded files
   void InitFromAssimpMesh(
-      const aiMesh& assimpMesh,
-      float sceneScale,
-      MeshVertex* dstVertices,
-      uint16_t* dstIndices);
+      const aiMesh& assimpMesh, float sceneScale, MeshVertex* dstVertices, uint16_t* dstIndices);
 
   // Procedural generation
   void InitBox(
@@ -227,71 +198,26 @@ public:
   void Shutdown();
 
   // Accessors
-  const std::vector<MeshPart>& MeshParts() const
-  {
-    return meshParts;
-  }
-  uint64_t NumMeshParts() const
-  {
-    return meshParts.size();
-  }
+  const std::vector<MeshPart>& MeshParts() const { return meshParts; }
+  uint64_t NumMeshParts() const { return meshParts.size(); }
 
-  uint32_t NumVertices() const
-  {
-    return numVertices;
-  }
-  uint32_t NumIndices() const
-  {
-    return numIndices;
-  }
-  uint32_t VertexOffset() const
-  {
-    return vtxOffset;
-  }
-  uint32_t IndexOffset() const
-  {
-    return idxOffset;
-  }
+  uint32_t NumVertices() const { return numVertices; }
+  uint32_t NumIndices() const { return numIndices; }
+  uint32_t VertexOffset() const { return vtxOffset; }
+  uint32_t IndexOffset() const { return idxOffset; }
 
-  IndexType IndexBufferType() const
-  {
-    return IndexType::Index16Bit;
-  }
-  DXGI_FORMAT IndexBufferFormat() const
-  {
-    return DXGI_FORMAT_R16_UINT;
-  }
-  uint32_t IndexSize() const
-  {
-    return 2;
-  }
+  IndexType IndexBufferType() const { return IndexType::Index16Bit; }
+  DXGI_FORMAT IndexBufferFormat() const { return DXGI_FORMAT_R16_UINT; }
+  uint32_t IndexSize() const { return 2; }
 
-  const MeshVertex* Vertices() const
-  {
-    return vertices;
-  }
-  const uint16_t* Indices() const
-  {
-    return indices;
-  }
+  const MeshVertex* Vertices() const { return vertices; }
+  const uint16_t* Indices() const { return indices; }
 
-  const D3D12_VERTEX_BUFFER_VIEW* VBView() const
-  {
-    return &vbView;
-  }
-  const D3D12_INDEX_BUFFER_VIEW* IBView() const
-  {
-    return &ibView;
-  }
+  const D3D12_VERTEX_BUFFER_VIEW* VBView() const { return &vbView; }
+  const D3D12_INDEX_BUFFER_VIEW* IBView() const { return &ibView; }
 
-  const glm::vec3& AABBMin() const
-  {
-    return aabbMin;
-  }
-  const glm::vec3& AABBMax() const
-  {
-    return aabbMax;
-  }
+  const glm::vec3& AABBMin() const { return aabbMin; }
+  const glm::vec3& AABBMax() const { return aabbMax; }
 
   static const char* InputElementTypeString(InputElementType elemType)
   {
@@ -303,8 +229,7 @@ public:
         "UV",
     };
 
-    static_assert(
-        arrayCount32(ElemStrings) == uint32_t(InputElementType::NumTypes));
+    static_assert(arrayCount32(ElemStrings) == uint32_t(InputElementType::NumTypes));
     assert(uint64_t(elemType) < uint64_t(InputElementType::NumTypes));
 
     return ElemStrings[uint64_t(elemType)];
@@ -341,10 +266,7 @@ struct ModelLoadSettings
 class Model
 {
 public:
-  ~Model()
-  {
-    assert(meshes.size() == 0);
-  }
+  ~Model() { assert(meshes.size() == 0); }
 
   // Loading from file formats
   void CreateWithAssimp(ID3D12Device* dev, const ModelLoadSettings& settings);
@@ -371,64 +293,25 @@ public:
   void Shutdown();
 
   // Accessors
-  const std::vector<Mesh>& Meshes() const
-  {
-    return meshes;
-  }
-  uint64_t NumMeshes() const
-  {
-    return meshes.size();
-  }
+  const std::vector<Mesh>& Meshes() const { return meshes; }
+  uint64_t NumMeshes() const { return meshes.size(); }
 
-  const glm::vec3& AABBMin() const
-  {
-    return aabbMin;
-  }
-  const glm::vec3& AABBMax() const
-  {
-    return aabbMax;
-  }
+  const glm::vec3& AABBMin() const { return aabbMin; }
+  const glm::vec3& AABBMax() const { return aabbMax; }
 
-  const std::vector<MeshMaterial>& Materials() const
-  {
-    return meshMaterials;
-  }
-  const std::vector<MaterialTexture*>& MaterialTextures() const
-  {
-    return materialTextures;
-  }
+  const std::vector<MeshMaterial>& Materials() const { return meshMaterials; }
+  const std::vector<MaterialTexture*>& MaterialTextures() const { return materialTextures; }
 
-  const std::vector<ModelSpotLight>& SpotLights() const
-  {
-    return spotLights;
-  }
-  const std::vector<PointLight>& PointLights() const
-  {
-    return pointLights;
-  }
+  const std::vector<ModelSpotLight>& SpotLights() const { return spotLights; }
+  const std::vector<PointLight>& PointLights() const { return pointLights; }
 
-  const StructuredBuffer& VertexBuffer() const
-  {
-    return vertexBuffer;
-  }
-  const FormattedBuffer& IndexBuffer() const
-  {
-    return indexBuffer;
-  }
+  const StructuredBuffer& VertexBuffer() const { return vertexBuffer; }
+  const FormattedBuffer& IndexBuffer() const { return indexBuffer; }
 
-  const std::wstring& FileDirectory() const
-  {
-    return fileDirectory;
-  }
+  const std::wstring& FileDirectory() const { return fileDirectory; }
 
-  static const D3D12_INPUT_ELEMENT_DESC* InputElements()
-  {
-    return StandardInputElements;
-  }
-  static const InputElementType* InputElementTypes()
-  {
-    return StandardInputElementTypes;
-  }
+  static const D3D12_INPUT_ELEMENT_DESC* InputElements() { return StandardInputElements; }
+  static const InputElementType* InputElementTypes() { return StandardInputElementTypes; }
   static uint64_t NumInputElements()
   {
     return static_cast<uint64_t>(arrayCount32(StandardInputElements));

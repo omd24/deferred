@@ -3,6 +3,7 @@
 #include <pix3.h>
 #include <algorithm>
 #include "Common/Input.hpp"
+#include "AppSettings.hpp"
 
 //---------------------------------------------------------------------------//
 // Internal variables
@@ -23,6 +24,7 @@ enum DeferredRootParams : uint32_t
   DeferredParams_LightCBuffer,
   DeferredParams_SRVIndices,
   DeferredParams_UAVDescriptors,
+  DeferredParams_AppSettings,
 
   NumDeferredRootParams
 };
@@ -600,6 +602,13 @@ void RenderManager::loadAssets()
         arrayCount32(descriptorRanges);
 
     // AppSettings
+    rootParameters[DeferredParams_AppSettings].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_AppSettings].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_AppSettings].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_AppSettings].Descriptor.ShaderRegister =
+        AppSettings::CBufferRegister;
+
+    // AppSettings
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
     staticSamplers[0] =
@@ -858,6 +867,8 @@ void RenderManager::renderDeferred()
 
   spotLightBuffer.setAsComputeRootParameter(m_CmdList, DeferredParams_LightCBuffer);
 
+  AppSettings::bindCBufferCompute(m_CmdList, DeferredParams_AppSettings);
+
   D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {deferredTarget.m_UAV};
   BindTempDescriptorTable(
       m_CmdList, uavs, arrayCount(uavs), DeferredParams_UAVDescriptors, CmdListMode::Compute);
@@ -1008,6 +1019,9 @@ void RenderManager::onLoad()
 
   // Init imgui
   ImGuiHelper::init(g_WinHandle, m_Dev);
+
+  // General appsettings
+  AppSettings::init();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
@@ -1047,6 +1061,7 @@ void RenderManager::onDestroy()
   }
 
   m_PostFx.deinit();
+  AppSettings::deinit();
   ImGuiHelper::deinit();
 
   // Shudown uploads and other helpers
@@ -1116,6 +1131,9 @@ void RenderManager::onUpdate()
     uint64_t offsets[1] = {0};
     spotLightBuffer.multiUpdateData(srcData, sizes, offsets, arrayCount(srcData));
   }
+
+  // Update application settings
+  AppSettings::updateCBuffer();
 
   // Imgui begin frame:
   // TODO: add correct delta time

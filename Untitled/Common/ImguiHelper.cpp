@@ -78,15 +78,16 @@ static void renderInternal()
     // App settings controls:
     ImGui::Checkbox("Render Lights", (bool*)&AppSettings::RenderLights);
     // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
-    ImGui::SliderFloat("Exposure", &AppSettings::Exposure, -24.0f, 24.0f);
-    ImGui::SliderFloat("Bloom-Xps", &AppSettings::BloomExposure, -10.0f, 0.0f);
-    ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f);
-    ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f);
-    // ImGui::Checkbox("Show Albedo", &AppSettings::ShowAlbedoMaps);
-    // ImGui::Checkbox("Show Normals", &AppSettings::ShowNormalMaps);
-    // ImGui::Checkbox("Show Specular", &AppSettings::ShowSpecular);
+    ImGui::SliderFloat(
+        "Exposure", &AppSettings::Exposure, -24.0f, 24.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::SliderFloat("Bloom-Xps", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
+    ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f, "%.2f");
+    ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f, "%.2f");
+    ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
+    ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
+    ImGui::Checkbox("Show Spec Albedo", (bool*)&AppSettings::ShowSpecular);
     // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
-    // ImGui::Checkbox("Show UV Gradients", &AppSettings::ShowUVGradients);
+    ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
     // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
 
     ImGui::Text(

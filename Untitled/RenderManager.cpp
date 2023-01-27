@@ -1269,15 +1269,8 @@ void RenderManager::onResize()
   m_Info.m_Width = clientRect.right;
   m_Info.m_Height = clientRect.bottom;
 
-  // flush gpu before resizing swapchain
+  // Flush gpu before resizing swapchain
   waitForRenderContext();
-
-  D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), nullptr));
-
-  // release all PSOs:
-  gbufferPSO->Release();
-  // m_PostFx.deinit();
-  deferredPSO->Release();
 
   // Release all references
   for (UINT i = 0; i < FRAME_COUNT; ++i)
@@ -1328,23 +1321,11 @@ void RenderManager::onResize()
   float aspect = float(m_Info.m_Width) / m_Info.m_Height;
   camera.SetAspectRatio(aspect);
 
-  // Deinit render target(s):
-  // depthBuffer.deinit();
-  // uvTarget.deinit();
-  // tangentFrameTarget.deinit();
-  // materialIDTarget.deinit();
-  // deferredTarget.deinit();
-
   createRenderTargets();
 
   // Re-create psos:
   createPSOs();
   // m_PostFx.init();
-
-  // Execute the resize commands.
-  D3D_EXEC_CHECKED(m_CmdList->Close());
-  ID3D12CommandList* cmdsLists[] = {m_CmdList.GetInterfacePtr()};
-  m_CmdQue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
   waitForRenderContext();
 }

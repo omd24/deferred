@@ -408,7 +408,7 @@ inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT) {}
 #endif
 //---------------------------------------------------------------------------//
 #ifdef D3D_COMPILE_STANDARD_FILE_INCLUDE
-inline ID3DBlobPtr compileShader(
+inline ID3DBlobPtr compileShaderFXC(
     const std::wstring& p_Filename,
     const D3D_SHADER_MACRO* p_Defines,
     const std::string& p_Entrypoint,

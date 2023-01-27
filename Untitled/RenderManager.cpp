@@ -62,6 +62,96 @@ struct LightConstants
 //---------------------------------------------------------------------------//
 // Internal private methods
 //---------------------------------------------------------------------------//
+bool RenderManager::compileShaders()
+{
+  bool ret = true;
+  ID3DBlobPtr tempVS;
+  ID3DBlobPtr tempPS;
+  ID3DBlobPtr tempCS;
+
+  // Gbuffer shaders
+  {
+    ID3DBlobPtr errorBlob;
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+    HRESULT hr = D3DCompileFromFile(
+        getShaderPath(L"Mesh.hlsl").c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "VS",
+        "vs_5_1",
+        compileFlags,
+        0,
+        &tempVS,
+        &errorBlob);
+    if (nullptr == tempVS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load gbuffer vertex shader.\n");
+      if (errorBlob != nullptr)
+        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+      ret = false;
+    }
+    errorBlob = nullptr;
+    hr = D3DCompileFromFile(
+        getShaderPath(L"Mesh.hlsl").c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "PS",
+        "ps_5_1",
+        compileFlags,
+        0,
+        &tempPS,
+        &errorBlob);
+    if (nullptr == tempPS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load gbuffer pixel shader.\n");
+      if (errorBlob != nullptr)
+        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+      ret = false;
+    }
+  }
+
+  // Deferred shader
+  {
+    ID3DBlobPtr csErrorBlob;
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+    HRESULT hr = D3DCompileFromFile(
+        getShaderPath(L"Deferred.hlsl").c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "CS",
+        "cs_5_1",
+        compileFlags,
+        0,
+        &tempCS,
+        &csErrorBlob);
+    if (nullptr == tempCS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load deferred compute shader.\n");
+      if (csErrorBlob != nullptr)
+        OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+  }
+
+  // Don't update shaders if there was any issue:
+  if (ret)
+  {
+    m_GBufferVS = tempVS;
+    m_GBufferPS = tempPS;
+    m_DeferredCS = tempCS;
+  }
+
+  return ret;
+}
 std::wstring RenderManager::getShaderPath(LPCWSTR p_ShaderName)
 {
   return m_Info.m_AssetsPath + L"Shaders\\" + p_ShaderName;
@@ -199,60 +289,21 @@ void RenderManager::loadD3D12Pipeline()
 //---------------------------------------------------------------------------//
 bool RenderManager::createPSOs()
 {
+  bool ret = true;
+  HRESULT hr = E_FAIL;
+
   // Release previous resources:
   if (gbufferPSO != nullptr)
     gbufferPSO->Release();
   if (deferredPSO != nullptr)
     deferredPSO->Release();
 
+  // Load and compile shaders:
+  ret = compileShaders();
+  assert(m_GBufferPS != nullptr && m_GBufferVS != nullptr && m_DeferredCS != nullptr);
+
   // 1. Gbuffer pso:
   {
-    // Load and compile shaders.
-    ID3DBlobPtr vertexShaderBlob;
-    ID3DBlobPtr pixelShaderBlob;
-
-    ID3DBlobPtr errorBlob;
-
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-
-    HRESULT hr = D3DCompileFromFile(
-        getShaderPath(L"Mesh.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "VS",
-        "vs_5_1",
-        compileFlags,
-        0,
-        &vertexShaderBlob,
-        &errorBlob);
-    if (nullptr == vertexShaderBlob)
-    {
-      if (errorBlob != nullptr)
-        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      assert(false && "Shader compilation failed");
-    }
-    errorBlob = nullptr;
-    D3DCompileFromFile(
-        getShaderPath(L"Mesh.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "PS",
-        "ps_5_1",
-        compileFlags,
-        0,
-        &pixelShaderBlob,
-        &errorBlob);
-    if (nullptr == pixelShaderBlob)
-    {
-      if (errorBlob != nullptr)
-        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      assert(false && "Shader compilation failed");
-    }
-
     static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
         {"POSITION",
          0,
@@ -293,8 +344,8 @@ bool RenderManager::createPSOs()
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = gbufferRootSignature;
-    psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.GetInterfacePtr());
-    psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.GetInterfacePtr());
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(m_GBufferVS.GetInterfacePtr());
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(m_GBufferPS.GetInterfacePtr());
     psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
     psoDesc.BlendState = GetBlendState(BlendState::Disabled);
     psoDesc.DepthStencilState = GetDepthState(DepthState::WritesEnabled);
@@ -309,50 +360,24 @@ bool RenderManager::createPSOs()
     psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
     psoDesc.InputLayout.pInputElementDescs = standardInputElements;
 
-    m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gbufferPSO));
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&gbufferPSO));
     gbufferPSO->SetName(L"Gbuffer PSO");
+    if (FAILED(hr))
+      ret = false;
   }
 
   // 2. Deferred pso
   {
-    ID3DBlobPtr compShaderBlob;
-    // compile shader
-    {
-      ID3DBlobPtr csErrorBlob;
-#if defined(_DEBUG)
-      UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-      UINT compileFlags = 0;
-#endif
-
-      compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-
-      HRESULT hr = D3DCompileFromFile(
-          getShaderPath(L"Deferred.hlsl").c_str(),
-          nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "CS",
-          "cs_5_1",
-          compileFlags,
-          0,
-          &compShaderBlob,
-          &csErrorBlob);
-      if (nullptr == compShaderBlob)
-      {
-        if (csErrorBlob != nullptr)
-          OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
-      }
-    }
-
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.CS = CD3DX12_SHADER_BYTECODE(compShaderBlob.GetInterfacePtr());
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_DeferredCS.GetInterfacePtr());
     psoDesc.pRootSignature = deferredRootSig;
     m_Dev->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&deferredPSO));
     deferredPSO->SetName(L"Deferred PSO");
+    if (FAILED(hr))
+      ret = false;
   }
 
-  return true;
+  return ret;
 }
 //---------------------------------------------------------------------------//
 void RenderManager::createRenderTargets()
@@ -1338,9 +1363,10 @@ void RenderManager::onShaderChange()
   Sleep(1000);
   waitForRenderContext();
 
-  if (createPSOs())
+  if (compileShaders())
   {
     OutputDebugStringA("[RenderManager] Shaders loaded\n");
+    createPSOs();
     m_PostFx.deinit();
     m_PostFx.init();
     return;

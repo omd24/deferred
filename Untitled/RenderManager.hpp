@@ -152,6 +152,12 @@ private:
   UINT64 m_FrameFenceValues[FRAME_COUNT];
   UINT64 volatile m_RenderContextFenceValues[THREAD_COUNT];
 
+  // Shaders blob
+  ID3DBlobPtr m_GBufferVS = nullptr;
+  ID3DBlobPtr m_GBufferPS = nullptr;
+  ID3DBlobPtr m_DeferredCS = nullptr;
+
+  bool compileShaders();
   std::wstring getAssetPath(LPCWSTR p_AssetName);
   std::wstring getShaderPath(LPCWSTR p_ShaderName);
   bool createPSOs();

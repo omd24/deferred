@@ -52,17 +52,21 @@ void PostProcessor::init()
 
   // Load and compile shaders:
   {
+    bool res = true;
     ID3DBlobPtr errorBlob;
+    ID3DBlobPtr tempToneMapShader = nullptr;
+    ID3DBlobPtr tempScaleShader = nullptr;
+    ID3DBlobPtr tempBloomShader = nullptr;
+    ID3DBlobPtr tempBlurHShader = nullptr;
+    ID3DBlobPtr tempBlurVShader = nullptr;
 
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
     UINT compileFlags = 0;
 #endif
-
     // Unbounded size descriptor tables
     compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-
     WCHAR assetsPath[512];
     getAssetsPath(assetsPath, _countof(assetsPath));
     std::wstring shaderPath = assetsPath;
@@ -78,13 +82,14 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &m_ToneMapShader,
+          &tempToneMapShader,
           &errorBlob);
-      if (nullptr == m_ToneMapShader)
+      if (nullptr == tempToneMapShader || FAILED(hr))
       {
+        OutputDebugStringA("Failed to load tone map shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
+        res = false;
       }
       errorBlob = nullptr;
     }
@@ -99,13 +104,14 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &m_ScaleShader,
+          &tempScaleShader,
           &errorBlob);
-      if (nullptr == m_ScaleShader)
+      if (nullptr == tempScaleShader || FAILED(hr))
       {
+        OutputDebugStringA("Failed to load scale shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
+        res = false;
       }
       errorBlob = nullptr;
     }
@@ -120,13 +126,14 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &m_BlurHShader,
+          &tempBlurHShader,
           &errorBlob);
-      if (nullptr == m_BlurHShader)
+      if (nullptr == tempBlurHShader || FAILED(hr))
       {
+        OutputDebugStringA("Failed to load hblur shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
+        res = false;
       }
       errorBlob = nullptr;
     }
@@ -141,13 +148,14 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &m_BlurVShader,
+          &tempBlurVShader,
           &errorBlob);
-      if (nullptr == m_BlurVShader)
+      if (nullptr == tempBlurVShader || FAILED(hr))
       {
+        OutputDebugStringA("Failed to load vblur shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
+        res = false;
       }
       errorBlob = nullptr;
     }
@@ -162,16 +170,28 @@ void PostProcessor::init()
           "ps_5_1",
           compileFlags,
           0,
-          &m_BloomShader,
+          &tempBloomShader,
           &errorBlob);
-      if (nullptr == m_BloomShader)
+      if (nullptr == tempBloomShader || FAILED(hr))
       {
+        OutputDebugStringA("Failed to load bloom shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        assert(false && "Shader compilation failed");
+        res = false;
       }
       errorBlob = nullptr;
     }
+
+    // Only update the postfx shaders if there was no issue:
+    if (res)
+    {
+      m_ToneMapShader = tempToneMapShader;
+      m_ScaleShader = tempScaleShader;
+      m_BloomShader = tempBloomShader;
+      m_BlurHShader = tempBlurHShader;
+      m_BlurVShader = tempBlurVShader;
+    }
+    assert(m_ToneMapShader && m_ScaleShader && m_BloomShader && m_BlurHShader && m_BlurVShader);
   }
 }
 void PostProcessor::deinit() { g_PostFxHelper.deinit(); }

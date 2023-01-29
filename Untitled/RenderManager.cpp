@@ -442,7 +442,7 @@ void RenderManager::createRenderTargets()
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     rtInit.Name = L"Main Target";
     deferredTarget.init(rtInit);
   }
@@ -523,6 +523,13 @@ void RenderManager::loadAssets()
   // Create render targets:
   {
     createRenderTargets();
+  }
+
+  // Init particles:
+  {
+    glm::vec3 forward = camera.Forward();
+
+    m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, camera.Forward());
   }
 
   {
@@ -845,14 +852,6 @@ void RenderManager::renderDeferred()
   const uint32_t numComputeTilesX = alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
   const uint32_t numComputeTilesY = alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
 
-  static bool firstAccess = true;
-  if (firstAccess)
-    deferredTarget.transition(
-        m_CmdList,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  firstAccess = false;
-
   m_CmdList->SetComputeRootSignature(deferredRootSig);
   m_CmdList->SetPipelineState(deferredPSO);
 
@@ -901,32 +900,6 @@ void RenderManager::renderDeferred()
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
-
-  // Copy deferred target to backbuffer:
-#if 0
-  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Copy to Backbuffer");
-
-  deferredTarget.transition(
-      m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].m_Texture.Resource,
-          D3D12_RESOURCE_STATE_RENDER_TARGET,
-          D3D12_RESOURCE_STATE_COPY_DEST));
-
-  m_CmdList->CopyResource(
-      m_RenderTargets[m_FrameIndex].m_Texture.Resource, deferredTarget.resource());
-
-  m_CmdList->ResourceBarrier(
-      1,
-      &CD3DX12_RESOURCE_BARRIER::Transition(
-          m_RenderTargets[m_FrameIndex].m_Texture.Resource,
-          D3D12_RESOURCE_STATE_COPY_DEST,
-          D3D12_RESOURCE_STATE_RENDER_TARGET));
-
-  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Copy to Backbuffer
-#endif // 0
 }
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
@@ -934,6 +907,19 @@ void RenderManager::populateCommandList()
   SetDescriptorHeaps(m_CmdList);
 
   renderDeferred();
+
+  // Render particles:
+  {
+    deferredTarget.transition(
+        m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
+    const glm::mat4 view = glm::transpose(camera.ViewMatrix());
+    const glm::mat4 wvp =
+        glm::identity<glm::mat4>() * glm::transpose(camera.ViewProjectionMatrix());
+    m_Particle.render(m_CmdList, view, wvp);
+    deferredTarget.transition(
+        m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  }
 
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 }
@@ -1085,6 +1071,7 @@ void RenderManager::onDestroy()
     RTVDescriptorHeap.FreePersistent(m_RenderTargets[n].m_RTV);
   }
 
+  m_Particle.deinit();
   m_PostFx.deinit();
   AppSettings::deinit();
   ImGuiHelper::deinit();
@@ -1104,7 +1091,7 @@ void RenderManager::onUpdate()
   // Rotate the camera with the mouse
   {
     // static float CamRotSpeed = 0.0005f * m_Timer.m_DeltaSecondsF;
-    static float CamRotSpeed = 0.001f;
+    static float CamRotSpeed = 0.0023f;
     POINT pos;
     GetCursorPos(&pos);
     if (g_WinHandle)
@@ -1291,68 +1278,71 @@ void RenderManager::onResize()
 {
   RECT clientRect;
   ::GetClientRect(g_WinHandle, &clientRect);
-  m_Info.m_Width = clientRect.right;
-  m_Info.m_Height = clientRect.bottom;
-
-  // Flush gpu before resizing swapchain
-  waitForRenderContext();
-
-  // Release all references
-  for (UINT i = 0; i < FRAME_COUNT; ++i)
+  if (clientRect.right > 0.0f && clientRect.bottom > 0.0f)
   {
-    m_RenderTargets[i].m_Texture.Resource->Release();
-    RTVDescriptorHeap.FreePersistent(m_RenderTargets[i].m_RTV);
+    m_Info.m_Width = clientRect.right;
+    m_Info.m_Height = clientRect.bottom;
+
+    // Flush gpu before resizing swapchain
+    waitForRenderContext();
+
+    // Release all references
+    for (UINT i = 0; i < FRAME_COUNT; ++i)
+    {
+      m_RenderTargets[i].m_Texture.Resource->Release();
+      RTVDescriptorHeap.FreePersistent(m_RenderTargets[i].m_RTV);
+    }
+
+    DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    DXGI_RATIONAL refreshRate = {};
+    refreshRate.Numerator = 60;
+    refreshRate.Denominator = 1;
+
+    m_Swc->ResizeBuffers(
+        FRAME_COUNT,
+        m_Info.m_Width,
+        m_Info.m_Height,
+        format,
+        DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
+            DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+
+    // Re-create an RTV for each back buffer
+    for (UINT i = 0; i < FRAME_COUNT; i++)
+    {
+      m_RenderTargets[i].m_RTV = RTVDescriptorHeap.AllocatePersistent().Handles[0];
+      D3D_EXEC_CHECKED(
+          m_Swc->GetBuffer(uint32_t(i), IID_PPV_ARGS(&m_RenderTargets[i].m_Texture.Resource)));
+
+      D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+      rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+      rtvDesc.Format = format;
+      rtvDesc.Texture2D.MipSlice = 0;
+      rtvDesc.Texture2D.PlaneSlice = 0;
+      m_Dev->CreateRenderTargetView(
+          m_RenderTargets[i].m_Texture.Resource, &rtvDesc, m_RenderTargets[i].m_RTV);
+
+      m_RenderTargets[i].m_Texture.Resource->SetName(MakeString(L"Back Buffer %u", i).c_str());
+
+      m_RenderTargets[i].m_Texture.Width = m_Info.m_Width;
+      m_RenderTargets[i].m_Texture.Height = m_Info.m_Height;
+      m_RenderTargets[i].m_Texture.ArraySize = 1;
+      m_RenderTargets[i].m_Texture.Format = format;
+      m_RenderTargets[i].m_Texture.NumMips = 1;
+      m_RenderTargets[i].m_MSAASamples = 1;
+    }
+    m_FrameIndex = m_Swc->GetCurrentBackBufferIndex();
+
+    float aspect = float(m_Info.m_Width) / m_Info.m_Height;
+    camera.SetAspectRatio(aspect);
+
+    createRenderTargets();
+
+    // Re-create psos:
+    createPSOs();
+    // m_PostFx.init();
+
+    waitForRenderContext();
   }
-
-  DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  DXGI_RATIONAL refreshRate = {};
-  refreshRate.Numerator = 60;
-  refreshRate.Denominator = 1;
-
-  m_Swc->ResizeBuffers(
-      FRAME_COUNT,
-      m_Info.m_Width,
-      m_Info.m_Height,
-      format,
-      DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING |
-          DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
-
-  // Re-create an RTV for each back buffer
-  for (UINT i = 0; i < FRAME_COUNT; i++)
-  {
-    m_RenderTargets[i].m_RTV = RTVDescriptorHeap.AllocatePersistent().Handles[0];
-    D3D_EXEC_CHECKED(
-        m_Swc->GetBuffer(uint32_t(i), IID_PPV_ARGS(&m_RenderTargets[i].m_Texture.Resource)));
-
-    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-    rtvDesc.Format = format;
-    rtvDesc.Texture2D.MipSlice = 0;
-    rtvDesc.Texture2D.PlaneSlice = 0;
-    m_Dev->CreateRenderTargetView(
-        m_RenderTargets[i].m_Texture.Resource, &rtvDesc, m_RenderTargets[i].m_RTV);
-
-    m_RenderTargets[i].m_Texture.Resource->SetName(MakeString(L"Back Buffer %u", i).c_str());
-
-    m_RenderTargets[i].m_Texture.Width = m_Info.m_Width;
-    m_RenderTargets[i].m_Texture.Height = m_Info.m_Height;
-    m_RenderTargets[i].m_Texture.ArraySize = 1;
-    m_RenderTargets[i].m_Texture.Format = format;
-    m_RenderTargets[i].m_Texture.NumMips = 1;
-    m_RenderTargets[i].m_MSAASamples = 1;
-  }
-  m_FrameIndex = m_Swc->GetCurrentBackBufferIndex();
-
-  float aspect = float(m_Info.m_Width) / m_Info.m_Height;
-  camera.SetAspectRatio(aspect);
-
-  createRenderTargets();
-
-  // Re-create psos:
-  createPSOs();
-  // m_PostFx.init();
-
-  waitForRenderContext();
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onCodeChange() {}
@@ -1367,8 +1357,14 @@ void RenderManager::onShaderChange()
   {
     OutputDebugStringA("[RenderManager] Shaders loaded\n");
     createPSOs();
+
     m_PostFx.deinit();
     m_PostFx.init();
+
+    ... separate quad model creation !!!;
+    m_Particle.deinit();
+    m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, camera.Forward());
+
     return;
   }
   else

@@ -198,6 +198,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="PostProcessor.cpp" />
     <ClCompile Include="RenderManager.cpp" />
+    <ClCompile Include="SimpleParticle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Externals\ImGui\imgui.h" />
@@ -220,6 +221,7 @@
     <ClInclude Include="Common\Utility.hpp" />
     <ClInclude Include="PostProcessor.hpp" />
     <ClInclude Include="RenderManager.hpp" />
+    <ClInclude Include="SimpleParticle.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

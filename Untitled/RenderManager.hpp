@@ -7,6 +7,7 @@
 #include "D3D12Wrapper.hpp"
 #include "Model.hpp"
 #include "PostProcessor.hpp"
+#include "SimpleParticle.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -142,6 +143,7 @@ private:
 
   FirstPersonCamera camera;
   PostProcessor m_PostFx;
+  SimpleParticle m_Particle;
   Timer m_Timer;
 
   // Synchronization objects.

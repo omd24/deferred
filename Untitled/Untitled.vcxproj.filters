@@ -49,6 +49,7 @@
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="AppSettings.cpp" />
+    <ClCompile Include="SimpleParticle.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -105,6 +106,7 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="AppSettings.hpp" />
+    <ClInclude Include="SimpleParticle.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

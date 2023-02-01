@@ -172,6 +172,7 @@ private:
   void releaseD3DResources();
   void renderForward();
   void renderDeferred();
+  void renderParticles();
   void createRenderTargets();
 };
 

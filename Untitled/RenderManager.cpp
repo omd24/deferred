@@ -902,24 +902,28 @@ void RenderManager::renderDeferred()
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
 }
 //---------------------------------------------------------------------------//
+void RenderManager::renderParticles()
+{
+  deferredTarget.transition(
+      m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+  m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
+  const glm::mat4 view = glm::transpose(camera.ViewMatrix());
+  const glm::mat4 proj = glm::transpose(camera.ProjectionMatrix());
+  const glm::mat4 viewproj = glm::transpose(camera.ViewProjectionMatrix());
+  const glm::mat4 wvp = glm::identity<glm::mat4>() * glm::transpose(camera.ViewProjectionMatrix());
+  const glm::vec2 viewportSize = glm::vec2(m_Info.m_Width, m_Info.m_Height);
+  m_Particle.render(m_CmdList, view, proj);
+  deferredTarget.transition(
+      m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+}
+//---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
 {
   SetDescriptorHeaps(m_CmdList);
 
   renderDeferred();
 
-  // Render particles:
-  {
-    deferredTarget.transition(
-        m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
-    const glm::mat4 view = glm::transpose(camera.ViewMatrix());
-    const glm::mat4 wvp =
-        glm::identity<glm::mat4>() * glm::transpose(camera.ViewProjectionMatrix());
-    m_Particle.render(m_CmdList, view, wvp);
-    deferredTarget.transition(
-        m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  }
+  renderParticles();
 
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 }
@@ -1361,9 +1365,7 @@ void RenderManager::onShaderChange()
     m_PostFx.deinit();
     m_PostFx.init();
 
-    ... separate quad model creation !!!;
-    m_Particle.deinit();
-    m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, camera.Forward());
+    m_Particle.createPSOs();
 
     return;
   }

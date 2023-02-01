@@ -6,38 +6,22 @@ struct VSConstants
 {
   glm::mat4x4 World;
   glm::mat4x4 View;
-  glm::mat4x4 WorldViewProjection;
+  glm::mat4x4 Proj;
 };
-
-void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, glm::vec3 p_Dir)
+//---------------------------------------------------------------------------//
+void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_CameraDir)
 {
   assert(g_Device != nullptr);
 
-  // test
-  {
-    glm::mat4 rotMat;
-    glm::vec3 new_y = glm::normalize(p_Dir);
-    glm::vec3 new_z = glm::normalize(glm::cross(new_y, glm::vec3(0, 1, 0)));
-    glm::vec3 new_x = glm::normalize(glm::cross(new_y, new_z));
-
-    rotMat = glm::mat3(new_x, new_y, new_z);
-    glm::quat rot = glm::toQuat(rotMat);
-    m_QuadModel.GeneratePlaneScene(
-        g_Device, glm::vec2(1.0f, 1.0f), glm::vec3(-8.0f, 2.0f, 0.0f), rot);
-  }
+  m_OutputFormat = p_Fmt;
+  m_DepthFormat = p_DepthFmt;
 
   // init quad data
-  if (false)
   {
-    // build a quaternion from an angle and a normalized axis.
-    glm::quat rot1 = glm::angleAxis(glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::quat rot2 = glm::angleAxis(glm::radians(45.f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::quat rot90 = glm::angleAxis(glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f));
     m_QuadModel.GeneratePlaneScene(
-        g_Device, glm::vec2(1.0f, 1.0f), glm::vec3(-8.0f, 2.0f, 0.0f), rot2 * rot1);
+        g_Device, glm::vec2(1.0f, 1.0f), glm::vec3(-1.0f, 2.0f, 0.0f), rot90);
   }
-
-  // load and compile shaders
-  compileShaders();
 
   // create root signatures:
   {
@@ -66,6 +50,17 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, glm::vec3 p
     createRootSignature(g_Device, &m_DrawRootSig, rootSignatureDesc);
     m_DrawRootSig->SetName(L"Particles Draw Root Sig");
   }
+
+  createPSOs();
+}
+//---------------------------------------------------------------------------//
+void SimpleParticle::createPSOs()
+{
+  // release any dangling pso:
+  destroyPSOs();
+
+  // load and compile shaders
+  compileShaders();
 
   // create PSOs:
   {
@@ -111,8 +106,8 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, glm::vec3 p
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = p_Fmt;
-    psoDesc.DSVFormat = p_DepthFmt;
+    psoDesc.RTVFormats[0] = m_OutputFormat;
+    psoDesc.DSVFormat = m_DepthFormat;
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleDesc.Quality = 0;
     psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
@@ -123,18 +118,23 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, glm::vec3 p
     assert(SUCCEEDED(hr));
   }
 }
+//---------------------------------------------------------------------------//
+void SimpleParticle::destroyPSOs()
+{
+  if (m_DrawPSO != nullptr)
+    m_DrawPSO->Release();
+}
+//---------------------------------------------------------------------------//
 void SimpleParticle::deinit()
 {
   m_DrawPSO->Release();
   m_DrawRootSig->Release();
   m_QuadModel.Shutdown();
 }
+//---------------------------------------------------------------------------//
 void SimpleParticle::render(
-    ID3D12GraphicsCommandList* p_CmdList,
-    const glm::mat4& p_ViewMat,
-    const glm::mat4& p_WorldViewProj)
+    ID3D12GraphicsCommandList* p_CmdList, const glm::mat4& p_ViewMat, const glm::mat4& p_ProjMat)
 {
-
   PIXBeginEvent(p_CmdList, 0, "Particle Draw");
 
   p_CmdList->SetGraphicsRootSignature(m_DrawRootSig);
@@ -146,7 +146,8 @@ void SimpleParticle::render(
     VSConstants vsConstants;
     vsConstants.World = world;
     vsConstants.View = p_ViewMat;
-    vsConstants.WorldViewProjection = p_WorldViewProj;
+    vsConstants.Proj = p_ProjMat;
+
     BindTempConstantBuffer(p_CmdList, vsConstants, 0, CmdListMode::Graphics);
   }
 
@@ -169,6 +170,7 @@ void SimpleParticle::render(
 
   PIXEndEvent(p_CmdList);
 }
+//---------------------------------------------------------------------------//
 void SimpleParticle::compileShaders()
 {
   // Load and compile shaders:
@@ -243,3 +245,4 @@ void SimpleParticle::compileShaders()
     assert(m_DrawVS && m_DrawPS);
   }
 }
+//---------------------------------------------------------------------------//

@@ -1,8 +1,21 @@
+float4 fromAngleAxis(in float3 p_axis, in float p_angle)
+{
+  float halfAngle = 0.5 * p_angle;
+  float s = sin(halfAngle);
+
+  return float4(s*p_axis.x, s*p_axis.y, s*p_axis.z, cos(halfAngle));
+}
+float3 rotateVector(in float4 p_quat, in float3 p_vec)
+{
+  const float3 t = 2.0 * cross(p_quat.xyz, p_vec);
+  return p_vec + p_quat.w * t + cross(p_quat.xyz, t);
+}
+
 struct VSConstants
 {
   row_major float4x4 World;
   row_major float4x4 View;
-  row_major float4x4 WorldViewProjection;
+  row_major float4x4 Proj;
 };
 
 ConstantBuffer<VSConstants> VSCBuffer : register(b0);
@@ -16,24 +29,34 @@ struct VSInput
   float3 BitangentOS : BITANGENT;
 };
 
+struct VSOutput
+{
+  float4 PositionCS : SV_Position;
+  float3 PositionWS : POSITIONWS;
+};
+
 struct PSInput
 {
   float4 PositionSS : SV_Position;
   float3 PositionWS : POSITIONWS;
 };
 
-PSInput VS(VSInput p_Input)
+VSOutput VS(VSInput p_Input)
 {
-  PSInput output;
+  VSOutput output;
+  float4 positionOS = float4(p_Input.PositionOS, 1.0f);
+  output.PositionCS = positionOS;
 
-  float3 positionOS = p_Input.PositionOS;
-
-  // Calc the world-space position
-  output.PositionWS = mul(float4(positionOS, 1.0f), VSCBuffer.World).xyz;
-
-  // Calc the clip-space position
-  output.PositionSS = mul(float4(positionOS, 1.0f), VSCBuffer.WorldViewProjection);
-
+  // N.B. For billboarding just set the upper left 3x3 of worldView to identity:
+  // https://stackoverflow.com/a/15325758/4623650
+  // TODO: Do this on host code not here!!!
+  matrix worldView = mul(VSCBuffer.World, VSCBuffer.View);
+  worldView._m00 = 1;worldView._m01 = 0;worldView._m02 = 0;
+  worldView._m10 = 0;worldView._m11 = 1;worldView._m12 = 0;
+  worldView._m20 = 0;worldView._m21 = 0;worldView._m22 = 1;
+  
+  output.PositionCS = mul(output.PositionCS, worldView); 
+  output.PositionCS = mul(output.PositionCS, VSCBuffer.Proj); 
   return output;
 }
 

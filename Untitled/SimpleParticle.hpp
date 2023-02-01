@@ -5,12 +5,12 @@
 
 struct SimpleParticle
 {
-  void init(DXGI_FORMAT p_OutputFormat, DXGI_FORMAT p_DepthFormat, glm::vec3 p_Dir);
+  void init(DXGI_FORMAT p_OutputFormat, DXGI_FORMAT p_DepthFormat, const glm::vec3& p_CameraDir);
   void deinit();
   void render(
-      ID3D12GraphicsCommandList* p_CmdList,
-      const glm::mat4& p_ViewMat,
-      const glm::mat4& p_WorldViewProj);
+      ID3D12GraphicsCommandList* p_CmdList, const glm::mat4& p_ViewMat, const glm::mat4& p_ProjMat);
+  void createPSOs();
+  void destroyPSOs();
 
 private:
   ID3DBlobPtr m_DrawVS = nullptr;
@@ -18,6 +18,8 @@ private:
   ID3D12RootSignature* m_DrawRootSig = nullptr;
   ID3D12PipelineState* m_DrawPSO = nullptr;
   Model m_QuadModel;
+  DXGI_FORMAT m_OutputFormat;
+  DXGI_FORMAT m_DepthFormat;
 
   void compileShaders();
 };

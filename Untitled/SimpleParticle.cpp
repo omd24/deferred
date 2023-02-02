@@ -4,9 +4,10 @@
 
 struct VSConstants
 {
+  glm::mat4x4 WorldViewIdentity;
   glm::mat4x4 World;
   glm::mat4x4 View;
-  glm::mat4x4 Proj;
+  glm::mat4x4 Projection;
 };
 //---------------------------------------------------------------------------//
 void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_CameraDir)
@@ -20,7 +21,7 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   {
     glm::quat rot90 = glm::angleAxis(glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f));
     m_QuadModel.GeneratePlaneScene(
-        g_Device, glm::vec2(1.0f, 1.0f), glm::vec3(-1.0f, 2.0f, 0.0f), rot90);
+        g_Device, glm::vec2(0.5f, 0.5f), glm::vec3(-1.0f, 2.0f, 0.0f), rot90);
   }
 
   // create root signatures:
@@ -133,20 +134,57 @@ void SimpleParticle::deinit()
 }
 //---------------------------------------------------------------------------//
 void SimpleParticle::render(
-    ID3D12GraphicsCommandList* p_CmdList, const glm::mat4& p_ViewMat, const glm::mat4& p_ProjMat)
+    ID3D12GraphicsCommandList* p_CmdList,
+    const glm::mat4& p_ViewMat,
+    const glm::mat4& p_ProjMat,
+    const float p_DeltaTime)
 {
   PIXBeginEvent(p_CmdList, 0, "Particle Draw");
 
   p_CmdList->SetGraphicsRootSignature(m_DrawRootSig);
   p_CmdList->SetPipelineState(m_DrawPSO);
 
+#pragma region Billboarding
+  glm::mat4 world = glm::identity<glm::mat4>();
+  glm::mat4 worldView = world * p_ViewMat;
+  // N.B. For billboarding just set the upper left 3x3 of worldView to identity:
+  // https://stackoverflow.com/a/15325758/4623650
+  worldView[0][0] = 1;
+  worldView[0][1] = 0;
+  worldView[0][2] = 0;
+  worldView[1][0] = 0;
+  worldView[1][1] = 1;
+  worldView[1][2] = 0;
+  worldView[2][0] = 0;
+  worldView[2][1] = 0;
+  worldView[2][2] = 1;
+#pragma endregion
+
+  const float pi = 3.141592654f;
+  // Animate particle position:
+  {
+    const float particleIndex = 1.0f;
+    float yFactor = std::cos(p_DeltaTime * pi + particleIndex * 0.1f);
+    yFactor *= 0.5f;
+    worldView[3][1] += yFactor;
+  }
+
+  // Animate particle scale:
+  {
+      // static int sign = 1;
+      // sign *= -1;
+      // float scale = std::sin(p_DeltaTime * pi);
+      // worldView[0][0] *= (1 + scale * sign);
+      // worldView[1][1] *= (1 + scale * -sign);
+  }
+
   // Set vs cbuffer:
   {
-    glm::mat4 world = glm::identity<glm::mat4>();
     VSConstants vsConstants;
-    vsConstants.World = world;
+    vsConstants.Projection = p_ProjMat;
+    vsConstants.WorldViewIdentity = worldView;
     vsConstants.View = p_ViewMat;
-    vsConstants.Proj = p_ProjMat;
+    vsConstants.World = world;
 
     BindTempConstantBuffer(p_CmdList, vsConstants, 0, CmdListMode::Graphics);
   }

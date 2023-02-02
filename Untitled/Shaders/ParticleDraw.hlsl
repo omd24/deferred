@@ -13,9 +13,10 @@ float3 rotateVector(in float4 p_quat, in float3 p_vec)
 
 struct VSConstants
 {
+  row_major float4x4 WorldView;
   row_major float4x4 World;
   row_major float4x4 View;
-  row_major float4x4 Proj;
+  row_major float4x4 Projection;
 };
 
 ConstantBuffer<VSConstants> VSCBuffer : register(b0);
@@ -47,16 +48,28 @@ VSOutput VS(VSInput p_Input)
   float4 positionOS = float4(p_Input.PositionOS, 1.0f);
   output.PositionCS = positionOS;
 
+#if 0
   // N.B. For billboarding just set the upper left 3x3 of worldView to identity:
   // https://stackoverflow.com/a/15325758/4623650
-  // TODO: Do this on host code not here!!!
   matrix worldView = mul(VSCBuffer.World, VSCBuffer.View);
   worldView._m00 = 1;worldView._m01 = 0;worldView._m02 = 0;
   worldView._m10 = 0;worldView._m11 = 1;worldView._m12 = 0;
   worldView._m20 = 0;worldView._m21 = 0;worldView._m22 = 1;
-  
-  output.PositionCS = mul(output.PositionCS, worldView); 
-  output.PositionCS = mul(output.PositionCS, VSCBuffer.Proj); 
+  output.PositionCS = mul(output.PositionCS, worldView);
+#endif
+
+  output.PositionCS = mul(output.PositionCS, VSCBuffer.WorldView);
+  output.PositionCS = mul(output.PositionCS, VSCBuffer.Projection); 
+
+  /// Per particle scale?
+  /// Alternatively just set worldView._m00 and worldView._m11
+  // float4x4 scaleMat = { 1.0f, 0.0f, 0.0f, 0.0f, // row 1
+  //                       0.0f, 1.0f, 0.0f, 0.0f, // row 2
+  //                       0.0f, 0.0f, 1.0f, 0.0f, // row 3
+  //                       0.0f, 0.0f, 0.0f, 1.0f, // row 4
+  //                     };
+  // output.PositionCS = mul(scaleMat, output.PositionCS); 
+
   return output;
 }
 

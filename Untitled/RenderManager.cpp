@@ -907,12 +907,14 @@ void RenderManager::renderParticles()
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
   m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
+
   const glm::mat4 view = glm::transpose(camera.ViewMatrix());
   const glm::mat4 proj = glm::transpose(camera.ProjectionMatrix());
   const glm::mat4 viewproj = glm::transpose(camera.ViewProjectionMatrix());
   const glm::mat4 wvp = glm::identity<glm::mat4>() * glm::transpose(camera.ViewProjectionMatrix());
   const glm::vec2 viewportSize = glm::vec2(m_Info.m_Width, m_Info.m_Height);
-  m_Particle.render(m_CmdList, view, proj);
+  m_Particle.render(m_CmdList, view, proj, m_Timer.m_ElapsedSecondsF);
+
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }

@@ -8,7 +8,10 @@ struct SimpleParticle
   void init(DXGI_FORMAT p_OutputFormat, DXGI_FORMAT p_DepthFormat, const glm::vec3& p_CameraDir);
   void deinit();
   void render(
-      ID3D12GraphicsCommandList* p_CmdList, const glm::mat4& p_ViewMat, const glm::mat4& p_ProjMat);
+      ID3D12GraphicsCommandList* p_CmdList,
+      const glm::mat4& p_ViewMat,
+      const glm::mat4& p_ProjMat,
+      const float p_DeltaTime);
   void createPSOs();
   void destroyPSOs();
 

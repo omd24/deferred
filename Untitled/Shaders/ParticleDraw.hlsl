@@ -62,6 +62,6 @@ VSOutput VS(VSInput p_Input)
 
 float4 PS(PSInput p_Input) : SV_TARGET
 {
-  float4 ret = float4(1.0, 0.0f, 0.0f, 1.0f);
+  float4 ret = float4(1.0, 0.0f, 0.0f, 0.5f);
   return ret;
 }

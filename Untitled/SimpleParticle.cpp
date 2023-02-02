@@ -101,7 +101,7 @@ void SimpleParticle::createPSOs()
     psoDesc.VS = CD3DX12_SHADER_BYTECODE(m_DrawVS.GetInterfacePtr());
     psoDesc.PS = CD3DX12_SHADER_BYTECODE(m_DrawPS.GetInterfacePtr());
     psoDesc.RasterizerState = GetRasterizerState(RasterizerState::NoCull);
-    psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+    psoDesc.BlendState = GetBlendState(BlendState::AlphaBlend);
     psoDesc.DepthStencilState = GetDepthState(DepthState::Enabled);
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;

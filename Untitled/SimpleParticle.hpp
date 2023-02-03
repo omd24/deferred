@@ -23,6 +23,7 @@ private:
   Model m_QuadModel;
   DXGI_FORMAT m_OutputFormat;
   DXGI_FORMAT m_DepthFormat;
+  Texture m_SpriteTexture;
 
   void compileShaders();
 };

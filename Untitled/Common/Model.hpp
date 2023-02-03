@@ -371,3 +371,6 @@ protected:
 
   std::vector<MaterialTexture*> materialTextures;
 };
+
+void loadTexture(
+    ID3D12Device* dev, Texture& texture, const wchar_t* filePath, bool forceSRGB = false);

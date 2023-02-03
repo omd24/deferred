@@ -2,12 +2,23 @@
 #include "d3dx12.h"
 #include "pix3.h"
 
+//---------------------------------------------------------------------------//
+enum RootParams : uint32_t
+{
+  RootParam_StandardDescriptors,
+  RootParam_VSCBuffer,
+  RootParam_SRVIndicesCB,
+
+  NumRootParams
+};
+//---------------------------------------------------------------------------//
 struct VSConstants
 {
   glm::mat4x4 WorldViewIdentity;
   glm::mat4x4 World;
   glm::mat4x4 View;
   glm::mat4x4 Projection;
+  glm::vec4 Params0;
 };
 //---------------------------------------------------------------------------//
 void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_CameraDir)
@@ -24,28 +35,44 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
         g_Device, glm::vec2(0.5f, 0.5f), glm::vec3(-1.0f, 2.0f, 0.0f), rot90);
   }
 
+  // load main texture
+  loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\smoke.dds");
+
   // create root signatures:
   {
-    D3D12_ROOT_PARAMETER1 rootParameters[2] = {};
+    D3D12_ROOT_PARAMETER1 rootParameters[NumRootParams] = {};
+
+    // textures
+    rootParameters[RootParam_StandardDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[RootParam_StandardDescriptors].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_StandardDescriptors].DescriptorTable.pDescriptorRanges =
+        StandardDescriptorRanges();
+    rootParameters[RootParam_StandardDescriptors].DescriptorTable.NumDescriptorRanges =
+        NumStandardDescriptorRanges;
 
     // vs cbuffer
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-    rootParameters[0].Descriptor.RegisterSpace = 0;
-    rootParameters[0].Descriptor.ShaderRegister = 0;
+    rootParameters[RootParam_VSCBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[RootParam_VSCBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_VSCBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[RootParam_VSCBuffer].Descriptor.ShaderRegister = 0;
 
-    // place holder #1
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    rootParameters[1].Constants.Num32BitValues = 1;
-    rootParameters[1].Constants.RegisterSpace = 0;
-    rootParameters[1].Constants.ShaderRegister = 2;
+    // srv indices
+    rootParameters[RootParam_SRVIndicesCB].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[RootParam_SRVIndicesCB].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_SRVIndicesCB].Descriptor.RegisterSpace = 0;
+    rootParameters[RootParam_SRVIndicesCB].Descriptor.ShaderRegister = 1;
+
+    // samplers
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+    staticSamplers[0] = GetStaticSamplerState(SamplerState::Point, 0);
+    staticSamplers[1] = GetStaticSamplerState(SamplerState::LinearClamp, 1);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
     rootSignatureDesc.pParameters = rootParameters;
-    rootSignatureDesc.NumStaticSamplers = 0;
-    rootSignatureDesc.pStaticSamplers = nullptr;
+    rootSignatureDesc.NumStaticSamplers = arrayCount32(staticSamplers);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     createRootSignature(g_Device, &m_DrawRootSig, rootSignatureDesc);
@@ -131,6 +158,7 @@ void SimpleParticle::deinit()
   m_DrawPSO->Release();
   m_DrawRootSig->Release();
   m_QuadModel.Shutdown();
+  m_SpriteTexture.Shutdown();
 }
 //---------------------------------------------------------------------------//
 void SimpleParticle::render(
@@ -161,12 +189,24 @@ void SimpleParticle::render(
 #pragma endregion
 
   const float pi = 3.141592654f;
+  static float maxMultiplier = -1;
   // Animate particle position:
   {
     const float particleIndex = 1.0f;
-    float yFactor = std::cos(p_DeltaTime * pi + particleIndex * 0.1f);
-    yFactor *= 0.5f;
-    worldView[3][1] += yFactor;
+    int rndNumInt = std::rand() % 2;
+    float rndNumF = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+    rndNumF = (0 == rndNumInt) ? -rndNumF : rndNumF;
+    float multiplier = std::cos(p_DeltaTime * pi / 10 + particleIndex * 0.1f);
+    // if (multiplier > maxMultiplier)
+    {
+      maxMultiplier = multiplier;
+      // float xFactor = multiplier;
+      float yFactor = multiplier;
+      // float zFactor = multiplier;
+      // worldView[3][0] += xFactor;
+      worldView[3][1] += yFactor;
+      // worldView[3][2] += zFactor;
+    }
   }
 
   // Animate particle scale:
@@ -185,8 +225,15 @@ void SimpleParticle::render(
     vsConstants.WorldViewIdentity = worldView;
     vsConstants.View = p_ViewMat;
     vsConstants.World = world;
+    vsConstants.Params0.x = std::cos(p_DeltaTime * pi / 10.0f);
 
-    BindTempConstantBuffer(p_CmdList, vsConstants, 0, CmdListMode::Graphics);
+    BindTempConstantBuffer(p_CmdList, vsConstants, RootParam_VSCBuffer, CmdListMode::Graphics);
+  }
+
+  // Set srv indices:
+  {
+    uint32_t srvIndices[] = {m_SpriteTexture.SRV};
+    BindTempConstantBuffer(p_CmdList, srvIndices, RootParam_SRVIndicesCB, CmdListMode::Graphics);
   }
 
   // Bind vb and ib
@@ -195,6 +242,8 @@ void SimpleParticle::render(
   p_CmdList->IASetVertexBuffers(0, 1, &vbView);
   p_CmdList->IASetIndexBuffer(&ibView);
   p_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Graphics);
 
   //
   // Draw particles:

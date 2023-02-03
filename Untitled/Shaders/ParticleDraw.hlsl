@@ -1,3 +1,7 @@
+//=================================================================================================
+// Helper functions
+//=================================================================================================
+
 float4 fromAngleAxis(in float3 p_axis, in float p_angle)
 {
   float halfAngle = 0.5 * p_angle;
@@ -11,15 +15,36 @@ float3 rotateVector(in float4 p_quat, in float3 p_vec)
   return p_vec + p_quat.w * t + cross(p_quat.xyz, t);
 }
 
+//=================================================================================================
+// Uniforms
+//=================================================================================================
+
 struct VSConstants
 {
   row_major float4x4 WorldView;
   row_major float4x4 World;
   row_major float4x4 View;
   row_major float4x4 Projection;
+  float4 Params0;
 };
-
 ConstantBuffer<VSConstants> VSCBuffer : register(b0);
+
+cbuffer SRVIndicesCB : register(b1)
+{
+    uint SpriteTextureIdx;
+}
+
+//=================================================================================================
+// Textures and samplers
+//=================================================================================================
+
+Texture2D Tex2DTable[] : register(t0, space0);
+SamplerState PointSampler : register(s0);
+SamplerState LinearSampler : register(s1);
+
+//=================================================================================================
+// VS and PS structs
+//=================================================================================================
 
 struct VSInput
 {
@@ -34,12 +59,14 @@ struct VSOutput
 {
   float4 PositionCS : SV_Position;
   float3 PositionWS : POSITIONWS;
+  float2 TexCoord : TEXCOORD;
 };
 
 struct PSInput
 {
   float4 PositionSS : SV_Position;
   float3 PositionWS : POSITIONWS;
+  float2 TexCoord : TEXCOORD;
 };
 
 VSOutput VS(VSInput p_Input)
@@ -70,11 +97,15 @@ VSOutput VS(VSInput p_Input)
   //                     };
   // output.PositionCS = mul(scaleMat, output.PositionCS); 
 
+  output.TexCoord = p_Input.UV;
   return output;
 }
 
 float4 PS(PSInput p_Input) : SV_TARGET
 {
-  float4 ret = float4(1.0, 0.0f, 0.0f, 0.5f);
+  Texture2D spriteTexture = Tex2DTable[SpriteTextureIdx];
+  float4 texColor = spriteTexture.Sample(LinearSampler, p_Input.TexCoord);
+  float4 ret = float4(0, 0, 0, texColor.w);
+  ret.xyz = texColor.xyz * 3.5f + (VSCBuffer.Params0.x * 1.5f);
   return ret;
 }

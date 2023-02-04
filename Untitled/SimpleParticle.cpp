@@ -2,6 +2,8 @@
 #include "d3dx12.h"
 #include "pix3.h"
 
+static constexpr int ParticleCount = 2;
+
 //---------------------------------------------------------------------------//
 enum RootParams : uint32_t
 {
@@ -18,7 +20,8 @@ struct VSConstants
   glm::mat4x4 World;
   glm::mat4x4 View;
   glm::mat4x4 Projection;
-  glm::vec4 Params0;
+  glm::vec4 Params0; // .x = scale
+  glm::vec4 Params1; // .x = 0, .y = 0, .z = textureWidth, .w = textureHeight
 };
 //---------------------------------------------------------------------------//
 void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_CameraDir)
@@ -28,11 +31,17 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   m_OutputFormat = p_Fmt;
   m_DepthFormat = p_DepthFmt;
 
-  // init quad data
+  // init index data
   {
-    glm::quat rot90 = glm::angleAxis(glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f));
-    m_QuadModel.GeneratePlaneScene(
-        g_Device, glm::vec2(0.5f, 0.5f), glm::vec3(-1.0f, 2.0f, 0.0f), rot90);
+    // Create the index buffer
+    uint16_t indices[] = {0, 1, 2, 3, 0, 2};
+    FormattedBufferInit ibInit;
+    ibInit.Format = DXGI_FORMAT_R16_UINT;
+    ibInit.NumElements = arrayCount32(indices);
+    ibInit.InitialState = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    ibInit.InitData = indices;
+    ibInit.Name = L"Quad Index Buffer";
+    m_IndexBuffer.init(ibInit);
   }
 
   // load main texture
@@ -157,8 +166,8 @@ void SimpleParticle::deinit()
 {
   m_DrawPSO->Release();
   m_DrawRootSig->Release();
-  m_QuadModel.Shutdown();
   m_SpriteTexture.Shutdown();
+  m_IndexBuffer.deinit();
 }
 //---------------------------------------------------------------------------//
 void SimpleParticle::render(
@@ -172,8 +181,36 @@ void SimpleParticle::render(
   p_CmdList->SetGraphicsRootSignature(m_DrawRootSig);
   p_CmdList->SetPipelineState(m_DrawPSO);
 
-#pragma region Billboarding
+  // Calculate particle position
   glm::mat4 world = glm::identity<glm::mat4>();
+  const float pi = 3.141592654f;
+  static float maxMultiplier = -1;
+  // Animate particle position:
+  {
+    glm::vec3 initPos = glm::vec3(1.0f, 2.0f, 1.0f);
+    const float particleIndex = 1.0f;
+    int rndNumInt = std::rand() % 2;
+    float rndNumF = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+    rndNumF = (0 == rndNumInt) ? -rndNumF : rndNumF;
+    float multiplier = std::cos(p_DeltaTime * pi / 500 + particleIndex * 0.1f);
+    // if (multiplier > maxMultiplier)
+    {
+      maxMultiplier = multiplier;
+      // float xFactor = multiplier;
+      float yFactor = multiplier;
+      // float zFactor = multiplier;
+      // worldView[3][0] += xFactor;
+      world[3][1] = initPos.y + yFactor;
+      // world[3][1] += yFactor;
+      // worldView[3][2] += zFactor;
+
+      // world[3][0] = initPos.x + yFactor;
+
+      // world[3][2] = initPos.z + yFactor;
+    }
+  }
+
+#pragma region Billboarding
   glm::mat4 worldView = world * p_ViewMat;
   // N.B. For billboarding just set the upper left 3x3 of worldView to identity:
   // https://stackoverflow.com/a/15325758/4623650
@@ -187,27 +224,6 @@ void SimpleParticle::render(
   worldView[2][1] = 0;
   worldView[2][2] = 1;
 #pragma endregion
-
-  const float pi = 3.141592654f;
-  static float maxMultiplier = -1;
-  // Animate particle position:
-  {
-    const float particleIndex = 1.0f;
-    int rndNumInt = std::rand() % 2;
-    float rndNumF = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-    rndNumF = (0 == rndNumInt) ? -rndNumF : rndNumF;
-    float multiplier = std::cos(p_DeltaTime * pi / 10 + particleIndex * 0.1f);
-    // if (multiplier > maxMultiplier)
-    {
-      maxMultiplier = multiplier;
-      // float xFactor = multiplier;
-      float yFactor = multiplier;
-      // float zFactor = multiplier;
-      // worldView[3][0] += xFactor;
-      worldView[3][1] += yFactor;
-      // worldView[3][2] += zFactor;
-    }
-  }
 
   // Animate particle scale:
   {
@@ -225,7 +241,8 @@ void SimpleParticle::render(
     vsConstants.WorldViewIdentity = worldView;
     vsConstants.View = p_ViewMat;
     vsConstants.World = world;
-    vsConstants.Params0.x = std::cos(p_DeltaTime * pi / 10.0f);
+    vsConstants.Params0.x = std::cos(p_DeltaTime * pi / 50.0f);
+    vsConstants.Params1 = glm::vec4(0, 0, m_SpriteTexture.Width, m_SpriteTexture.Height);
 
     BindTempConstantBuffer(p_CmdList, vsConstants, RootParam_VSCBuffer, CmdListMode::Graphics);
   }
@@ -237,9 +254,7 @@ void SimpleParticle::render(
   }
 
   // Bind vb and ib
-  D3D12_VERTEX_BUFFER_VIEW vbView = m_QuadModel.VertexBuffer().vbView();
-  D3D12_INDEX_BUFFER_VIEW ibView = m_QuadModel.IndexBuffer().IBView();
-  p_CmdList->IASetVertexBuffers(0, 1, &vbView);
+  D3D12_INDEX_BUFFER_VIEW ibView = m_IndexBuffer.IBView();
   p_CmdList->IASetIndexBuffer(&ibView);
   p_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -248,11 +263,7 @@ void SimpleParticle::render(
   //
   // Draw particles:
   {
-    // There should only be one mesh and meshPart in the quad model:
-    assert(m_QuadModel.NumMeshes() == 1 && m_QuadModel.Meshes()[0].NumMeshParts() == 1);
-    const Mesh& quad = m_QuadModel.Meshes()[0];
-    const MeshPart& part = quad.MeshParts()[0];
-    p_CmdList->DrawIndexedInstanced(part.IndexCount, 1, 0, 0, 0);
+    p_CmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
   }
 
   PIXEndEvent(p_CmdList);

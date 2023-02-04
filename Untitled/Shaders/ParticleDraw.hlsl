@@ -26,6 +26,7 @@ struct VSConstants
   row_major float4x4 View;
   row_major float4x4 Projection;
   float4 Params0;
+  float4 Params1;
 };
 ConstantBuffer<VSConstants> VSCBuffer : register(b0);
 
@@ -69,8 +70,83 @@ struct PSInput
   float2 TexCoord : TEXCOORD;
 };
 
-VSOutput VS(VSInput p_Input)
+VSOutput VS(in uint VertexIdx
+                  : SV_VertexID)
 {
+#if 1
+
+#if DRAW_SS_QUAD
+  float2 vtxPosition = 0.0f;
+  if (VertexIdx == 1)
+      vtxPosition = float2(1.0f, 0.0f);
+  else if (VertexIdx == 2)
+      vtxPosition = float2(1.0f, 1.0f);
+  else if (VertexIdx == 3)
+      vtxPosition = float2(0.0f, 1.0f);
+
+  float textureWH = 10;
+  float4 rect = float4(0.0f, 0.0f, textureWH, textureWH);
+
+  // Scale the quad so that it's texture-sized
+  float2 positionSS = vtxPosition * rect.zw;
+
+  float scale = 10.0f;
+  positionSS *= scale;
+
+  // Rotation
+  // positionSS = mul(positionSS, float2x2(cosRotation, -sinRotation, sinRotation, cosRotation));
+
+  // Translate
+  float2 pos = float2(10.0f, 10.0f);
+  positionSS += pos;
+
+  // Scale by the viewport size, flip Y, then rescale to device coordinates
+  float2 viewportSize = float2(1280, 720);
+  float2 positionDS = positionSS;
+  positionDS /= viewportSize;
+  positionDS = positionDS * 2 - 1;
+  positionDS.y *= -1;
+
+  // Figure out the texture coordinates
+  float2 outTexCoord = vtxPosition;
+  outTexCoord.xy *= rect.zw / textureWH;
+  outTexCoord.xy += rect.xy / textureWH;
+
+  VSOutput output;
+  output.PositionCS = float4(positionDS, 1.0f, 1.0f);
+  output.TexCoord = outTexCoord;
+  // output.Color = instanceData.Color;
+#endif // DRAW_SS_QUAD
+
+
+  // Experiment
+  VSOutput output;
+
+  float4 vtxPosition = float4(0, 0, 1, 1);
+  if (VertexIdx == 1)
+    vtxPosition = float4(1.0f, 0.0f, 1, 1);
+  else if (VertexIdx == 2)
+    vtxPosition = float4(1.0f, 1.0f, 1, 1);
+  else if (VertexIdx == 3)
+    vtxPosition = float4(0.0f, 1.0f, 1, 1);
+
+  // UVs
+  output.TexCoord = vtxPosition.xy;
+
+  // Scale:
+  float scale = VSCBuffer.Params0.x;
+  vtxPosition.xy *= scale;
+
+  output.PositionCS = vtxPosition;
+  float4x4 mat = VSCBuffer.WorldView;
+  // mat._m31 = 0.0f;
+  output.PositionCS = mul(output.PositionCS, mat);
+  output.PositionCS = mul(output.PositionCS, VSCBuffer.Projection);
+
+  return output;
+
+#else
+
   VSOutput output;
   float4 positionOS = float4(p_Input.PositionOS, 1.0f);
   output.PositionCS = positionOS;
@@ -99,6 +175,8 @@ VSOutput VS(VSInput p_Input)
 
   output.TexCoord = p_Input.UV;
   return output;
+
+#endif
 }
 
 float4 PS(PSInput p_Input) : SV_TARGET
@@ -108,4 +186,6 @@ float4 PS(PSInput p_Input) : SV_TARGET
   float4 ret = float4(0, 0, 0, texColor.w);
   ret.xyz = texColor.xyz * 3.5f + (VSCBuffer.Params0.x * 1.5f);
   return ret;
+
+  // return float4(1.0f, 0.0f, 0.0f, 1.0f);
 }

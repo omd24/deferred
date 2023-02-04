@@ -20,7 +20,7 @@ private:
   ID3DBlobPtr m_DrawPS = nullptr;
   ID3D12RootSignature* m_DrawRootSig = nullptr;
   ID3D12PipelineState* m_DrawPSO = nullptr;
-  Model m_QuadModel;
+  FormattedBuffer m_IndexBuffer;
   DXGI_FORMAT m_OutputFormat;
   DXGI_FORMAT m_DepthFormat;
   Texture m_SpriteTexture;

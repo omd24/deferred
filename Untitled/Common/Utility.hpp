@@ -600,3 +600,17 @@ inline bool isMouseOverWindow(POINT p_MousePos)
   return ret;
 }
 //---------------------------------------------------------------------------//
+/// zero or one random int
+inline int randInt()
+{
+  int rndNumInt = std::rand() % 2;
+  return rndNumInt;
+}
+//---------------------------------------------------------------------------//
+/// random float between 0 and 1
+inline float randFloat()
+{
+  float ret = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+  return ret;
+}
+//---------------------------------------------------------------------------//

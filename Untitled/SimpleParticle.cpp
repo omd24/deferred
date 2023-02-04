@@ -14,22 +14,34 @@ enum RootParams : uint32_t
   NumRootParams
 };
 //---------------------------------------------------------------------------//
-struct VSConstants
+struct SpriteConstants
 {
-  glm::mat4x4 WorldViewIdentity;
-  glm::mat4x4 World;
-  glm::mat4x4 View;
+  glm::mat4x4 WorldView;
   glm::mat4x4 Projection;
+  glm::mat4x4 ViewProj;
+  glm::mat4x4 View;
+  glm::mat4x4 InvView;
   glm::vec4 Params0; // .x = scale
-  glm::vec4 Params1; // .x = 0, .y = 0, .z = textureWidth, .w = textureHeight
+  glm::quat QuatCamera;
+  glm::vec4 CamUp;
+  glm::vec4 CamRight;
+  glm::mat3x3 InvView3;
 };
 //---------------------------------------------------------------------------//
-void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_CameraDir)
+void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::vec3& p_Position)
 {
   assert(g_Device != nullptr);
 
   m_OutputFormat = p_Fmt;
   m_DepthFormat = p_DepthFmt;
+
+  // init transofrms:
+  m_Transforms.resize(ParticleCount);
+  glm::mat4 worldMat = glm::identity<glm::mat4>();
+  // worldMat[3][0] = p_Position.x;
+  // worldMat[3][1] = p_Position.y;
+  // worldMat[3][2] = p_Position.z;
+  m_Transforms[0] = worldMat;
 
   // init index data
   {
@@ -45,7 +57,7 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   }
 
   // load main texture
-  loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\smoke.dds");
+  loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\ring.dds");
 
   // create root signatures:
   {
@@ -174,6 +186,11 @@ void SimpleParticle::render(
     ID3D12GraphicsCommandList* p_CmdList,
     const glm::mat4& p_ViewMat,
     const glm::mat4& p_ProjMat,
+    const glm::mat4& p_ViewProj,
+    const glm::vec3& p_Dir,
+    const glm::quat& p_CameraOrientation,
+    const glm::vec4& p_CameraUp,
+    const glm::vec4& p_CameraRight,
     const float p_DeltaTime)
 {
   PIXBeginEvent(p_CmdList, 0, "Particle Draw");
@@ -182,69 +199,54 @@ void SimpleParticle::render(
   p_CmdList->SetPipelineState(m_DrawPSO);
 
   // Calculate particle position
-  glm::mat4 world = glm::identity<glm::mat4>();
+  glm::mat4 world = m_Transforms[0];
   const float pi = 3.141592654f;
-  static float maxMultiplier = -1;
   // Animate particle position:
   {
-    glm::vec3 initPos = glm::vec3(1.0f, 2.0f, 1.0f);
-    const float particleIndex = 1.0f;
-    int rndNumInt = std::rand() % 2;
-    float rndNumF = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
-    rndNumF = (0 == rndNumInt) ? -rndNumF : rndNumF;
-    float multiplier = std::cos(p_DeltaTime * pi / 500 + particleIndex * 0.1f);
-    // if (multiplier > maxMultiplier)
-    {
-      maxMultiplier = multiplier;
-      // float xFactor = multiplier;
-      float yFactor = multiplier;
-      // float zFactor = multiplier;
-      // worldView[3][0] += xFactor;
-      world[3][1] = initPos.y + yFactor;
-      // world[3][1] += yFactor;
-      // worldView[3][2] += zFactor;
-
-      // world[3][0] = initPos.x + yFactor;
-
-      // world[3][2] = initPos.z + yFactor;
-    }
+    // const float particleIndex = 1.0f;
+    // float multiplier = std::cos(p_DeltaTime * pi / 500 + particleIndex * 0.1f);
+    // float yFactor = multiplier;
+    // world[3][1] += yFactor;
   }
 
 #pragma region Billboarding
   glm::mat4 worldView = world * p_ViewMat;
   // N.B. For billboarding just set the upper left 3x3 of worldView to identity:
   // https://stackoverflow.com/a/15325758/4623650
-  worldView[0][0] = 1;
-  worldView[0][1] = 0;
-  worldView[0][2] = 0;
-  worldView[1][0] = 0;
-  worldView[1][1] = 1;
-  worldView[1][2] = 0;
-  worldView[2][0] = 0;
-  worldView[2][1] = 0;
-  worldView[2][2] = 1;
+  // worldView[0][0] = 1;
+  // worldView[0][1] = 0;
+  // worldView[0][2] = 0;
+  // worldView[1][0] = 0;
+  // worldView[1][1] = 1;
+  // worldView[1][2] = 0;
+  // worldView[2][0] = 0;
+  // worldView[2][1] = 0;
+  // worldView[2][2] = 1;
 #pragma endregion
 
-  // Animate particle scale:
-  {
-      // static int sign = 1;
-      // sign *= -1;
-      // float scale = std::sin(p_DeltaTime * pi);
-      // worldView[0][0] *= (1 + scale * sign);
-      // worldView[1][1] *= (1 + scale * -sign);
-  }
+  glm::mat3 invViewRot = glm::inverse(glm::mat3(p_ViewMat));
 
   // Set vs cbuffer:
   {
-    VSConstants vsConstants;
-    vsConstants.Projection = p_ProjMat;
-    vsConstants.WorldViewIdentity = worldView;
-    vsConstants.View = p_ViewMat;
-    vsConstants.World = world;
-    vsConstants.Params0.x = std::cos(p_DeltaTime * pi / 50.0f);
-    vsConstants.Params1 = glm::vec4(0, 0, m_SpriteTexture.Width, m_SpriteTexture.Height);
+    SpriteConstants spriteConstants;
+    spriteConstants.Projection = p_ProjMat;
+    // spriteConstants.WorldView = glm::inverse(p_ViewMat) * worldView;
+    spriteConstants.WorldView = p_ViewMat;
+    spriteConstants.ViewProj = p_ViewProj;
+    spriteConstants.View = p_ViewMat;
+    glm::mat4 rotMat;
+    glm::vec3 new_y = glm::normalize(p_Dir);
+    glm::vec3 new_z = -glm::normalize(glm::cross(new_y, glm::vec3(0, 1, 0)));
+    glm::vec3 new_x = glm::normalize(glm::cross(new_y, new_z));
+    // spriteConstants.RotationMatrix = glm::transpose(glm::mat3(new_x, new_y, new_z));
+    spriteConstants.InvView = glm::inverse(p_ViewMat);
+    spriteConstants.Params0.x = std::cos(p_DeltaTime * pi / 50.0f); // scale factor
+    spriteConstants.InvView3 = invViewRot;
+    spriteConstants.QuatCamera = p_CameraOrientation;
+    spriteConstants.CamUp = p_CameraUp;
+    spriteConstants.CamRight = p_CameraRight;
 
-    BindTempConstantBuffer(p_CmdList, vsConstants, RootParam_VSCBuffer, CmdListMode::Graphics);
+    BindTempConstantBuffer(p_CmdList, spriteConstants, RootParam_VSCBuffer, CmdListMode::Graphics);
   }
 
   // Set srv indices:

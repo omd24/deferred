@@ -527,9 +527,8 @@ void RenderManager::loadAssets()
 
   // Init particles:
   {
-    glm::vec3 forward = camera.Forward();
-
-    m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, camera.Forward());
+    glm::vec3 initPos = glm::vec3(1.20f, 0.42f, -1.38f);
+    m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, initPos);
   }
 
   {
@@ -909,11 +908,20 @@ void RenderManager::renderParticles()
   m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
 
   const glm::mat4 view = glm::transpose(camera.ViewMatrix());
-  const glm::mat4 proj = glm::transpose(camera.ProjectionMatrix());
+  const glm::mat4 proj = glm::transpose(camera.ProjectionMatrix()); // Already transposed
   const glm::mat4 viewproj = glm::transpose(camera.ViewProjectionMatrix());
   const glm::mat4 wvp = glm::identity<glm::mat4>() * glm::transpose(camera.ViewProjectionMatrix());
   const glm::vec2 viewportSize = glm::vec2(m_Info.m_Width, m_Info.m_Height);
-  m_Particle.render(m_CmdList, view, proj, m_Timer.m_ElapsedSecondsF);
+  m_Particle.render(
+      m_CmdList,
+      view,
+      proj,
+      viewproj,
+      camera.Forward(),
+      camera.Orientation(),
+      glm::vec4(camera.Up(), 0.0f),
+      glm::vec4(camera.Right(), 0.0f),
+      m_Timer.m_ElapsedSecondsF);
 
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

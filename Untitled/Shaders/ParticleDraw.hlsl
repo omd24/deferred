@@ -135,6 +135,32 @@ VSOutput VS(in uint VertexIdx
   worldView._m13 = 0;
   worldView._m23 = 0; 
   worldView._m33 = 1; 
+
+#if 0
+  worldView._m20 = 0;
+  worldView._m21 = 0;
+  worldView._m22 = 1; 
+
+  worldView._m02 = 0;
+  worldView._m12 = 0;
+  worldView._m22 = 1; 
+
+  worldView._m10 = 0;
+  worldView._m11 = 1;
+  worldView._m12 = 0; 
+
+  worldView._m01 = 0;
+  worldView._m11 = 1;
+  worldView._m21 = 0;
+
+  worldView._m00 = 1;
+  worldView._m01 = 0;
+  worldView._m02 = 0; 
+
+  worldView._m00 = 1;
+  worldView._m10 = 0;
+  worldView._m20 = 0; 
+#endif
   // worldView *= SpriteCBuffer.InvView;
 
   // output.PositionCS = mul(output.PositionCS, /* transpose */(worldView));

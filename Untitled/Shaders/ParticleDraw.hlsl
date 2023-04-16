@@ -96,8 +96,8 @@ VSOutput VS(in uint VertexIdx
 
   // Scale:
   // float scale = SpriteCBuffer.Params0.x * 10;
-  float scale = 1.0;
-  vtxPosition.xy *= scale;
+  float scale = 0.5;
+  // vtxPosition.xy *= scale;
 
   // Billboard:
   output.PositionCS = vtxPosition;
@@ -106,7 +106,7 @@ VSOutput VS(in uint VertexIdx
   // float4 quatRot = QuatFrom3x3(SpriteCBuffer.RotationMatrix);
   // output.PositionCS.xyz = rotateVector(quatRot, output.PositionCS.xyz);
   float4x4 worldView = SpriteCBuffer.WorldView;
-#if 1
+#if 0
   worldView._m20 = 0;
   worldView._m21 = 0;
   worldView._m22 = 1; 
@@ -135,8 +135,8 @@ VSOutput VS(in uint VertexIdx
 
   float aspect = 1280 / 720;
 
-  float half_width = scale;
-  float half_height = scale;
+  float half_width = 1.0 * scale;
+  float half_height = 1.0 * scale;
 
   float3 right = float3(0, 0, 0);
   float3 up = float3(0, 0, 0);
@@ -145,6 +145,16 @@ VSOutput VS(in uint VertexIdx
   {
     right = SpriteCBuffer.CamRight.xyz;
     up = SpriteCBuffer.CamUp.xyz;
+
+    float3 localPos = float3(0, 0, 0);
+    if (VertexIdx == 0) // float4(0.0f, 0.0f, 1, 1);
+      output.PositionCS = float4(localPos + half_width * right + half_height * up, 1.0f);
+    else if (VertexIdx == 1) // float4(1.0f, 0.0f, 1, 1);
+      output.PositionCS = float4(localPos - half_width * right + half_height * up, 1.0f);
+    else if (VertexIdx == 2) // float4(1.0f, 1.0f, 1, 1);
+      output.PositionCS = float4(localPos - half_width * right - half_height * up, 1.0f);
+    else if (VertexIdx == 3) // float4(0.0f, 1.0f, 1, 1);
+      output.PositionCS = float4(localPos + half_width * right - half_height * up, 1.0f);
   }
   else
   {
@@ -168,21 +178,27 @@ VSOutput VS(in uint VertexIdx
     up[1] = worldView._m11;
     up[2] = worldView._m12;
 
+    float2 quadOffset = vtxPosition.xy * 0.5;
+    quadOffset.y *= aspect;
 
+    float size = 1.0f;
+    float3 localQuadVertex = quadOffset.y * up * size + quadOffset.x * right * size;
+
+    output.PositionCS.xyz = localQuadVertex.xyz;
   }
 
   // up[0] = worldView._m10;
   // up[1] = worldView._m11;
   // up[2] = worldView._m12;
 
-  if (VertexIdx == 0) // float4(0.0f, 0.0f, 1, 1);
-    output.PositionCS = float4(vtxPosition.xyz + half_width * right + half_height * up, 1.0f);
-  else if (VertexIdx == 1) // float4(1.0f, 0.0f, 1, 1);
-    output.PositionCS = float4(vtxPosition.xyz - half_width * right + half_height * up, 1.0f);
-  else if (VertexIdx == 2) // float4(1.0f, 1.0f, 1, 1);
-    output.PositionCS = float4(vtxPosition.xyz - half_width * right - half_height * up, 1.0f);
-  else if (VertexIdx == 3) // float4(0.0f, 1.0f, 1, 1);
-    output.PositionCS = float4(vtxPosition.xyz + half_width * right - half_height * up, 1.0f);
+  // if (VertexIdx == 0) // float4(0.0f, 0.0f, 1, 1);
+  //   output.PositionCS = float4(vtxPosition.xyz + half_width * right + half_height * up, 1.0f);
+  // else if (VertexIdx == 1) // float4(1.0f, 0.0f, 1, 1);
+  //   output.PositionCS = float4(vtxPosition.xyz - half_width * right + half_height * up, 1.0f);
+  // else if (VertexIdx == 2) // float4(1.0f, 1.0f, 1, 1);
+  //   output.PositionCS = float4(vtxPosition.xyz - half_width * right - half_height * up, 1.0f);
+  // else if (VertexIdx == 3) // float4(0.0f, 1.0f, 1, 1);
+  //   output.PositionCS = float4(vtxPosition.xyz + half_width * right - half_height * up, 1.0f);
 
 #endif
 

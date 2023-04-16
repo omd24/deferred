@@ -41,6 +41,7 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   // worldMat[3][0] = p_Position.x;
   // worldMat[3][1] = p_Position.y;
   // worldMat[3][2] = p_Position.z;
+  worldMat[3][1] = 2.0f; // shift a little up
   m_Transforms[0] = worldMat;
 
   // init index data
@@ -57,7 +58,8 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   }
 
   // load main texture
-  loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\ring.dds");
+  // loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\ring.dds");
+  loadTexture(g_Device, m_SpriteTexture, L"..\\Content\\Textures\\checkerboard.dds");
 
   // create root signatures:
   {
@@ -231,7 +233,7 @@ void SimpleParticle::render(
     SpriteConstants spriteConstants;
     spriteConstants.Projection = p_ProjMat;
     // spriteConstants.WorldView = glm::inverse(p_ViewMat) * worldView;
-    spriteConstants.WorldView = p_ViewMat;
+    spriteConstants.WorldView = world * p_ViewMat;
     spriteConstants.ViewProj = p_ViewProj;
     spriteConstants.View = p_ViewMat;
     glm::mat4 rotMat;

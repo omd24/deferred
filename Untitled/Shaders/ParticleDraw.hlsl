@@ -101,41 +101,11 @@ VSOutput VS(in uint VertexIdx
 
   // Billboard:
   output.PositionCS = vtxPosition;
-
-  // float3 cameraRightWS = float3(SpriteCBuffer.View[0][0], SpriteCBuffer.View[1][0], SpriteCBuffer.View[2][0]);
-  // float3 cameraUpWS = float3(SpriteCBuffer.View[0][1], SpriteCBuffer.View[1][1], SpriteCBuffer.View[2][1]);
-
-  // output.PositionCS.xyz +=
-  //   + cameraRightWS * -0.5f * 2.0f
-  //   + cameraUpWS * +0.5f * 2.0f;
-
   float3x3 invView = SpriteCBuffer.InvView;
 
   // float4 quatRot = QuatFrom3x3(SpriteCBuffer.RotationMatrix);
   // output.PositionCS.xyz = rotateVector(quatRot, output.PositionCS.xyz);
   float4x4 worldView = SpriteCBuffer.WorldView;
-  worldView._m00 = invView._m00; 
-  worldView._m01 = invView._m01; 
-  worldView._m02 = invView._m02;
-
-  worldView._m10 = invView._m10; 
-  worldView._m11 = invView._m11; 
-  worldView._m12 = invView._m12;
-
-  worldView._m20 = invView._m20; 
-  worldView._m21 = invView._m21; 
-  worldView._m22 = invView._m22; 
-
-  worldView._m30 = 0;
-  worldView._m31 = 0;
-  worldView._m32 = 0; 
-  worldView._m33 = 1; 
-
-  worldView._m03 = 0;
-  worldView._m13 = 0;
-  worldView._m23 = 0; 
-  worldView._m33 = 1; 
-
 #if 0
   worldView._m20 = 0;
   worldView._m21 = 0;
@@ -160,18 +130,9 @@ VSOutput VS(in uint VertexIdx
   worldView._m00 = 1;
   worldView._m10 = 0;
   worldView._m20 = 0; 
-#endif
-  // worldView *= SpriteCBuffer.InvView;
+  
+#else // alternate billboarding method
 
-  // output.PositionCS = mul(output.PositionCS, /* transpose */(worldView));
-
-  // float3x3 invViewRot = float3x3(SpriteCBuffer.InvView);
-  // output.PositionCS.xy = vtxPosition.xy + mul(vtxPosition, invViewRot);
-
-  // output.PositionCS.xyz = mul(output.PositionCS.xyz, SpriteCBuffer.InvView3);
-  // output.PositionCS.xyz = mul(output.PositionCS.xyz, SpriteCBuffer.InvView3);
-
-  // output.PositionCS.xyz = rotateVector( SpriteCBuffer.Params0.x *wSpriteCBuffer.QuatCamera, output.PositionCS.xyz);
   float half_width = 2 * scale;
   float half_height = 2 * scale;
   float3 right = SpriteCBuffer.CamRight.xyz;
@@ -185,14 +146,10 @@ VSOutput VS(in uint VertexIdx
   else if (VertexIdx == 3) // float4(0.0f, 1.0f, 1, 1);
     output.PositionCS = float4(vtxPosition.xyz + half_width * right - half_height * up, 1.0f);
 
-  	// output.PositionCS.xyz = 
-		// // vtxPosition.xyz
-		// + SpriteCBuffer.CamRight * vtxPosition.x
-		// + SpriteCBuffer.CamUp * vtxPosition.y;
+#endif
 
-  // output.PositionCS += 
-
-  output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.View));
+  output.PositionCS = mul(output.PositionCS, /* transpose */(worldView));
+  // output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.View));
   output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.Projection));
   // output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.ViewProj));
 

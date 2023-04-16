@@ -2,6 +2,9 @@
 #include "d3dx12.h"
 #include "pix3.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/transform.hpp>
+
 static constexpr int ParticleCount = 2;
 
 //---------------------------------------------------------------------------//
@@ -38,11 +41,16 @@ void SimpleParticle::init(DXGI_FORMAT p_Fmt, DXGI_FORMAT p_DepthFmt, const glm::
   // init transofrms:
   m_Transforms.resize(ParticleCount);
   glm::mat4 worldMat = glm::identity<glm::mat4>();
-  // worldMat[3][0] = p_Position.x;
-  // worldMat[3][1] = p_Position.y;
-  // worldMat[3][2] = p_Position.z;
-  worldMat[3][1] = 2.0f; // shift a little up
-  m_Transforms[0] = worldMat;
+  // worldMat[0][3] = p_Position.x;
+  // worldMat[1][3] = p_Position.y;
+  // worldMat[2][3] = p_Position.z;
+
+  worldMat[1][3] = 2.0f; // shift a little up
+
+  // rotate 90 degree
+  // worldMat = glm::rotate(worldMat, 1.0f, glm::vec3(0, 1, 0));
+
+  m_Transforms[0] = glm::transpose(worldMat);
 
   // init index data
   {

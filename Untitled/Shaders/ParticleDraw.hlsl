@@ -96,7 +96,7 @@ VSOutput VS(in uint VertexIdx
 
   // Scale:
   // float scale = SpriteCBuffer.Params0.x * 10;
-  float scale = 0.5;
+  float scale = 1.0;
   vtxPosition.xy *= scale;
 
   // Billboard:
@@ -106,7 +106,7 @@ VSOutput VS(in uint VertexIdx
   // float4 quatRot = QuatFrom3x3(SpriteCBuffer.RotationMatrix);
   // output.PositionCS.xyz = rotateVector(quatRot, output.PositionCS.xyz);
   float4x4 worldView = SpriteCBuffer.WorldView;
-#if 0
+#if 1
   worldView._m20 = 0;
   worldView._m21 = 0;
   worldView._m22 = 1; 
@@ -133,10 +133,48 @@ VSOutput VS(in uint VertexIdx
   
 #else // alternate billboarding method
 
-  float half_width = 2 * scale;
-  float half_height = 2 * scale;
-  float3 right = SpriteCBuffer.CamRight.xyz;
-  float3 up = SpriteCBuffer.CamUp.xyz;
+  float aspect = 1280 / 720;
+
+  float half_width = scale;
+  float half_height = scale;
+
+  float3 right = float3(0, 0, 0);
+  float3 up = float3(0, 0, 0);
+
+  if (true)
+  {
+    right = SpriteCBuffer.CamRight.xyz;
+    up = SpriteCBuffer.CamUp.xyz;
+  }
+  else
+  {
+    // Getting right and up from model-view matrix:
+    // http://www.lighthouse3d.com/opengl/billboarding/index.php?billCheat2
+
+    // float4x4 rot90 =
+    //   {
+    //       { 0, 1, 0, 0 },
+    //       { -1, 0, 0, 0 },
+    //       { 0, 0, 1, 0 },
+    //       { 0, 0, 0, 1 }
+    //   };
+    // worldView = rot90 * SpriteCBuffer.View;
+
+    right[0] = worldView._m00;
+    right[1] = worldView._m01;
+    right[2] = worldView._m02;
+
+    up[0] = worldView._m10;
+    up[1] = worldView._m11;
+    up[2] = worldView._m12;
+
+
+  }
+
+  // up[0] = worldView._m10;
+  // up[1] = worldView._m11;
+  // up[2] = worldView._m12;
+
   if (VertexIdx == 0) // float4(0.0f, 0.0f, 1, 1);
     output.PositionCS = float4(vtxPosition.xyz + half_width * right + half_height * up, 1.0f);
   else if (VertexIdx == 1) // float4(1.0f, 0.0f, 1, 1);

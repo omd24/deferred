@@ -23,6 +23,7 @@ float3 rotateVector(in float4 p_quat, in float3 p_vec)
 
 struct SpriteConstants
 {
+  row_major float4x4 World;
   row_major float4x4 WorldView;
   row_major float4x4 Projection;
   row_major float4x4 ViewProj;
@@ -146,7 +147,9 @@ VSOutput VS(in uint VertexIdx
     right = SpriteCBuffer.CamRight.xyz;
     up = SpriteCBuffer.CamUp.xyz;
 
-    float3 localPos = float3(0, 0, 0);
+    float4 localPos = float4(0, 0, 0, 1); // TODO: pass this from host
+    localPos = mul(localPos, SpriteCBuffer.World); // everything here is in WS
+    // localPos = mul(localPos, SpriteCBuffer.View);
     if (VertexIdx == 0) // float4(0.0f, 0.0f, 1, 1);
       output.PositionCS = float4(localPos + half_width * right + half_height * up, 1.0f);
     else if (VertexIdx == 1) // float4(1.0f, 0.0f, 1, 1);
@@ -202,8 +205,8 @@ VSOutput VS(in uint VertexIdx
 
 #endif
 
-  output.PositionCS = mul(output.PositionCS, /* transpose */(worldView));
-  // output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.View));
+  // output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.World));
+  output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.View));
   output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.Projection));
   // output.PositionCS = mul(output.PositionCS, /* transpose */(SpriteCBuffer.ViewProj));
 

@@ -19,6 +19,7 @@ enum RootParams : uint32_t
 //---------------------------------------------------------------------------//
 struct SpriteConstants
 {
+  glm::mat4x4 World;
   glm::mat4x4 WorldView;
   glm::mat4x4 Projection;
   glm::mat4x4 ViewProj;
@@ -240,7 +241,7 @@ void SimpleParticle::render(
   {
     SpriteConstants spriteConstants;
     spriteConstants.Projection = p_ProjMat;
-    // spriteConstants.WorldView = glm::inverse(p_ViewMat) * worldView;
+    spriteConstants.World = world;
     spriteConstants.WorldView = world * p_ViewMat;
     spriteConstants.ViewProj = p_ViewProj;
     spriteConstants.View = p_ViewMat;

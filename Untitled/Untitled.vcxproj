@@ -149,6 +149,7 @@
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
       <MinimalRebuild>false</MinimalRebuild>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>
@@ -172,6 +173,7 @@
       <DisableSpecificWarnings>
       </DisableSpecificWarnings>
       <MinimalRebuild>false</MinimalRebuild>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <SubSystem>

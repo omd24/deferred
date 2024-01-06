@@ -708,7 +708,10 @@ struct Texture
   {
     SRVDescriptorHeap.FreePersistent(SRV);
     if (Resource != nullptr)
+    {
+      // TODO!
       Resource->Release();
+    }
   }
 
 private:

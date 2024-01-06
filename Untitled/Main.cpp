@@ -174,13 +174,6 @@ _Use_decl_annotations_ int WINAPI WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR
 {
   // Set up the renderer
   void* rendererMem = reinterpret_cast<void*>(::malloc(sizeof(*g_Renderer)));
-  DEFER(free_renderer_mem)
-  {
-    g_Renderer->~RenderManager();
-    //::free(rendererMem);
-  };
-  g_Renderer = new (rendererMem) RenderManager;
-  g_Renderer->OnInit(1280, 720, L"D3D12 Draw Untitled");
 
   // Get shader path:
   UINT pathSize = 512;
@@ -189,6 +182,18 @@ _Use_decl_annotations_ int WINAPI WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR
   const std::wstring& p_WideStr = std::wstring(shadersPath);
   std::string shaderPathStr = WideStrToStr(p_WideStr);
 
+  // Fancy way to release resources
+
+  DEFER(free_renderer_mem)
+  {
+    ::free(shadersPath);
+    g_Renderer->~RenderManager();
+    ::free(rendererMem);
+  };
+
+  g_Renderer = new (rendererMem) RenderManager;
+  g_Renderer->OnInit(1280, 720, L"D3D12 Draw Untitled");
+
   // Start the file watcher:
   g_FileWatcher = std::make_unique<FileWatcher>();
   g_FileWatcher->startWatching(shaderPathStr.c_str(), true);
@@ -196,6 +201,11 @@ _Use_decl_annotations_ int WINAPI WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR
   // Run the application:
   int ret = appExec(p_Instance, p_CmdShow, nullptr);
 
-  ::free(shadersPath);
+  // Simple release resources
+  /*
+    ::free(shadersPath);
+    g_Renderer->~RenderManager();
+  */
+
   return ret;
 }

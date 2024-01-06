@@ -2231,7 +2231,10 @@ DepthBuffer::DepthBuffer() {}
 DepthBuffer::~DepthBuffer()
 {
   assert(DSVFormat == DXGI_FORMAT_UNKNOWN);
-  deinit();
+
+  // TODO: Check why this causes access violation?
+  // Are we releasing this earlier?
+  // deinit();
 }
 
 void DepthBuffer::init(const DepthBufferInit& init)

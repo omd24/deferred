@@ -197,6 +197,7 @@
     <ClCompile Include="Common\ImguiHelper.cpp" />
     <ClCompile Include="Common\Model.cpp" />
     <ClCompile Include="Common\PostFxHelper.cpp" />
+    <ClCompile Include="Common\ShadowHelper.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="PostProcessor.cpp" />
     <ClCompile Include="RenderManager.cpp" />
@@ -218,6 +219,7 @@
     <ClInclude Include="Common\Input.hpp" />
     <ClInclude Include="Common\Model.hpp" />
     <ClInclude Include="Common\PostFxHelper.hpp" />
+    <ClInclude Include="Common\ShadowHelper.hpp" />
     <ClInclude Include="Common\Thread.hpp" />
     <ClInclude Include="Common\Timer.hpp" />
     <ClInclude Include="Common\Utility.hpp" />

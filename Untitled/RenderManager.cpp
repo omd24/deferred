@@ -3,7 +3,7 @@
 #include <pix3.h>
 #include <algorithm>
 #include "Common/Input.hpp"
-#include "AppSettings.hpp"
+#include "ShadowHelper.hpp"
 
 #define ENABLE_PARTICLE_EXPERIMENTAL 0
 
@@ -15,6 +15,8 @@ static constexpr uint32_t MaxSpotLights = 32;
 static const float SpotLightIntensityFactor = 25.0f;
 static uint32_t MaxLightClamp = 0;
 
+static const uint64_t SpotLightShadowMapSize = 1024;
+
 //---------------------------------------------------------------------------//
 // Internal structs
 //---------------------------------------------------------------------------//
@@ -22,6 +24,7 @@ enum DeferredRootParams : uint32_t
 {
   DeferredParams_StandardDescriptors, // textures
   DeferredParams_PSCBuffer,
+  DeferredParams_ShadowCBuffer,
   DeferredParams_DeferredCBuffer,
   DeferredParams_LightCBuffer,
   DeferredParams_SRVIndices,
@@ -299,45 +302,48 @@ bool RenderManager::createPSOs()
     gbufferPSO->Release();
   if (deferredPSO != nullptr)
     deferredPSO->Release();
+  if (spotLightShadowPSO != nullptr)
+    spotLightShadowPSO = nullptr;
 
   // Load and compile shaders:
   ret = compileShaders();
   assert(m_GBufferPS != nullptr && m_GBufferVS != nullptr && m_DeferredCS != nullptr);
 
+  // Standard input elements
+  static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
+      {"POSITION",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       0,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"NORMAL",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       12,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"TANGENT",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       32,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"BITANGENT",
+       0,
+       DXGI_FORMAT_R32G32B32_FLOAT,
+       0,
+       44,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+
   // 1. Gbuffer pso:
   {
-    static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
-        {"POSITION",
-         0,
-         DXGI_FORMAT_R32G32B32_FLOAT,
-         0,
-         0,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-        {"NORMAL",
-         0,
-         DXGI_FORMAT_R32G32B32_FLOAT,
-         0,
-         12,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-        {"UV", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"TANGENT",
-         0,
-         DXGI_FORMAT_R32G32B32_FLOAT,
-         0,
-         32,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-        {"BITANGENT",
-         0,
-         DXGI_FORMAT_R32G32B32_FLOAT,
-         0,
-         44,
-         D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-         0},
-    };
-
     DXGI_FORMAT gbufferFormats[] = {
         tangentFrameTarget.format(),
         uvTarget.format(),
@@ -375,6 +381,35 @@ bool RenderManager::createPSOs()
     psoDesc.pRootSignature = deferredRootSig;
     m_Dev->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&deferredPSO));
     deferredPSO->SetName(L"Deferred PSO");
+    if (FAILED(hr))
+      ret = false;
+  }
+
+  // 3. depth only and spot light shadow depth psos
+  {
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = depthRootSignature;
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(m_GBufferVS.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
+    psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+    psoDesc.DepthStencilState = GetDepthState(DepthState::WritesEnabled);
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 0;
+    psoDesc.DSVFormat = depthBuffer.DSVFormat;
+    psoDesc.SampleDesc.Count = 1;
+    psoDesc.SampleDesc.Quality = 0;
+    psoDesc.InputLayout.NumElements = arrayCount32(standardInputElements);
+    psoDesc.InputLayout.pInputElementDescs = standardInputElements;
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&depthPSO));
+    depthPSO->SetName(L"Depth-only PSO");
+    if (FAILED(hr))
+      ret = false;
+
+    // Spotlight shadow depth PSO
+    psoDesc.DSVFormat = spotLightShadowMap.DSVFormat;
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&spotLightShadowPSO));
+    spotLightShadowPSO->SetName(L"Spotlight shadow PSO");
     if (FAILED(hr))
       ret = false;
   }
@@ -452,6 +487,8 @@ void RenderManager::createRenderTargets()
 //---------------------------------------------------------------------------//
 void RenderManager::loadAssets()
 {
+  ShadowHelper::init();
+
   // set up camera
   float aspect = float(m_Info.m_Width) / m_Info.m_Height;
   camera.Initialize(aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
@@ -496,6 +533,18 @@ void RenderManager::loadAssets()
   // Init post fx
   {
     m_PostFx.init();
+  }
+
+  {
+    DepthBufferInit dbInit;
+    dbInit.Width = SpotLightShadowMapSize;
+    dbInit.Height = SpotLightShadowMapSize;
+    dbInit.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dbInit.MSAASamples = 1;
+    dbInit.ArraySize = sceneModel.SpotLights().size();
+    dbInit.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    dbInit.Name = L"Spot Light Shadow Map";
+    spotLightShadowMap.init(dbInit);
   }
 
   // Create a structured buffer containing texture indices per-material:
@@ -575,6 +624,26 @@ void RenderManager::loadAssets()
     gbufferRootSignature->SetName(L"Gbuffer Root Sig");
   }
 
+  // Depth only root signature
+  {
+    D3D12_ROOT_PARAMETER1 rootParameters[1] = {};
+
+    // VSCBuffer
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[0].Descriptor.RegisterSpace = 0;
+    rootParameters[0].Descriptor.ShaderRegister = 0;
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = 0;
+    rootSignatureDesc.pStaticSamplers = nullptr;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    createRootSignature(m_Dev, &depthRootSignature, rootSignatureDesc);
+  }
+
   // Deferred root signature
   {
     D3D12_DESCRIPTOR_RANGE1 descriptorRanges[1] = {};
@@ -601,6 +670,14 @@ void RenderManager::loadAssets()
     rootParameters[DeferredParams_PSCBuffer].Descriptor.RegisterSpace = 0;
     rootParameters[DeferredParams_PSCBuffer].Descriptor.ShaderRegister = 0;
     rootParameters[DeferredParams_PSCBuffer].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // ShadowCBuffer
+    rootParameters[DeferredParams_ShadowCBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[DeferredParams_ShadowCBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[DeferredParams_ShadowCBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[DeferredParams_ShadowCBuffer].Descriptor.ShaderRegister = 1;
+    rootParameters[DeferredParams_ShadowCBuffer].Descriptor.Flags =
         D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
 
     // DeferredCBuffer
@@ -645,9 +722,11 @@ void RenderManager::loadAssets()
 
     // AppSettings
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[1] =
+        GetStaticSamplerState(SamplerState::ShadowMapPCF, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -704,8 +783,8 @@ void RenderManager::renderDeferred()
   PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Gbuffers");
 
   {
-    // Transition our G-Buffer targets to a writable state
-    D3D12_RESOURCE_BARRIER barriers[4] = {};
+    // Transition our G-Buffer targets to a writable state and sync on shadowmap
+    D3D12_RESOURCE_BARRIER barriers[5] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -735,6 +814,13 @@ void RenderManager::renderDeferred()
     barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[3].Transition.Subresource = 0;
+
+    barriers[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[4].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[4].Transition.pResource = spotLightShadowMap.getResource();
+    barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[4].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -808,9 +894,9 @@ void RenderManager::renderDeferred()
     }
   }
 
-  // Transition back G-Buffer stuff:
+  // Transition back G-Buffer stuff and shadow map:
   {
-    D3D12_RESOURCE_BARRIER barriers[4] = {};
+    D3D12_RESOURCE_BARRIER barriers[5] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -841,10 +927,17 @@ void RenderManager::renderDeferred()
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.Subresource = 0;
 
+    barriers[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[4].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[4].Transition.pResource = spotLightShadowMap.getResource();
+    barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[4].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
 
-  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Gbuffers
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Render Gbuffers
 #pragma endregion
 
   //
@@ -1084,6 +1177,12 @@ void RenderManager::onDestroy()
   deferredTarget.deinit();
   spotLightBuffer.deinit();
 
+  depthRootSignature->Release();
+  depthPSO->Release();
+  spotLightShadowPSO->Release();
+
+  spotLightShadowMap.deinit();
+
   // Release swc backbuffers
   for (UINT n = 0; n < FRAME_COUNT; n++)
   {
@@ -1094,6 +1193,8 @@ void RenderManager::onDestroy()
 #if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
   m_Particle.deinit();
 #endif
+
+  ShadowHelper::deinit();
 
   m_PostFx.deinit();
   AppSettings::deinit();
@@ -1159,11 +1260,14 @@ void RenderManager::onUpdate()
     camera.SetPosition(camPos);
   }
 
+  // Render spotlight shadow map
+
   // Update light uniforms
   {
-    const void* srcData[1] = {spotLights.data()};
-    uint64_t sizes[1] = {spotLights.size() * sizeof(SpotLight)};
-    uint64_t offsets[1] = {0};
+    const void* srcData[2] = {spotLights.data(), spotLightShadowMatrices};
+    uint64_t sizes[2] = {
+        spotLights.size() * sizeof(SpotLight), spotLights.size() * sizeof(glm::mat4)};
+    uint64_t offsets[2] = {0, AppSettings::MaxSpotLights * sizeof(SpotLight)};
     spotLightBuffer.multiUpdateData(srcData, sizes, offsets, arrayCount(srcData));
   }
 

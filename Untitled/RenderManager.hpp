@@ -8,6 +8,7 @@
 #include "Model.hpp"
 #include "PostProcessor.hpp"
 #include "SimpleParticle.hpp"
+#include "AppSettings.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -123,6 +124,13 @@ private:
   // Light stuff
   std::vector<SpotLight> spotLights;
   ConstantBuffer spotLightBuffer;
+  glm::mat4 spotLightShadowMatrices[AppSettings::MaxSpotLights];
+  DepthBuffer spotLightShadowMap;
+
+  // Depth only stuff
+  ID3D12PipelineState* depthPSO = nullptr;
+  ID3D12RootSignature* depthRootSignature = nullptr;
+  ID3D12PipelineState* spotLightShadowPSO = nullptr;
 
   // Deferred Stuff
   RenderTexture deferredTarget;

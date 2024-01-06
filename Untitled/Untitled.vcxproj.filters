@@ -50,6 +50,9 @@
     </ClCompile>
     <ClCompile Include="AppSettings.cpp" />
     <ClCompile Include="SimpleParticle.cpp" />
+    <ClCompile Include="Common\ShadowHelper.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -107,6 +110,9 @@
     </ClInclude>
     <ClInclude Include="AppSettings.hpp" />
     <ClInclude Include="SimpleParticle.hpp" />
+    <ClInclude Include="Common\ShadowHelper.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

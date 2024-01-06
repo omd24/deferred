@@ -1555,6 +1555,8 @@ MapResult Buffer::map()
   DEBUG_BREAK(m_CpuAccessible);
 
   // Make sure that we do this at most once per-frame
+  // because we're calling update on winproc callback in case there is any unforeseen issue, this
+  // might be called more than necessary!
   DEBUG_BREAK(m_UploadFrame != g_CurrentCPUFrame);
   m_UploadFrame = g_CurrentCPUFrame;
 
@@ -1587,6 +1589,8 @@ uint64_t Buffer::multiUpdateData(
   DEBUG_BREAK(p_NumUpdates > 0);
 
   // Make sure that we do this at most once per-frame
+  // because we're calling update on winproc callback in case there is any unforeseen issue, this
+  // might be called more than necessary!
   DEBUG_BREAK(m_UploadFrame != g_CurrentCPUFrame);
   m_UploadFrame = g_CurrentCPUFrame;
 

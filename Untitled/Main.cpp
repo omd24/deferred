@@ -182,8 +182,7 @@ _Use_decl_annotations_ int WINAPI WinMain(HINSTANCE p_Instance, HINSTANCE, LPSTR
   const std::wstring& p_WideStr = std::wstring(shadersPath);
   std::string shaderPathStr = WideStrToStr(p_WideStr);
 
-  // Fancy way to release resources
-
+  // Fancy way to release resources:
   DEFER(free_renderer_mem)
   {
     ::free(shadersPath);

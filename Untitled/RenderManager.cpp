@@ -5,6 +5,8 @@
 #include "Common/Input.hpp"
 #include "AppSettings.hpp"
 
+#define ENABLE_PARTICLE_EXPERIMENTAL 0
+
 //---------------------------------------------------------------------------//
 // Internal variables
 //---------------------------------------------------------------------------//
@@ -526,10 +528,12 @@ void RenderManager::loadAssets()
   }
 
   // Init particles:
+#if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
   {
     glm::vec3 initPos = glm::vec3(1.20f, 0.42f, -1.38f);
     m_Particle.init(deferredTarget.format(), depthBuffer.DSVFormat, initPos);
   }
+#endif
 
   {
     // Spot light and shadow bounds buffer
@@ -903,6 +907,7 @@ void RenderManager::renderDeferred()
 //---------------------------------------------------------------------------//
 void RenderManager::renderParticles()
 {
+#if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
   m_CmdList->OMSetRenderTargets(1, &deferredTarget.m_RTV, false, &depthBuffer.DSV);
@@ -925,6 +930,7 @@ void RenderManager::renderParticles()
 
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+#endif
 }
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()
@@ -1085,7 +1091,10 @@ void RenderManager::onDestroy()
     RTVDescriptorHeap.FreePersistent(m_RenderTargets[n].m_RTV);
   }
 
+#if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
   m_Particle.deinit();
+#endif
+
   m_PostFx.deinit();
   AppSettings::deinit();
   ImGuiHelper::deinit();
@@ -1375,7 +1384,9 @@ void RenderManager::onShaderChange()
     m_PostFx.deinit();
     m_PostFx.init();
 
+#if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
     m_Particle.createPSOs();
+#endif
 
     return;
   }

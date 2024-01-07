@@ -127,6 +127,29 @@ private:
   glm::mat4 spotLightShadowMatrices[AppSettings::MaxSpotLights];
   DepthBuffer spotLightShadowMap;
 
+  // Clustering stuff
+  StructuredBuffer spotLightBoundsBuffer;
+  StructuredBuffer spotLightInstanceBuffer;
+  RawBuffer spotLightClusterBuffer;
+  uint64_t numIntersectingSpotLights = 0;
+
+  ID3D12RootSignature* clusterRS = nullptr;
+  ID3DBlobPtr clusterVS;
+  ID3DBlobPtr clusterFrontFacePS;
+  ID3DBlobPtr clusterBackFacePS;
+  ID3DBlobPtr clusterIntersectingPS;
+  ID3D12PipelineState* clusterFrontFacePSO = nullptr;
+  ID3D12PipelineState* clusterBackFacePSO = nullptr;
+  ID3D12PipelineState* clusterIntersectingPSO = nullptr;
+
+  StructuredBuffer spotLightClusterVtxBuffer;
+  FormattedBuffer spotLightClusterIdxBuffer;
+  std::vector<glm::vec3> coneVertices;
+
+  ID3DBlobPtr clusterVisPS;
+  ID3D12RootSignature* clusterVisRootSignature = nullptr;
+  ID3D12PipelineState* clusterVisPSO = nullptr;
+
   // Depth only stuff
   ID3D12PipelineState* depthPSO = nullptr;
   ID3D12RootSignature* depthRootSignature = nullptr;
@@ -196,6 +219,10 @@ private:
 
   // Render shadows for all spot lights
   void renderSpotLightShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
+
+  // Clustered rendering
+  void renderClusters();
+  void renderClusterVisualizer();
 };
 
 //---------------------------------------------------------------------------//

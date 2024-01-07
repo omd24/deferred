@@ -17,9 +17,31 @@ static uint32_t MaxLightClamp = 0;
 
 static const uint64_t SpotLightShadowMapSize = 1024;
 
+static const uint64_t NumConeSides = 16;
+
 //---------------------------------------------------------------------------//
 // Internal structs
 //---------------------------------------------------------------------------//
+
+enum ClusterRootParams : uint32_t
+{
+  ClusterParams_StandardDescriptors,
+  ClusterParams_UAVDescriptors,
+  ClusterParams_CBuffer,
+  ClusterParams_AppSettings,
+
+  NumClusterRootParams,
+};
+
+enum ClusterVisRootParams : uint32_t
+{
+  ClusterVisParams_StandardDescriptors,
+  ClusterVisParams_CBuffer,
+  ClusterVisParams_AppSettings,
+
+  NumClusterVisRootParams,
+};
+
 enum DeferredRootParams : uint32_t
 {
   DeferredParams_StandardDescriptors, // textures
@@ -62,6 +84,70 @@ struct LightConstants
 {
   SpotLight Lights[MaxSpotLights];
   glm::mat4x4 ShadowMatrices[MaxSpotLights];
+};
+
+struct Quaternion
+{
+  float x, y, z, w;
+
+  Quaternion() { *this = Quaternion::Identity(); }
+  Quaternion(float x_, float y_, float z_, float w_)
+  {
+    x = x_;
+    y = y_;
+    z = z_;
+    w = w_;
+  }
+  Quaternion(const glm::vec3& axis, float angle) { *this = Quaternion::FromAxisAngle(axis, angle); }
+
+  static Quaternion Identity() { return Quaternion(0.0f, 0.0f, 0.0f, 1.0f); }
+  static Quaternion FromAxisAngle(const glm::vec3& axis, float angle)
+  {
+    assert(false); // TODO!}
+  };
+};
+
+struct ClusterBounds
+{
+  glm::vec3 Position;
+  Quaternion Orientation;
+  glm::vec3 Scale;
+  glm::uvec2 ZBounds;
+};
+
+struct ClusterConstants
+{
+  glm::mat4 ViewProjection;
+  glm::mat4 InvProjection;
+  float NearClip = 0.0f;
+  float FarClip = 0.0f;
+  float InvClipRange = 0.0f;
+  uint32_t NumXTiles = 0;
+  uint32_t NumYTiles = 0;
+  uint32_t NumXYTiles = 0;
+  uint32_t ElementsPerCluster = 0;
+  uint32_t InstanceOffset = 0;
+  uint32_t NumLights = 0;
+  uint32_t NumDecals = 0; // TODO!
+
+  uint32_t BoundsBufferIdx = uint32_t(-1);
+  uint32_t VertexBufferIdx = uint32_t(-1);
+  uint32_t InstanceBufferIdx = uint32_t(-1);
+};
+
+struct ClusterVisConstants
+{
+  glm::mat4 Projection;
+  glm::vec3 ViewMin;
+  float NearClip = 0.0f;
+  glm::vec3 ViewMax;
+  float InvClipRange = 0.0f;
+  glm::vec2 DisplaySize;
+  uint32_t NumXTiles = 0;
+  uint32_t NumXYTiles = 0;
+
+  uint32_t DecalClusterBufferIdx = uint32_t(-1); // TODO!
+  uint32_t SpotLightClusterBufferIdx = uint32_t(-1);
 };
 
 //---------------------------------------------------------------------------//
@@ -143,6 +229,129 @@ bool RenderManager::compileShaders()
       OutputDebugStringA("Failed to load deferred compute shader.\n");
       if (csErrorBlob != nullptr)
         OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+  }
+
+  // Cluster shaders
+  ID3DBlobPtr tempClusterVS;
+  ID3DBlobPtr tempClusterFrontFacePS;
+  ID3DBlobPtr tempClusterBackFacePS;
+  ID3DBlobPtr tempClusterIntersectingPS;
+  ID3DBlobPtr tempClusterVisPS;
+
+  {
+    ID3DBlobPtr clusterErrorBlob;
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+
+    const D3D_SHADER_MACRO definesVS[] = {
+        {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
+    HRESULT hr = D3DCompileFromFile(
+        getShaderPath(L"Clusters.hlsl").c_str(),
+        definesVS,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "ClusterVS",
+        "vs_5_1",
+        compileFlags,
+        0,
+        &tempClusterVS,
+        &clusterErrorBlob);
+    if (nullptr == tempClusterVS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load cluster shader.\n");
+      if (clusterErrorBlob != nullptr)
+        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+
+    // front face cluster ps
+    clusterErrorBlob = nullptr;
+    const D3D_SHADER_MACRO definesFrontFacePS[] = {
+        {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
+    hr = D3DCompileFromFile(
+        getShaderPath(L"Clusters.hlsl").c_str(),
+        definesFrontFacePS,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "ClusterPS",
+        "ps_5_1",
+        compileFlags,
+        0,
+        &tempClusterFrontFacePS,
+        &clusterErrorBlob);
+    if (nullptr == tempClusterFrontFacePS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load front face cluster pixel shader.\n");
+      if (clusterErrorBlob != nullptr)
+        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+
+    // backface cluster ps
+    clusterErrorBlob = nullptr;
+    const D3D_SHADER_MACRO definesBackFacePS[] = {
+        {"FrontFace_", "0"}, {"BackFace_", "1"}, {"Intersecting_", "0"}, {NULL, NULL}};
+    hr = D3DCompileFromFile(
+        getShaderPath(L"Clusters.hlsl").c_str(),
+        definesBackFacePS,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "ClusterPS",
+        "ps_5_1",
+        compileFlags,
+        0,
+        &tempClusterBackFacePS,
+        &clusterErrorBlob);
+    if (nullptr == tempClusterBackFacePS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load back face cluster pixel shader.\n");
+      if (clusterErrorBlob != nullptr)
+        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+
+    // intersecting cluster ps
+    clusterErrorBlob = nullptr;
+    const D3D_SHADER_MACRO definesIntersectingPS[] = {
+        {"FrontFace_", "0"}, {"BackFace_", "0"}, {"Intersecting_", "1"}, {NULL, NULL}};
+    hr = D3DCompileFromFile(
+        getShaderPath(L"Clusters.hlsl").c_str(),
+        definesIntersectingPS,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "ClusterPS",
+        "ps_5_1",
+        compileFlags,
+        0,
+        &tempClusterIntersectingPS,
+        &clusterErrorBlob);
+    if (nullptr == tempClusterIntersectingPS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load intersecting cluster pixel shader.\n");
+      if (clusterErrorBlob != nullptr)
+        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
+      ret = false;
+    }
+
+    // cluster visualizer ps
+    clusterErrorBlob = nullptr;
+    hr = D3DCompileFromFile(
+        getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "ClusterVisualizerPS",
+        "ps_5_1",
+        compileFlags,
+        0,
+        &tempClusterVisPS,
+        &clusterErrorBlob);
+    if (nullptr == tempClusterVisPS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load cluster visualizer pixel shader.\n");
+      if (clusterErrorBlob != nullptr)
+        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
       ret = false;
     }
   }
@@ -535,6 +744,25 @@ void RenderManager::loadAssets()
     m_PostFx.init();
   }
 
+#pragma region Set up clustered rendering stuff
+  // Spot light bounds and instance buffers
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(ClusterBounds);
+    sbInit.NumElements = AppSettings::MaxSpotLights;
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = true;
+    spotLightBoundsBuffer.init(sbInit);
+
+    sbInit.Stride = sizeof(uint32_t);
+    spotLightInstanceBuffer.init(sbInit);
+  }
+
+  makeConeGeometry(
+      NumConeSides, spotLightClusterVtxBuffer, spotLightClusterIdxBuffer, coneVertices);
+
+#pragma endregion
+
   {
     DepthBufferInit dbInit;
     dbInit.Width = SpotLightShadowMapSize;
@@ -738,6 +966,9 @@ void RenderManager::loadAssets()
     createRootSignature(m_Dev, &deferredRootSig, rootSignatureDesc);
     deferredRootSig->SetName(L"Deferred Root Sig");
   }
+
+  // Cluster root signature
+  {...}
 
   createPSOs();
 
@@ -1027,7 +1258,7 @@ void RenderManager::renderParticles()
 #endif
 }
 //---------------------------------------------------------------------------//
-  // Renders all meshes using depth-only rendering
+// Renders all meshes using depth-only rendering
 void RenderManager::renderDepth(
     ID3D12GraphicsCommandList* p_CmdList,
     const CameraBase& p_Camera,
@@ -1083,7 +1314,6 @@ void RenderManager::renderSpotLightShadowDepth(
 void RenderManager::renderSpotLightShadowMap(
     ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
 {
-
   PIXBeginEvent(p_CmdList, 0, "Spot Light Shadow Map Rendering");
 
   const std::vector<ModelSpotLight>& spotLights = sceneModel.SpotLights();
@@ -1274,7 +1504,11 @@ void RenderManager::onDestroy()
   materialIDTarget.deinit();
   materialTextureIndices.deinit();
   deferredTarget.deinit();
+
   spotLightBuffer.deinit();
+  spotLightBoundsBuffer.deinit();
+  spotLightClusterBuffer.deinit();
+  spotLightInstanceBuffer.deinit();
 
   depthRootSignature->Release();
   depthPSO->Release();

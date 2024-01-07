@@ -2,13 +2,6 @@
 
 #include "Utility.hpp"
 
-class Camera;
-class OrthographicCamera;
-class PerspectiveCamera;
-struct ModelSpotLight;
-struct DepthBuffer;
-struct RenderTexture;
-
 namespace ShadowHelper
 {
 

@@ -996,7 +996,7 @@ void RenderManager::renderDeferred()
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
-  PIXEndEvent(m_CmdList.GetInterfacePtr()); // Render Deferred
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Render Deferred
 }
 //---------------------------------------------------------------------------//
 void RenderManager::renderParticles()
@@ -1025,6 +1025,97 @@ void RenderManager::renderParticles()
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 #endif
+}
+//---------------------------------------------------------------------------//
+  // Renders all meshes using depth-only rendering
+void RenderManager::renderDepth(
+    ID3D12GraphicsCommandList* p_CmdList,
+    const CameraBase& p_Camera,
+    ID3D12PipelineState* p_PSO,
+    uint64_t p_NumVisible)
+{
+  p_CmdList->SetGraphicsRootSignature(depthRootSignature);
+  p_CmdList->SetPipelineState(p_PSO);
+  p_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  glm::mat4 world = glm::identity<glm::mat4>();
+
+  // Set constant buffers
+  MeshVSConstants vsConstants;
+  vsConstants.World = world;
+  vsConstants.View = camera.ViewMatrix();
+  vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
+  BindTempConstantBuffer(p_CmdList, vsConstants, 0, CmdListMode::Graphics);
+
+  // Bind vertices and indices
+  D3D12_VERTEX_BUFFER_VIEW vbView = sceneModel.VertexBuffer().vbView();
+  D3D12_INDEX_BUFFER_VIEW ibView = sceneModel.IndexBuffer().IBView();
+  p_CmdList->IASetVertexBuffers(0, 1, &vbView);
+  p_CmdList->IASetIndexBuffer(&ibView);
+
+  // Draw all meshes
+  for (uint64_t i = 0; i < p_NumVisible; ++i)
+  {
+    uint64_t meshIdx = i;
+    const Mesh& mesh = sceneModel.Meshes()[meshIdx];
+
+    // Draw the whole mesh
+    p_CmdList->DrawIndexedInstanced(
+        mesh.NumIndices(), 1, mesh.IndexOffset(), mesh.VertexOffset(), 0);
+  }
+}
+//---------------------------------------------------------------------------//
+// Renders all meshes using depth-only rendering for spotlight shadowmap
+void RenderManager::renderSpotLightShadowDepth(
+    ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
+{
+  renderDepth(p_CmdList, camera, spotLightShadowPSO, ...);
+}
+//---------------------------------------------------------------------------//
+// Render shadows for all spot lights
+void RenderManager::renderSpotLightShadowMap(
+    ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
+{
+
+  PIXBeginEvent(p_CmdList, 0, "Spot Light Shadow Map Rendering");
+
+  const std::vector<ModelSpotLight>& spotLights = sceneModel.SpotLights();
+  const uint64_t numSpotLights = std::min<uint64_t>(spotLights.size(), AppSettings::MaxLightClamp);
+  for (uint64_t i = 0; i < numSpotLights; ++i)
+  {
+    PIXBeginEvent(p_CmdList, 0, "Rendering Spot Light Shadow  %u", i);
+
+    // Set the viewport
+    SetViewport(p_CmdList, SpotLightShadowMapSize, SpotLightShadowMapSize);
+
+    // Set the shadow map as the depth target
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv = spotLightShadowMap.ArrayDSVs[i];
+    p_CmdList->OMSetRenderTargets(0, nullptr, false, &dsv);
+    p_CmdList->ClearDepthStencilView(
+        dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+    const ModelSpotLight& light = spotLights[i];
+
+    // Draw the mesh with depth only, using the new shadow camera
+    PerspectiveCamera shadowCamera;
+    shadowCamera.Initialize(
+        1.0f,
+        light.AngularAttenuation.y,
+        AppSettings::SpotShadowNearClip,
+        AppSettings::SpotLightRange,
+        float(SpotLightShadowMapSize));
+    shadowCamera.SetPosition(light.Position);
+    shadowCamera.SetOrientation(light.Orientation);
+    renderSpotLightShadowDepth(p_CmdList, shadowCamera);
+
+    glm::mat4 shadowMatrix =
+        shadowCamera.ViewProjectionMatrix() * ShadowHelper::ShadowScaleOffsetMatrix;
+    spotLightShadowMatrices[i] = glm::transpose(shadowMatrix);
+
+    PIXEndEvent(p_CmdList); // End spotlight shadow
+  }
+
+  PIXEndEvent(p_CmdList); // End spotlight shadowmap
 }
 //---------------------------------------------------------------------------//
 void RenderManager::populateCommandList()

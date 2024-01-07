@@ -7,7 +7,9 @@ typedef uint32_t bool32;
 namespace AppSettings
 {
 static const uint64_t MaxSpotLights = 32;
+static const uint64_t MaxLightClamp = 32;
 static const float SpotLightRange = 7.5000f;
+static const float SpotShadowNearClip = 0.1000f;
 
 extern bool32 RenderLights;
 extern bool32 ComputeUVGradients;

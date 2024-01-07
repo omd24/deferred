@@ -182,6 +182,20 @@ private:
   void renderDeferred();
   void renderParticles();
   void createRenderTargets();
+
+
+  // Renders all meshes using depth-only rendering
+  void renderDepth(
+      ID3D12GraphicsCommandList* p_CmdList,
+      const CameraBase& p_Camera,
+      ID3D12PipelineState* p_PSO,
+      uint64_t p_NumVisible);
+
+  // Renders all meshes using depth-only rendering for spotlight shadowmap
+  void renderSpotLightShadowDepth(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
+
+  // Render shadows for all spot lights
+  void renderSpotLightShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
 };
 
 //---------------------------------------------------------------------------//

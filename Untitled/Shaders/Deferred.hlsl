@@ -49,6 +49,7 @@ struct DeferredConstants
 };
 struct SRVIndexConstants
 {
+  uint SpotLightShadowMapIdx;
   uint MaterialIndicesBufferIdx;
   uint MaterialIDMapIdx;
   uint UVMapIdx;

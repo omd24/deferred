@@ -965,6 +965,7 @@ void RenderManager::renderDeferred()
         m_CmdList, deferredConstants, DeferredParams_DeferredCBuffer, CmdListMode::Compute);
 
     uint32_t srvIndices[] = {
+        spotLightShadowMap.getSrv(),
         materialTextureIndices.m_SrvIndex,
         materialIDTarget.srv(),
         uvTarget.srv(),

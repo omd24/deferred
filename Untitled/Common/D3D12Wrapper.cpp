@@ -2093,6 +2093,144 @@ void StructuredBuffer::updateDynamicSRV() const
   g_Device->CreateShaderResourceView(m_InternalBuffer.m_Resource, &desc, handle);
 }
 //---------------------------------------------------------------------------//
+// RawBuffer
+//---------------------------------------------------------------------------//
+void RawBuffer::init(const RawBufferInit& p_Init)
+{
+  deinit();
+
+  assert(p_Init.NumElements > 0);
+  NumElements = p_Init.NumElements;
+
+  InternalBuffer.init(
+      Stride * NumElements,
+      Stride,
+      p_Init.Dynamic,
+      p_Init.CPUAccessible,
+      p_Init.CreateUAV,
+      p_Init.InitData,
+      p_Init.InitialState,
+      p_Init.Heap,
+      p_Init.HeapOffset,
+      p_Init.Name);
+  GPUAddress = InternalBuffer.m_GpuAddress;
+
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  SRV = srvAlloc.Index;
+
+  // Start off all SRV's pointing to the first buffer
+  D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(0);
+  for (uint32_t i = 0; i < arrayCount32(srvAlloc.Handles); ++i)
+    g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
+
+  if (p_Init.CreateUAV)
+  {
+    assert(p_Init.Dynamic == false);
+
+    UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+    uavDesc.Buffer.CounterOffsetInBytes = 0;
+    uavDesc.Buffer.FirstElement = 0;
+    uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+    uavDesc.Buffer.NumElements = uint32_t(NumElements);
+    g_Device->CreateUnorderedAccessView(InternalBuffer.m_Resource, nullptr, &uavDesc, UAV);
+  }
+}
+void RawBuffer::deinit()
+{
+  SRVDescriptorHeap.FreePersistent(SRV);
+  UAVDescriptorHeap.FreePersistent(UAV);
+  InternalBuffer.deinit();
+  NumElements = 0;
+}
+
+void* RawBuffer::map()
+{
+  MapResult mapResult = InternalBuffer.map();
+  GPUAddress = mapResult.GpuAddress;
+
+  updateDynamicSRV();
+
+  return mapResult.CpuAddress;
+}
+void RawBuffer::mapAndSetData(const void* data, uint64_t numElements)
+{
+  assert(numElements <= NumElements);
+  void* cpuAddr = map();
+  memcpy(cpuAddr, data, numElements * Stride);
+}
+void RawBuffer::updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset)
+{
+  GPUAddress = InternalBuffer.updateData(srcData, srcNumElements * Stride, dstElemOffset * Stride);
+
+  updateDynamicSRV();
+}
+void RawBuffer::multiUpdateData(
+    const void* srcData[],
+    uint64_t srcNumElements[],
+    uint64_t dstElemOffset[],
+    uint64_t numUpdates)
+{
+  uint64_t srcSizes[16];
+  uint64_t dstOffsets[16];
+  assert(numUpdates <= arrayCount32(srcSizes));
+  for (uint64_t i = 0; i < numUpdates; ++i)
+  {
+    srcSizes[i] = srcNumElements[i] * Stride;
+    dstOffsets[i] = dstElemOffset[i] * Stride;
+  }
+
+  GPUAddress = InternalBuffer.multiUpdateData(srcData, srcSizes, dstOffsets, numUpdates);
+
+  updateDynamicSRV();
+}
+
+void RawBuffer::transition(
+    ID3D12GraphicsCommandList* cmdList,
+    D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const
+{
+  InternalBuffer.transition(cmdList, before, after);
+}
+void RawBuffer::makeReadable(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.makeReadable(cmdList);
+}
+void RawBuffer::makeWritable(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.makeWritable(cmdList);
+}
+void RawBuffer::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
+{
+  InternalBuffer.uavBarrier(cmdList);
+}
+D3D12_SHADER_RESOURCE_VIEW_DESC RawBuffer::srvDesc(uint64_t bufferIdx) const
+{
+  assert(bufferIdx == 0 || InternalBuffer.m_Dynamic);
+  assert(bufferIdx < RENDER_LATENCY);
+
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+  srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+  srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+  srvDesc.Buffer.FirstElement = uint32_t(NumElements * bufferIdx);
+  srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+  srvDesc.Buffer.NumElements = uint32_t(NumElements);
+  return srvDesc;
+}
+void RawBuffer::updateDynamicSRV() const
+{
+  assert(InternalBuffer.m_Dynamic);
+  D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(InternalBuffer.m_CurrBuffer);
+
+  D3D12_CPU_DESCRIPTOR_HANDLE handle =
+      SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
+  g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
+}
+
+//---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
 void RenderTexture::init(const RenderTextureInit& p_Init)

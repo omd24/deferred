@@ -682,6 +682,66 @@ private:
   void updateDynamicSRV() const;
 };
 //---------------------------------------------------------------------------//
+// RawBuffer
+//---------------------------------------------------------------------------//
+struct RawBufferInit
+{
+  uint64_t NumElements = 0;
+  bool CreateUAV = false;
+  bool Dynamic = false;
+  bool CPUAccessible = false;
+  const void* InitData = nullptr;
+  D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_GENERIC_READ;
+  ID3D12Heap* Heap = nullptr;
+  uint64_t HeapOffset = 0;
+  const wchar_t* Name = nullptr;
+};
+
+struct RawBuffer
+{
+  Buffer InternalBuffer;
+  uint64_t NumElements = 0;
+  uint32_t SRV = uint32_t(-1);
+  D3D12_CPU_DESCRIPTOR_HANDLE UAV = {};
+  uint64_t GPUAddress = 0;
+
+  const uint64_t Stride = 4;
+
+  RawBuffer() {}
+  ~RawBuffer() 
+  {
+    assert(NumElements == 0);
+    deinit();
+  }
+
+  void init(const RawBufferInit& p_Init);
+  void deinit();
+
+  ID3D12Resource* getResource() const { return InternalBuffer.m_Resource; }
+
+  void* map();
+  template <typename T> T* map() { return reinterpret_cast<T*>(map()); };
+  void mapAndSetData(const void* data, uint64_t numElements);
+  void updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
+  void multiUpdateData(
+      const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
+
+  void transition(
+      ID3D12GraphicsCommandList* cmdList,
+      D3D12_RESOURCE_STATES before,
+      D3D12_RESOURCE_STATES after) const;
+  void makeReadable(ID3D12GraphicsCommandList* cmdList) const;
+  void makeWritable(ID3D12GraphicsCommandList* cmdList) const;
+  void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
+
+private:
+  RawBuffer(const RawBuffer& other) {}
+
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
+  void updateDynamicSRV() const;
+};
+
+//---------------------------------------------------------------------------//
 // Textures
 //---------------------------------------------------------------------------//
 struct Texture

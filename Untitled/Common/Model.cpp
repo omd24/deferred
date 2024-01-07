@@ -981,3 +981,71 @@ void Model::Shutdown()
   vertices.clear();
   indices.clear();
 }
+
+void makeConeGeometry(
+    uint64_t divisions,
+    StructuredBuffer& vtxBuffer,
+    FormattedBuffer& idxBuffer,
+    std::vector<glm::vec3>& positions)
+{
+  assert(divisions >= 3);
+
+  const uint64_t numVertices = 2 + divisions;
+  const uint64_t numIndices = 3 * divisions * 2;
+  assert(numVertices <= UINT16_MAX);
+
+  positions.resize(numVertices);
+  std::vector<uint16_t> indices(numIndices, 0);
+
+  // The tip
+  uint16_t tipIdx = 0;
+  positions[0] = glm::vec3(0.0f, 0.0f, 0.0f);
+
+  // The center of the base
+  uint16_t centerIdx = 1;
+  positions[1] = glm::vec3(0.0f, 0.0f, 1.0f);
+
+  // The ring at the base
+  uint16_t ringStartIdx = 2;
+  for (uint64_t i = 0; i < divisions; ++i)
+  {
+    const float theta = (float(i) / divisions) * 6.283185307f;
+    positions[i + ringStartIdx] = glm::vec3(std::cos(theta), std::sin(theta), 1.0f);
+  }
+
+  // Tip->ring triangles
+  uint64_t currIdx = 0;
+  for (uint64_t i = 0; i < divisions; ++i)
+  {
+    indices[currIdx++] = tipIdx;
+    indices[currIdx++] = uint16_t(ringStartIdx + i);
+
+    uint64_t prevRingIdx = i == 0 ? divisions - 1 : i - 1;
+    indices[currIdx++] = uint16_t(ringStartIdx + prevRingIdx);
+  }
+
+  // Ring->center triangles
+  for (uint64_t i = 0; i < divisions; ++i)
+  {
+    indices[currIdx++] = uint16_t(ringStartIdx + i);
+    indices[currIdx++] = centerIdx;
+
+    uint64_t prevRingIdx = i == 0 ? divisions - 1 : i - 1;
+    indices[currIdx++] = uint16_t(ringStartIdx + prevRingIdx);
+  }
+
+  StructuredBufferInit vbInit;
+  vbInit.Stride = sizeof(glm::vec3);
+  vbInit.NumElements = numVertices;
+  vbInit.InitData = positions.data();
+  vtxBuffer.init(vbInit);
+
+  FormattedBufferInit ibInit;
+  ibInit.Format = DXGI_FORMAT_R16_UINT;
+  ibInit.NumElements = numIndices;
+  ibInit.InitData = indices.data();
+  idxBuffer.init(ibInit);
+}
+void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, FormattedBuffer& idxBuffer)
+{
+}

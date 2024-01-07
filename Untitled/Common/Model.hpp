@@ -374,3 +374,10 @@ protected:
 
 void loadTexture(
     ID3D12Device* dev, Texture& texture, const wchar_t* filePath, bool forceSRGB = false);
+
+void makeConeGeometry(
+    uint64_t divisions,
+    StructuredBuffer& vtxBuffer,
+    FormattedBuffer& idxBuffer,
+    std::vector<glm::vec3>& positions);
+void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, FormattedBuffer& idxBuffer);

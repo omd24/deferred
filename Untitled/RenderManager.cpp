@@ -1034,6 +1034,10 @@ void RenderManager::renderDepth(
     ID3D12PipelineState* p_PSO,
     uint64_t p_NumVisible)
 {
+  // TODO:
+  // Frustum culling
+  p_NumVisible = sceneModel.Meshes().size();
+
   p_CmdList->SetGraphicsRootSignature(depthRootSignature);
   p_CmdList->SetPipelineState(p_PSO);
   p_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -1043,8 +1047,8 @@ void RenderManager::renderDepth(
   // Set constant buffers
   MeshVSConstants vsConstants;
   vsConstants.World = world;
-  vsConstants.View = camera.ViewMatrix();
-  vsConstants.WorldViewProjection = world * camera.ViewProjectionMatrix();
+  vsConstants.View = glm::transpose(p_Camera.ViewMatrix());
+  vsConstants.WorldViewProjection = world * glm::transpose(p_Camera.ViewProjectionMatrix());
   BindTempConstantBuffer(p_CmdList, vsConstants, 0, CmdListMode::Graphics);
 
   // Bind vertices and indices
@@ -1069,7 +1073,10 @@ void RenderManager::renderDepth(
 void RenderManager::renderSpotLightShadowDepth(
     ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
 {
-  renderDepth(p_CmdList, camera, spotLightShadowPSO, ...);
+  // TODO:
+  // Frustum culling
+  const uint64_t numVisible = sceneModel.Meshes().size();
+  renderDepth(p_CmdList, p_Camera, spotLightShadowPSO, numVisible);
 }
 //---------------------------------------------------------------------------//
 // Render shadows for all spot lights
@@ -1352,8 +1359,6 @@ void RenderManager::onUpdate()
     camera.SetPosition(camPos);
   }
 
-  // Render spotlight shadow map
-
   // Update light uniforms
   {
     const void* srcData[2] = {spotLights.data(), spotLightShadowMatrices};
@@ -1383,6 +1388,9 @@ void RenderManager::onRender()
       // Prepare for [re]-recording commands:
       D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
       D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
+
+      // Render spotlight shadow map
+      renderSpotLightShadowMap(m_CmdList, camera);
 
       // Swc begin-frame backbuffer transition:
       m_CmdList->ResourceBarrier(

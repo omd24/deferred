@@ -94,6 +94,7 @@ StructuredBuffer<MaterialTextureIndices> MaterialIndexBuffers[] : register(t0, s
 Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
 
 SamplerState AnisoSampler : register(s0);
+SamplerComparisonState ShadowMapSampler : register(s1);
 
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv)
@@ -110,6 +111,8 @@ float3 PosWSFromDepth(in float zw, in float2 uv)
 //=================================================================================================
 void ShadeSample(in uint2 pixelPos)
 {
+  Texture2DArray spotLightShadowMap = Tex2DArrayTable[SRVIndices.SpotLightShadowMapIdx];
+
   StructuredBuffer<MaterialTextureIndices> materialIndicesBuffer =
       MaterialIndexBuffers[SRVIndices.MaterialIndicesBufferIdx];
 
@@ -223,7 +226,7 @@ void ShadeSample(in uint2 pixelPos)
   shadingInput.ShadingCBuffer = PSCBuffer;
   shadingInput.LightCBuffer = LightCBuffer;
 
-  float3 shadingResult = ShadePixel(shadingInput);
+  float3 shadingResult = ShadePixel(shadingInput, spotLightShadowMap, ShadowMapSampler);
 
   if (AppSettings.ShowUVGradients)
   {

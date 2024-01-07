@@ -1117,7 +1117,7 @@ void RenderManager::renderSpotLightShadowMap(
 
     glm::mat4 shadowMatrix =
         shadowCamera.ViewProjectionMatrix() * ShadowHelper::ShadowScaleOffsetMatrix;
-    spotLightShadowMatrices[i] = glm::transpose(shadowMatrix);
+    spotLightShadowMatrices[i] = shadowMatrix;
 
     PIXEndEvent(p_CmdList); // End spotlight shadow
   }

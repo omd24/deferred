@@ -142,6 +142,8 @@ private:
   ID3D12PipelineState* clusterBackFacePSO = nullptr;
   ID3D12PipelineState* clusterIntersectingPSO = nullptr;
 
+  ID3DBlobPtr fullScreenTriVS;
+
   StructuredBuffer spotLightClusterVtxBuffer;
   FormattedBuffer spotLightClusterIdxBuffer;
   std::vector<glm::vec3> coneVertices;
@@ -206,7 +208,6 @@ private:
   void renderParticles();
   void createRenderTargets();
 
-
   // Renders all meshes using depth-only rendering
   void renderDepth(
       ID3D12GraphicsCommandList* p_CmdList,
@@ -221,6 +222,7 @@ private:
   void renderSpotLightShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
 
   // Clustered rendering
+  void updateLights();
   void renderClusters();
   void renderClusterVisualizer();
 };

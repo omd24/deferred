@@ -53,4 +53,8 @@ void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParamet
 {
   CBuffer.setAsComputeRootParameter(cmdList, rootParameter);
 }
+
+uint64_t NumXTiles = 0;
+uint64_t NumYTiles = 0;
+
 } // namespace AppSettings

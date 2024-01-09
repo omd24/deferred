@@ -6,6 +6,10 @@ typedef uint32_t bool32;
 
 namespace AppSettings
 {
+static const uint64_t ClusterTileSize = 16;
+static const uint64_t NumZTiles = 16;
+static const uint64_t SpotLightElementsPerCluster = 1;
+
 static const uint64_t MaxSpotLights = 32;
 static const uint64_t MaxLightClamp = 32;
 static const float SpotLightRange = 7.5000f;
@@ -48,5 +52,8 @@ void deinit();
 void updateCBuffer();
 void bindCBufferGfx(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter);
 void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter);
+
+extern uint64_t NumXTiles;
+extern uint64_t NumYTiles;
 
 }; // namespace AppSettings

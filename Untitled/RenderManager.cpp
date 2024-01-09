@@ -20,6 +20,46 @@ static const uint64_t SpotLightShadowMapSize = 1024;
 static const uint64_t NumConeSides = 16;
 
 //---------------------------------------------------------------------------//
+// Local helpers
+//---------------------------------------------------------------------------//
+// Returns true if a sphere intersects a capped cone defined by a direction, height, and angle
+static bool _sphereConeIntersection(
+    const glm::vec3& coneTip,
+    const glm::vec3& coneDir,
+    float coneHeight,
+    float coneAngle,
+    const glm::vec3& sphereCenter,
+    float sphereRadius)
+{
+  if (glm::dot(sphereCenter - coneTip, coneDir) > coneHeight + sphereRadius)
+    return false;
+
+  float cosHalfAngle = std::cos(coneAngle * 0.5f);
+  float sinHalfAngle = std::sin(coneAngle * 0.5f);
+
+  glm::vec3 v = sphereCenter - coneTip;
+  float a = glm::dot(v, coneDir);
+  float b = a * sinHalfAngle / cosHalfAngle;
+  float c = std::sqrt(glm::dot(v, v) - a * a);
+  float d = c - b;
+  float e = d * cosHalfAngle;
+
+  return e < sphereRadius;
+}
+
+// mimicking XMVector3TransofrmCoord
+// i.e., setting w = 1 for the input and forcing the result to have w = 1
+// https://learn.microsoft.com/en-us/windows/win32/api/directxmath/nf-directxmath-xmvector3transformcoord
+glm::vec3 _transformVec3Mat4(const glm::vec3& v, const glm::mat4& m)
+{
+  glm::vec4 v4 = glm::vec4(v.x, v.y, v.z, 1.0f) * m;
+  v4 /= v4.w;
+
+  glm::vec3 ret = glm::vec3(v4.x, v4.y, v4.z);
+  return ret;
+}
+
+//---------------------------------------------------------------------------//
 // Internal structs
 //---------------------------------------------------------------------------//
 
@@ -100,11 +140,26 @@ struct Quaternion
   }
   Quaternion(const glm::vec3& axis, float angle) { *this = Quaternion::FromAxisAngle(axis, angle); }
 
+  Quaternion& operator=(const glm::quat& other)
+  {
+    x = other.x;
+    y = other.y;
+    z = other.z;
+    w = other.w;
+    return *this;
+  }
+
   static Quaternion Identity() { return Quaternion(0.0f, 0.0f, 0.0f, 1.0f); }
   static Quaternion FromAxisAngle(const glm::vec3& axis, float angle)
   {
     assert(false); // TODO!}
   };
+
+  glm::mat4 ToMat4()
+  {
+    glm::quat q = glm::quat(x, y, z, w);
+    return glm::toMat4(q);
+  }
 };
 
 struct ClusterBounds
@@ -356,12 +411,50 @@ bool RenderManager::compileShaders()
     }
   }
 
+  // Fullscreen triangle vs
+  ID3DBlobPtr tempfullScreenTriVS;
+
+  {
+    ID3DBlobPtr errBlob = nullptr;
+#if defined(_DEBUG)
+    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+    UINT compileFlags = 0;
+#endif
+    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+    HRESULT hr = D3DCompileFromFile(
+        getShaderPath(L"FullScreenTriangle.hlsl").c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        "VS",
+        "vs_5_1",
+        compileFlags,
+        0,
+        &tempfullScreenTriVS,
+        &errBlob);
+    if (nullptr == tempfullScreenTriVS || FAILED(hr))
+    {
+      OutputDebugStringA("Failed to load fullscreen triangle vertex shader.\n");
+      if (errBlob != nullptr)
+        OutputDebugStringA((char*)errBlob->GetBufferPointer());
+      ret = false;
+    }
+  }
+
   // Don't update shaders if there was any issue:
   if (ret)
   {
     m_GBufferVS = tempVS;
     m_GBufferPS = tempPS;
     m_DeferredCS = tempCS;
+
+    clusterVS = tempClusterVS;
+    clusterFrontFacePS = tempClusterFrontFacePS;
+    clusterBackFacePS = tempClusterBackFacePS;
+    clusterIntersectingPS = tempClusterIntersectingPS;
+    clusterVisPS = tempClusterVisPS;
+
+    fullScreenTriVS = tempfullScreenTriVS;
   }
 
   return ret;
@@ -512,11 +605,23 @@ bool RenderManager::createPSOs()
   if (deferredPSO != nullptr)
     deferredPSO->Release();
   if (spotLightShadowPSO != nullptr)
-    spotLightShadowPSO = nullptr;
+    spotLightShadowPSO->Release();
+
+  if (clusterFrontFacePSO != nullptr)
+    clusterFrontFacePSO->Release();
+  if (clusterBackFacePSO != nullptr)
+    clusterBackFacePSO->Release();
+  if (clusterIntersectingPSO != nullptr)
+    clusterIntersectingPSO->Release();
+  if (clusterVisPSO != nullptr)
+    clusterVisPSO->Release();
 
   // Load and compile shaders:
   ret = compileShaders();
-  assert(m_GBufferPS != nullptr && m_GBufferVS != nullptr && m_DeferredCS != nullptr);
+  assert(
+      m_GBufferPS != nullptr && m_GBufferVS != nullptr && m_DeferredCS != nullptr &&
+      clusterVS != nullptr && clusterFrontFacePS != nullptr && clusterBackFacePS != nullptr &&
+      clusterIntersectingPS != nullptr && clusterVisPS != nullptr && fullScreenTriVS != nullptr);
 
   // Standard input elements
   static const D3D12_INPUT_ELEMENT_DESC standardInputElements[5] = {
@@ -623,6 +728,64 @@ bool RenderManager::createPSOs()
       ret = false;
   }
 
+  // 4. clustering psos
+  {
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = clusterRS;
+    psoDesc.BlendState = GetBlendState(BlendState::Disabled);
+    psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 0;
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(clusterVS.GetInterfacePtr());
+    psoDesc.SampleDesc.Count = 1;
+
+    // TODO: toggle conservative mode
+    D3D12_CONSERVATIVE_RASTERIZATION_MODE crMode = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
+
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(clusterFrontFacePS.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCull);
+    psoDesc.RasterizerState.ConservativeRaster = crMode;
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&clusterFrontFacePSO));
+    if (FAILED(hr))
+      ret = false;
+
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(clusterBackFacePS.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::FrontFaceCull);
+    psoDesc.RasterizerState.ConservativeRaster = crMode;
+    (hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&clusterBackFacePSO)));
+    if (FAILED(hr))
+      ret = false;
+
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(clusterIntersectingPS.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::FrontFaceCull);
+    psoDesc.RasterizerState.ConservativeRaster = crMode;
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&clusterIntersectingPSO));
+    if (FAILED(hr))
+      ret = false;
+
+    clusterFrontFacePSO->SetName(L"Cluster Front-Face PSO");
+    clusterBackFacePSO->SetName(L"Cluster Back-Face PSO");
+    clusterIntersectingPSO->SetName(L"Cluster Intersecting PSO");
+  }
+
+  // 5. cluster visualizer pso
+  {
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = clusterVisRootSignature;
+    psoDesc.VS = CD3DX12_SHADER_BYTECODE(fullScreenTriVS.GetInterfacePtr());
+    psoDesc.PS = CD3DX12_SHADER_BYTECODE(clusterVisPS.GetInterfacePtr());
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::NoCull);
+    psoDesc.BlendState = GetBlendState(BlendState::AlphaBlend);
+    psoDesc.DepthStencilState = GetDepthState(DepthState::Disabled);
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    psoDesc.SampleDesc.Count = 1;
+    m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&clusterVisPSO));
+  }
+
   return ret;
 }
 //---------------------------------------------------------------------------//
@@ -691,6 +854,23 @@ void RenderManager::createRenderTargets()
     rtInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     rtInit.Name = L"Main Target";
     deferredTarget.init(rtInit);
+  }
+
+  // Clustered rendering
+  AppSettings::NumXTiles =
+      (m_Info.m_Width + (AppSettings::ClusterTileSize - 1)) / AppSettings::ClusterTileSize;
+  AppSettings::NumYTiles =
+      (m_Info.m_Height + (AppSettings::ClusterTileSize - 1)) / AppSettings::ClusterTileSize;
+  const uint64_t numXYZTiles =
+      AppSettings::NumXTiles * AppSettings::NumYTiles * AppSettings::NumZTiles;
+
+  // Spotlight cluster bitmask buffer
+  {
+    RawBufferInit rbInit;
+    rbInit.NumElements = numXYZTiles * AppSettings::SpotLightElementsPerCluster;
+    rbInit.CreateUAV = true;
+    spotLightClusterBuffer.init(rbInit);
+    spotLightClusterBuffer.InternalBuffer.m_Resource->SetName(L"Spot Light Cluster Buffer");
   }
 }
 //---------------------------------------------------------------------------//
@@ -967,8 +1147,55 @@ void RenderManager::loadAssets()
     deferredRootSig->SetName(L"Deferred Root Sig");
   }
 
-  // Cluster root signature
-  {...}
+  // Clustering root signature
+  {
+    D3D12_DESCRIPTOR_RANGE1 uavRanges[1] = {};
+    uavRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    uavRanges[0].NumDescriptors = 1;
+    uavRanges[0].BaseShaderRegister = 0;
+    uavRanges[0].RegisterSpace = 0;
+    uavRanges[0].OffsetInDescriptorsFromTableStart = 0;
+
+    D3D12_ROOT_PARAMETER1 rootParameters[NumClusterRootParams] = {};
+    rootParameters[ClusterParams_StandardDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[ClusterParams_StandardDescriptors].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[ClusterParams_StandardDescriptors].DescriptorTable.pDescriptorRanges =
+        StandardDescriptorRanges();
+    rootParameters[ClusterParams_StandardDescriptors].DescriptorTable.NumDescriptorRanges =
+        NumStandardDescriptorRanges;
+
+    rootParameters[ClusterParams_UAVDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[ClusterParams_UAVDescriptors].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[ClusterParams_UAVDescriptors].DescriptorTable.pDescriptorRanges = uavRanges;
+    rootParameters[ClusterParams_UAVDescriptors].DescriptorTable.NumDescriptorRanges =
+        arrayCount32(uavRanges);
+
+    rootParameters[ClusterParams_CBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[ClusterParams_CBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[ClusterParams_CBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[ClusterParams_CBuffer].Descriptor.ShaderRegister = 0;
+    rootParameters[ClusterParams_CBuffer].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    rootParameters[ClusterParams_AppSettings].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[ClusterParams_AppSettings].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[ClusterParams_AppSettings].Descriptor.RegisterSpace = 0;
+    rootParameters[ClusterParams_AppSettings].Descriptor.ShaderRegister =
+        AppSettings::CBufferRegister;
+    rootParameters[ClusterParams_AppSettings].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = 0;
+    rootSignatureDesc.pStaticSamplers = nullptr;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    createRootSignature(m_Dev, &clusterRS, rootSignatureDesc);
+  }
 
   createPSOs();
 
@@ -1208,8 +1435,8 @@ void RenderManager::renderDeferred()
   {
     ShadingConstants shadingConstants;
     shadingConstants.CameraPosWS = camera.Position();
-    shadingConstants.NumXTiles = numComputeTilesX;
-    shadingConstants.NumXYTiles = numComputeTilesY;
+    shadingConstants.NumXTiles = uint32_t(AppSettings::NumXTiles);
+    shadingConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
     shadingConstants.NearClip = camera.NearClip();
     shadingConstants.FarClip = camera.FarClip();
 
@@ -1510,11 +1737,22 @@ void RenderManager::onDestroy()
   spotLightClusterBuffer.deinit();
   spotLightInstanceBuffer.deinit();
 
+  spotLightClusterVtxBuffer.deinit();
+  spotLightClusterIdxBuffer.deinit();
+
+  clusterRS->Release();
+  clusterVisRootSignature->Release();
+
   depthRootSignature->Release();
   depthPSO->Release();
   spotLightShadowPSO->Release();
 
   spotLightShadowMap.deinit();
+
+  clusterFrontFacePSO->Release();
+  clusterBackFacePSO->Release();
+  clusterIntersectingPSO->Release();
+  clusterVisPSO->Release();
 
   // Release swc backbuffers
   for (UINT n = 0; n < FRAME_COUNT; n++)
@@ -1533,7 +1771,7 @@ void RenderManager::onDestroy()
   AppSettings::deinit();
   ImGuiHelper::deinit();
 
-  // Shudown uploads and other helpers
+  // Shutdown uploads and other helpers
   shutdownHelpers();
   shutdownUpload();
 }
@@ -1592,6 +1830,8 @@ void RenderManager::onUpdate()
       camPos += camera.Down() * CamMoveSpeed;
     camera.SetPosition(camPos);
   }
+
+  // update light bound buffer for clustering
 
   // Update light uniforms
   {
@@ -1832,5 +2072,95 @@ void RenderManager::onShaderChange()
   {
     OutputDebugStringA("[RenderManager] Failed to reload the shaders\n");
   }
+}
+//---------------------------------------------------------------------------//
+void RenderManager::updateLights()
+{
+  const uint64_t numSpotLights = std::min<uint64_t>(spotLights.size(), AppSettings::MaxLightClamp);
+  const float Pi = 3.141592654f;
+
+  // An additional scale factor that is needed to make sure that our polygonal bounding cone fully
+  // encloses the actual cone representing the light's area of influence
+  const float inRadius = std::cos(Pi / NumConeSides);
+  const float scaleCorrection = 1.0f / inRadius;
+
+  // TODO: CHECK!
+  const glm::mat4 viewMatrix = camera.ViewMatrix();
+  const float nearClip = camera.NearClip();
+  const float farClip = camera.FarClip();
+  const float zRange = farClip - nearClip;
+  const glm::vec3 cameraPos = camera.Position();
+  const uint64_t numConeVerts = coneVertices.size();
+
+  // Come up with a bounding sphere that surrounds the near clipping plane. We'll test this sphere
+  // for intersection with the spotlight's bounding cone and use that to over-estimate if the
+  // bounding geometry will end up getting clipped by the camera's near clipping plane
+  glm::vec3 nearClipCenter = cameraPos + nearClip * camera.Forward();
+  glm::mat4 invViewProjection = glm::inverse(camera.ViewProjectionMatrix());
+
+  glm::vec3 nearTopRight = _transformVec3Mat4(glm::vec3(1.0f, 1.0f, 0.0f), invViewProjection);
+  float nearClipRadius = glm::length(nearTopRight - nearClipCenter);
+
+  ClusterBounds* boundsData = spotLightBoundsBuffer.map<ClusterBounds>();
+  bool intersectsCamera[AppSettings::MaxSpotLights] = {};
+
+  // Update the light bounds buffer
+  for (uint64_t spotLightIdx = 0; spotLightIdx < numSpotLights; ++spotLightIdx)
+  {
+    const SpotLight& spotLight = spotLights[spotLightIdx];
+    const ModelSpotLight& srcSpotLight = sceneModel.SpotLights()[spotLightIdx];
+    ClusterBounds bounds;
+    bounds.Position = spotLight.Position;
+    bounds.Orientation = srcSpotLight.Orientation;
+    bounds.Scale.x = bounds.Scale.y =
+        std::tan(srcSpotLight.AngularAttenuation.y / 2.0f) * spotLight.Range * scaleCorrection;
+    bounds.Scale.z = spotLight.Range;
+
+    // Compute conservative Z bounds for the light based on vertices of the bounding geometry
+    constexpr float FloatMax = std::numeric_limits<float>::max();
+    float minZ = FloatMax;
+    float maxZ = -FloatMax;
+    for (uint64_t i = 0; i < numConeVerts; ++i)
+    {
+      glm::vec3 coneVert = coneVertices[i] * bounds.Scale;
+      coneVert = _transformVec3Mat4(coneVert, bounds.Orientation.ToMat4());
+      coneVert += bounds.Position;
+
+      float vertZ = _transformVec3Mat4(coneVert, viewMatrix).z;
+      minZ = std::min(minZ, vertZ);
+      maxZ = std::max(maxZ, vertZ);
+    }
+
+    minZ = clamp((minZ - nearClip) / zRange, 0.0f, 1.0f);
+    maxZ = clamp((maxZ - nearClip) / zRange, 0.0f, 1.0f);
+
+    bounds.ZBounds.x = uint32_t(minZ * AppSettings::NumZTiles);
+    bounds.ZBounds.y =
+        std::min(uint32_t(maxZ * AppSettings::NumZTiles), uint32_t(AppSettings::NumZTiles - 1));
+
+    // Estimate if the light's bounding geometry intersects with the camera's near clip plane
+    boundsData[spotLightIdx] = bounds;
+    intersectsCamera[spotLightIdx] = _sphereConeIntersection(
+        spotLight.Position,
+        srcSpotLight.Direction,
+        spotLight.Range,
+        srcSpotLight.AngularAttenuation.y,
+        nearClipCenter,
+        nearClipRadius);
+
+    spotLights[spotLightIdx].Intensity = srcSpotLight.Intensity * SpotLightIntensityFactor;
+  }
+
+  numIntersectingSpotLights = 0;
+  uint32_t* instanceData = spotLightInstanceBuffer.map<uint32_t>();
+
+  for (uint64_t spotLightIdx = 0; spotLightIdx < numSpotLights; ++spotLightIdx)
+    if (intersectsCamera[spotLightIdx])
+      instanceData[numIntersectingSpotLights++] = uint32_t(spotLightIdx);
+
+  uint64_t offset = numIntersectingSpotLights;
+  for (uint64_t spotLightIdx = 0; spotLightIdx < numSpotLights; ++spotLightIdx)
+    if (intersectsCamera[spotLightIdx] == false)
+      instanceData[offset++] = uint32_t(spotLightIdx);
 }
 //---------------------------------------------------------------------------//

@@ -2164,3 +2164,109 @@ void RenderManager::updateLights()
       instanceData[offset++] = uint32_t(spotLightIdx);
 }
 //---------------------------------------------------------------------------//
+void RenderManager::renderClusters()
+{
+  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Cluster Update");
+
+  spotLightClusterBuffer.makeWritable(m_CmdList);
+
+  // Clear spot light clusters
+  {
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptrs[1] = {spotLightClusterBuffer.UAV};
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
+        TempDescriptorTable(cpuDescriptrs, arrayCount32(cpuDescriptrs));
+
+    uint32_t values[4] = {};
+    m_CmdList->ClearUnorderedAccessViewUint(
+        gpuHandle,
+        cpuDescriptrs[0],
+        spotLightClusterBuffer.InternalBuffer.m_Resource,
+        values,
+        0,
+        nullptr);
+  }
+
+  ClusterConstants clusterConstants = {};
+  clusterConstants.ViewProjection = camera.ViewProjectionMatrix();
+  clusterConstants.InvProjection = glm::inverse(camera.ProjectionMatrix());
+  clusterConstants.NearClip = camera.NearClip();
+  clusterConstants.FarClip = camera.FarClip();
+  clusterConstants.InvClipRange = 1.0f / (camera.FarClip() - camera.NearClip());
+  clusterConstants.NumXTiles = uint32_t(AppSettings::NumXTiles);
+  clusterConstants.NumYTiles = uint32_t(AppSettings::NumYTiles);
+  clusterConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
+  clusterConstants.InstanceOffset = 0;
+  clusterConstants.NumLights =
+      std::min<uint32_t>(uint32_t(spotLights.size()), AppSettings::MaxLightClamp);
+  clusterConstants.NumDecals = 0; // TODO: Decals
+
+  m_CmdList->OMSetRenderTargets(0, nullptr, false, nullptr);
+
+  SetViewport(m_CmdList, AppSettings::NumXTiles, AppSettings::NumYTiles);
+  m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  m_CmdList->SetGraphicsRootSignature(clusterRS);
+
+  BindStandardDescriptorTable(m_CmdList, ClusterParams_StandardDescriptors, CmdListMode::Graphics);
+
+  if (AppSettings::RenderLights)
+  {
+    // Update spotlight clusters
+    spotLightClusterBuffer.uavBarrier(m_CmdList);
+
+    D3D12_INDEX_BUFFER_VIEW ibView = spotLightClusterIdxBuffer.IBView();
+    m_CmdList->IASetIndexBuffer(&ibView);
+
+    clusterConstants.ElementsPerCluster = uint32_t(AppSettings::SpotLightElementsPerCluster);
+    clusterConstants.InstanceOffset = 0;
+    clusterConstants.BoundsBufferIdx = spotLightBoundsBuffer.m_SrvIndex;
+    clusterConstants.VertexBufferIdx = spotLightClusterVtxBuffer.m_SrvIndex;
+    clusterConstants.InstanceBufferIdx = spotLightInstanceBuffer.m_SrvIndex;
+    BindTempConstantBuffer(
+        m_CmdList, clusterConstants, ClusterParams_CBuffer, CmdListMode::Graphics);
+
+    AppSettings::bindCBufferGfx(m_CmdList, ClusterParams_AppSettings);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {spotLightClusterBuffer.UAV};
+    BindTempDescriptorTable(
+        m_CmdList, uavs, arrayCount32(uavs), ClusterParams_UAVDescriptors, CmdListMode::Graphics);
+
+    const uint64_t numLightsToRender =
+        std::min<uint64_t>(spotLights.size(), AppSettings::MaxLightClamp);
+    assert(numIntersectingSpotLights <= numLightsToRender);
+    const uint64_t numNonIntersecting = numLightsToRender - numIntersectingSpotLights;
+
+    // Render back faces for spotlights that intersect with the camera
+    m_CmdList->SetPipelineState(clusterIntersectingPSO);
+
+    m_CmdList->DrawIndexedInstanced(
+        uint32_t(spotLightClusterIdxBuffer.NumElements),
+        uint32_t(numIntersectingSpotLights),
+        0,
+        0,
+        0);
+
+    // Now for all other lights, render the back faces followed by the front faces
+    m_CmdList->SetPipelineState(clusterBackFacePSO);
+
+    clusterConstants.InstanceOffset = uint32_t(numIntersectingSpotLights);
+    BindTempConstantBuffer(
+        m_CmdList, clusterConstants, ClusterParams_CBuffer, CmdListMode::Graphics);
+
+    m_CmdList->DrawIndexedInstanced(
+        uint32_t(spotLightClusterIdxBuffer.NumElements), uint32_t(numNonIntersecting), 0, 0, 0);
+
+    spotLightClusterBuffer.uavBarrier(m_CmdList);
+
+    m_CmdList->SetPipelineState(clusterFrontFacePSO);
+
+    m_CmdList->DrawIndexedInstanced(
+        uint32_t(spotLightClusterIdxBuffer.NumElements), uint32_t(numNonIntersecting), 0, 0, 0);
+  }
+
+  // Sync back cluster buffer to be read
+  spotLightClusterBuffer.makeReadable(m_CmdList);
+
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Cluster Update
+}
+//---------------------------------------------------------------------------//

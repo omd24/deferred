@@ -87,6 +87,7 @@ static void renderInternal()
     ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
     ImGui::Checkbox("Show Spec Albedo", (bool*)&AppSettings::ShowSpecular);
     // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
+    ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
     ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
     // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
 

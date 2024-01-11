@@ -25,6 +25,7 @@ extern bool32 ShowAlbedoMaps;
 extern bool32 ShowNormalMaps;
 extern bool32 ShowSpecular;
 extern bool32 ShowLightCounts;
+extern bool32 ShowClusterVisualizer;
 extern bool32 ShowUVGradients;
 extern bool32 AnimateLightIntensity;
 

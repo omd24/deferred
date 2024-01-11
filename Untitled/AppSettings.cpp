@@ -11,6 +11,7 @@ float BloomBlurSigma = 2.5f;
 bool32 ShowAlbedoMaps = false;
 bool32 ShowNormalMaps = false;
 bool32 ShowSpecular = false;
+bool32 ShowClusterVisualizer = false;
 bool32 ShowLightCounts = false;
 bool32 ShowUVGradients = false;
 bool32 AnimateLightIntensity = false;

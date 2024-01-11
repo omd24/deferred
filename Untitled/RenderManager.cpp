@@ -183,7 +183,7 @@ struct ClusterConstants
   uint32_t ElementsPerCluster = 0;
   uint32_t InstanceOffset = 0;
   uint32_t NumLights = 0;
-  uint32_t NumDecals = 0; // TODO!
+  uint32_t NumDecals = -1; // TODO!
 
   uint32_t BoundsBufferIdx = uint32_t(-1);
   uint32_t VertexBufferIdx = uint32_t(-1);
@@ -1425,6 +1425,7 @@ void RenderManager::renderDeferred()
     uint32_t srvIndices[] = {
         spotLightShadowMap.getSrv(),
         materialTextureIndices.m_SrvIndex,
+        spotLightClusterBuffer.SRV,
         materialIDTarget.srv(),
         uvTarget.srv(),
         depthBuffer.getSrv(),
@@ -2198,7 +2199,7 @@ void RenderManager::renderClusters()
   clusterConstants.InstanceOffset = 0;
   clusterConstants.NumLights =
       std::min<uint32_t>(uint32_t(spotLights.size()), AppSettings::MaxLightClamp);
-  clusterConstants.NumDecals = 0; // TODO: Decals
+  clusterConstants.NumDecals = -1; // TODO: Decals
 
   m_CmdList->OMSetRenderTargets(0, nullptr, false, nullptr);
 
@@ -2268,5 +2269,69 @@ void RenderManager::renderClusters()
   spotLightClusterBuffer.makeReadable(m_CmdList);
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Cluster Update
+}
+//---------------------------------------------------------------------------//
+// Renders the 2D "overhead" visualizer that shows per-cluster light counts
+void RenderManager::renderClusterVisualizer()
+{
+  if (false == AppSettings::ShowClusterVisualizer)
+    return;
+
+  PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Cluster Visualizer");
+
+  glm::vec2 displaySize = glm::vec2(float(m_Info.m_Width), float(m_Info.m_Height));
+  glm::vec2 drawSize = displaySize * 0.375f;
+  glm::vec2 drawPos = displaySize * (0.5f + (0.5f - 0.375f) / 2.0f);
+
+  D3D12_VIEWPORT viewport = {};
+  viewport.Width = drawSize.x;
+  viewport.Height = drawSize.y;
+  viewport.MinDepth = 0.0f;
+  viewport.MaxDepth = 1.0f;
+  viewport.TopLeftX = drawPos.x;
+  viewport.TopLeftY = drawPos.y;
+
+  D3D12_RECT scissorRect = {};
+  scissorRect.left = 0;
+  scissorRect.top = 0;
+  scissorRect.right = uint32_t(m_Info.m_Width);
+  scissorRect.bottom = uint32_t(m_Info.m_Height);
+
+  m_CmdList->RSSetViewports(1, &viewport);
+  m_CmdList->RSSetScissorRects(1, &scissorRect);
+
+  m_CmdList->SetGraphicsRootSignature(clusterVisRootSignature);
+  m_CmdList->SetPipelineState(clusterVisPSO);
+
+  BindStandardDescriptorTable(
+      m_CmdList, ClusterVisParams_StandardDescriptors, CmdListMode::Graphics);
+
+  glm::mat4 invProjection = glm::inverse(camera.ProjectionMatrix());
+  glm::vec3 farTopRight = _transformVec3Mat4(glm::vec3(1.0f, 1.0f, 1.0f), invProjection);
+  glm::vec3 farBottomLeft = _transformVec3Mat4(glm::vec3(-1.0f, -1.0f, 1.0f), invProjection);
+
+  ClusterVisConstants clusterVisConstants;
+  clusterVisConstants.Projection = camera.ProjectionMatrix();
+  clusterVisConstants.ViewMin = glm::vec3(farBottomLeft.x, farBottomLeft.y, camera.NearClip());
+  clusterVisConstants.NearClip = camera.NearClip();
+  clusterVisConstants.ViewMax = glm::vec3(farTopRight.x, farTopRight.y, camera.FarClip());
+  clusterVisConstants.InvClipRange = 1.0f / (camera.FarClip() - camera.NearClip());
+  clusterVisConstants.DisplaySize = displaySize;
+  clusterVisConstants.NumXTiles = uint32_t(AppSettings::NumXTiles);
+  clusterVisConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
+  clusterVisConstants.DecalClusterBufferIdx = -1; // TODO: Decals
+  clusterVisConstants.SpotLightClusterBufferIdx = spotLightClusterBuffer.SRV;
+  BindTempConstantBuffer(
+      m_CmdList, clusterVisConstants, ClusterVisParams_CBuffer, CmdListMode::Graphics);
+
+  AppSettings::bindCBufferGfx(m_CmdList, ClusterVisParams_AppSettings);
+
+  m_CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  m_CmdList->IASetIndexBuffer(nullptr);
+  m_CmdList->IASetVertexBuffers(0, 0, nullptr);
+
+  m_CmdList->DrawInstanced(3, 1, 0, 0);
+
+  PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Cluster Visualizer
 }
 //---------------------------------------------------------------------------//

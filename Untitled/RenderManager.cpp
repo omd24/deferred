@@ -508,6 +508,14 @@ void RenderManager::loadD3D12Pipeline()
         hardwareAdapter.GetInterfacePtr(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_Dev)));
   }
 
+#if defined(_DEBUG)
+  // Break on d3d12 validation errors
+  ID3D12InfoQueue* infoQueue = nullptr;
+  HRESULT result = m_Dev->QueryInterface(IID_PPV_ARGS(&infoQueue));
+  infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+  D3D_EXEC_CHECKED(result);
+#endif
+
   // Describe and create the command queue.
   D3D12_COMMAND_QUEUE_DESC queueDesc = {
       .Type = D3D12_COMMAND_LIST_TYPE_DIRECT, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE};

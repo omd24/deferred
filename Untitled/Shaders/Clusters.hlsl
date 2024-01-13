@@ -68,7 +68,7 @@ struct VSOutput
     float4 Position : SV_Position;
     uint2 ZTileRange: ZTILERANGE;
     uint Index : INDEX;
-}
+};
 
 VSOutput ClusterVS(in uint VertexId : SV_VertexID, in uint InstanceIdx : SV_InstanceID)
 {

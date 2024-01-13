@@ -38,12 +38,12 @@ ConstantBuffer<ClusterVisConstants> CBuffer : register(b0);
 // ================================================================================================
 // Pixel shader for visualizing light counts from an overhead view of the frustum
 // ================================================================================================
-float4 ClusterVisualizerPS(in float4 PositionPS : SV_Position, in flaot2 TexCoord : TEXCOORD) : SV_Target0
+float4 ClusterVisualizerPS(in float4 PositionPS : SV_Position, in float2 TexCoord : TEXCOORD) : SV_Target0
 {
     ByteAddressBuffer spotLightClusterBuffer = RawBufferTable[CBuffer.SpotLightClusterBufferIdx];
 
     float3 viewPos = lerp(CBuffer.ViewMin, CBuffer.ViewMax, float3(TexCoord.x, 0.5f, 1.0f - TexCoord.y));
-    float3 projectedPos = mul(float3(viewPos, 1.0f), CBuffer.Projection);
+    float4 projectedPos = mul(float4(viewPos, 1.0f), CBuffer.Projection);
     projectedPos.xyz /= projectedPos.w;
     projectedPos.y *= -1.0f;
     projectedPos.xy = projectedPos.xy * 0.5f + 0.5f;

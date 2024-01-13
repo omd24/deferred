@@ -51,6 +51,7 @@ struct SRVIndexConstants
 {
   uint SpotLightShadowMapIdx;
   uint MaterialIndicesBufferIdx;
+  uint SpotLightClusterBufferIdx;
   uint MaterialIDMapIdx;
   uint UVMapIdx;
   uint DepthMapIdx;

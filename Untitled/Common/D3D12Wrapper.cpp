@@ -1544,9 +1544,20 @@ void Buffer::init(
 }
 void Buffer::deinit()
 {
-  // release the buffer resource:
-  if (m_Resource != nullptr)
+
+  if (m_Resource == nullptr)
+    return;
+
+  if (g_Device == nullptr)
     m_Resource->Release();
+
+  // TODO: deferred release!
+  // right now the following leads to some access violations on shutdown
+
+  IUnknown* base = m_Resource;
+  if (base != nullptr)
+    base->Release();
+  m_Resource = nullptr;
 }
 MapResult Buffer::map()
 {
@@ -2169,10 +2180,7 @@ void RawBuffer::updateData(const void* srcData, uint64_t srcNumElements, uint64_
   updateDynamicSRV();
 }
 void RawBuffer::multiUpdateData(
-    const void* srcData[],
-    uint64_t srcNumElements[],
-    uint64_t dstElemOffset[],
-    uint64_t numUpdates)
+    const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates)
 {
   uint64_t srcSizes[16];
   uint64_t dstOffsets[16];
@@ -2190,7 +2198,8 @@ void RawBuffer::multiUpdateData(
 
 void RawBuffer::transition(
     ID3D12GraphicsCommandList* cmdList,
-    D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const
+    D3D12_RESOURCE_STATES before,
+    D3D12_RESOURCE_STATES after) const
 {
   InternalBuffer.transition(cmdList, before, after);
 }
@@ -2225,8 +2234,7 @@ void RawBuffer::updateDynamicSRV() const
   assert(InternalBuffer.m_Dynamic);
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = srvDesc(InternalBuffer.m_CurrBuffer);
 
-  D3D12_CPU_DESCRIPTOR_HANDLE handle =
-      SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
+  D3D12_CPU_DESCRIPTOR_HANDLE handle = SRVDescriptorHeap.CPUHandleFromIndex(SRV, g_CurrFrameIdx);
   g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, handle);
 }
 
@@ -2376,7 +2384,7 @@ DepthBuffer::~DepthBuffer()
 
   // TODO: Check why this causes access violation?
   // Are we releasing this earlier?
-  // deinit();
+  deinit();
 }
 
 void DepthBuffer::init(const DepthBufferInit& init)

@@ -708,7 +708,7 @@ struct RawBuffer
   const uint64_t Stride = 4;
 
   RawBuffer() {}
-  ~RawBuffer() 
+  ~RawBuffer()
   {
     assert(NumElements == 0);
     deinit();
@@ -724,7 +724,10 @@ struct RawBuffer
   void mapAndSetData(const void* data, uint64_t numElements);
   void updateData(const void* srcData, uint64_t srcNumElements, uint64_t dstElemOffset);
   void multiUpdateData(
-      const void* srcData[], uint64_t srcNumElements[], uint64_t dstElemOffset[], uint64_t numUpdates);
+      const void* srcData[],
+      uint64_t srcNumElements[],
+      uint64_t dstElemOffset[],
+      uint64_t numUpdates);
 
   void transition(
       ID3D12GraphicsCommandList* cmdList,
@@ -767,11 +770,21 @@ struct Texture
   void Shutdown()
   {
     SRVDescriptorHeap.FreePersistent(SRV);
-    if (Resource != nullptr)
-    {
-      // TODO!
+
+    // TODO: deferred release
+    if (Resource == nullptr)
+      return;
+
+    if (g_Device == nullptr)
       Resource->Release();
-    }
+
+    // TODO: deferred release!
+    // right now the following leads to some access violations on shutdown
+
+    IUnknown* base = Resource;
+    if (base != nullptr)
+      base->Release();
+    Resource = nullptr;
   }
 
 private:

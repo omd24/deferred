@@ -1205,6 +1205,47 @@ void RenderManager::loadAssets()
     createRootSignature(m_Dev, &clusterRS, rootSignatureDesc);
   }
 
+  // Cluster visualization root signature
+  {
+    D3D12_ROOT_PARAMETER1 rootParameters[NumClusterVisRootParams] = {};
+
+    // Standard SRV descriptors
+    rootParameters[ClusterVisParams_StandardDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[ClusterVisParams_StandardDescriptors].ShaderVisibility =
+        D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[ClusterVisParams_StandardDescriptors].DescriptorTable.pDescriptorRanges =
+        StandardDescriptorRanges();
+    rootParameters[ClusterVisParams_StandardDescriptors].DescriptorTable.NumDescriptorRanges =
+        NumStandardDescriptorRanges;
+
+    // CBuffer
+    rootParameters[ClusterVisParams_CBuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[ClusterVisParams_CBuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[ClusterVisParams_CBuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[ClusterVisParams_CBuffer].Descriptor.ShaderRegister = 0;
+    rootParameters[ClusterVisParams_CBuffer].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // AppSettings
+    rootParameters[ClusterVisParams_AppSettings].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[ClusterVisParams_AppSettings].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[ClusterVisParams_AppSettings].Descriptor.RegisterSpace = 0;
+    rootParameters[ClusterVisParams_AppSettings].Descriptor.ShaderRegister =
+        AppSettings::CBufferRegister;
+    rootParameters[ClusterVisParams_AppSettings].Descriptor.Flags =
+        D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = 0;
+    rootSignatureDesc.pStaticSamplers = nullptr;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    CreateRootSignature(&clusterVisRootSignature, rootSignatureDesc);
+  }
+
   createPSOs();
 
   // Create the command list.

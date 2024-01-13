@@ -73,7 +73,7 @@ struct RenderManager
   }
   ~RenderManager()
   {
-    // Just to release ComPtrs
+    // dtor needed to release ComPtrs
   }
 
   RendererSettings m_Info;

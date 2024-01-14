@@ -183,7 +183,7 @@ struct ClusterConstants
   uint32_t ElementsPerCluster = 0;
   uint32_t InstanceOffset = 0;
   uint32_t NumLights = 0;
-  uint32_t NumDecals = -1; // TODO!
+  uint32_t NumDecals = uint32_t(-1); // TODO!
 
   uint32_t BoundsBufferIdx = uint32_t(-1);
   uint32_t VertexBufferIdx = uint32_t(-1);
@@ -1636,6 +1636,8 @@ void RenderManager::populateCommandList()
 {
   SetDescriptorHeaps(m_CmdList);
 
+  renderClusters();
+
   renderDeferred();
 
   renderParticles();
@@ -1882,6 +1884,7 @@ void RenderManager::onUpdate()
   }
 
   // update light bound buffer for clustering
+  updateLights();
 
   // Update light uniforms
   {
@@ -1933,7 +1936,10 @@ void RenderManager::onRender()
       // Internal rendering code:
       populateCommandList();
 
-      // Imgui rendering:
+      // Cluster visualizer
+      renderClusterVisualizer();
+
+      // Imgui rendering (NOTE: here descriptor heap changes!):
       {
         PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Imgui");
         ImGuiHelper::endFrame(
@@ -2237,8 +2243,8 @@ void RenderManager::renderClusters()
   }
 
   ClusterConstants clusterConstants = {};
-  clusterConstants.ViewProjection = camera.ViewProjectionMatrix();
-  clusterConstants.InvProjection = glm::inverse(camera.ProjectionMatrix());
+  clusterConstants.ViewProjection = glm::transpose(camera.ViewProjectionMatrix());
+  clusterConstants.InvProjection = glm::transpose(glm::inverse(camera.ProjectionMatrix()));
   clusterConstants.NearClip = camera.NearClip();
   clusterConstants.FarClip = camera.FarClip();
   clusterConstants.InvClipRange = 1.0f / (camera.FarClip() - camera.NearClip());

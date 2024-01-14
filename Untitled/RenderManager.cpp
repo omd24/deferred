@@ -2366,7 +2366,7 @@ void RenderManager::renderClusterVisualizer()
   glm::vec3 farBottomLeft = _transformVec3Mat4(glm::vec3(-1.0f, -1.0f, 1.0f), invProjection);
 
   ClusterVisConstants clusterVisConstants;
-  clusterVisConstants.Projection = camera.ProjectionMatrix();
+  clusterVisConstants.Projection = glm::transpose(camera.ProjectionMatrix());
   clusterVisConstants.ViewMin = glm::vec3(farBottomLeft.x, farBottomLeft.y, camera.NearClip());
   clusterVisConstants.NearClip = camera.NearClip();
   clusterVisConstants.ViewMax = glm::vec3(farTopRight.x, farTopRight.y, camera.FarClip());

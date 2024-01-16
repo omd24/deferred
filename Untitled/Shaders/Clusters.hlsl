@@ -54,7 +54,7 @@ ConstantBuffer<ClusterConstants> CBuffer : register(b0);
 //=================================================================================================
 
 StructuredBuffer<ClusterBounds> BoundsBuffers[] : register(t0, space100);
-StructuredBuffer<float> VertexBuffers[] : register(t0, space101);
+StructuredBuffer<float3> VertexBuffers[] : register(t0, space101);
 StructuredBuffer<uint> InstanceBuffers[] : register(t0, space102);
 
 RWByteAddressBuffer ClusterBuffer : register(u0);
@@ -73,7 +73,7 @@ struct VSOutput
 VSOutput ClusterVS(in uint VertexId : SV_VertexID, in uint InstanceIdx : SV_InstanceID)
 {
     StructuredBuffer<ClusterBounds> boundsBuffer = BoundsBuffers[CBuffer.BoundsBufferIdx];
-    StructuredBuffer<float> vertexBuffer = VertexBuffers[CBuffer.VertexBufferIdx];
+    StructuredBuffer<float3> vertexBuffer = VertexBuffers[CBuffer.VertexBufferIdx];
     StructuredBuffer<uint> instanceBuffer = InstanceBuffers[CBuffer.InstanceBufferIdx];
 
     uint idx = instanceBuffer[InstanceIdx + CBuffer.InstanceOffset];
@@ -93,7 +93,7 @@ VSOutput ClusterVS(in uint VertexId : SV_VertexID, in uint InstanceIdx : SV_Inst
 
 void ClusterPS(in VSOutput input)
 {
-        uint2 tilePosXY = uint2(input.Position.xy);
+    uint2 tilePosXY = uint2(input.Position.xy);
     uint elemIdx = input.Index / 32;
     uint mask = 1u << (input.Index % 32);
 

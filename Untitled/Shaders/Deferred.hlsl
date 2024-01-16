@@ -117,6 +117,8 @@ void ShadeSample(in uint2 pixelPos)
   StructuredBuffer<MaterialTextureIndices> materialIndicesBuffer =
       MaterialIndexBuffers[SRVIndices.MaterialIndicesBufferIdx];
 
+  ByteAddressBuffer spotLightClusterBuffer = RawBufferTable[SRVIndices.SpotLightClusterBufferIdx];
+
   Texture2D tangentFrameMap = Tex2DTable[SRVIndices.TangentFrameMapIndex];
   Texture2D uvMap = Tex2DTable[SRVIndices.UVMapIdx];
   Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
@@ -221,6 +223,8 @@ void ShadeSample(in uint2 pixelPos)
   shadingInput.NormalMap = NormalMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY).xy;
   shadingInput.RoughnessMap = RoughnessMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY).x;
   shadingInput.MetallicMap = MetallicMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY).x;
+
+  shadingInput.SpotLightClusterBuffer = spotLightClusterBuffer;
 
   shadingInput.AnisoSampler = AnisoSampler;
 

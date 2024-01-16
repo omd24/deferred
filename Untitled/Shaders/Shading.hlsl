@@ -46,6 +46,8 @@ struct ShadingInput
   float RoughnessMap;
   float MetallicMap;
 
+  ByteAddressBuffer SpotLightClusterBuffer;
+
   SamplerState AnisoSampler;
 
   ShadingConstants ShadingCBuffer;
@@ -119,7 +121,13 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
 
   float depthVS = input.DepthVS;
 
-  // TODO: calculate cluster id:
+  // Compute shared cluster lookup data
+  uint2 pixelPos = uint2(input.PositionSS);
+  float zRange = CBuffer.FarClip - CBuffer.NearClip;
+  float normalizedZ = saturate((depthVS - CBuffer.NearClip) / zRange);
+  uint zTile = normalizedZ * NumZTiles;
+  uint3 tileCoords = uint3(pixelPos / ClusterTileSize, zTile);
+  uint clusterIdx = (tileCoords.z * CBuffer.NumXYTiles) + (tileCoords.y * CBuffer.NumXTiles) + tileCoords.x;
 
   float3 positionNeighborX = input.PositionWS + input.PositionWS_DX;
   float3 positionNeighborY = input.PositionWS + input.PositionWS_DY;
@@ -142,46 +150,56 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
     float numSlices;
     spotLightShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);    
 
-    // TODO: cluster lights
+    uint clusterOffset = clusterIdx * SpotLightElementsPerCluster;
 
-    for (uint i = 0; i < MaxSpotLights; ++i)
+    // Loop over the number of 4-byte elements needed for each cluster
+    [unroll]
+    for (uint elemIdx = 0; elemIdx < SpotLightElementsPerCluster; ++elemIdx)
     {
-      // TODO: cluster lights
-      uint spotLightIdx = i;
+      // Loop until we've processed every raised bit
+      uint clusterElemMask = input.SpotLightClusterBuffer.Load((clusterOffset + elemIdx) * 4);
 
-      SpotLight spotLight = input.LightCBuffer.Lights[i];
+      while(clusterElemMask)
+      {
+        uint bitIdx = firstbitlow(clusterElemMask);
+        clusterElemMask &= ~(1u << bitIdx);
+        uint spotLightIdx = bitIdx + (elemIdx * 32);
+        SpotLight spotLight = input.LightCBuffer.Lights[spotLightIdx];
       
-      float3 surfaceToLight = spotLight.Position - positionWS;
-      float distanceToLight = length(surfaceToLight);
-      surfaceToLight /= distanceToLight;
-      float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
-      float angularAttenuation =
+        float3 surfaceToLight = spotLight.Position - positionWS;
+        float distanceToLight = length(surfaceToLight);
+        surfaceToLight /= distanceToLight;
+        float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
+        float angularAttenuation =
           smoothstep(spotLight.AngularAttenuationY, spotLight.AngularAttenuationX, angleFactor);
 
-      if (angularAttenuation > 0.0f)
-      {
-        float d = distanceToLight / spotLight.Range;
-        float falloff = saturate(1.0f - (d * d * d * d));
-        falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
-        float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
+        if (angularAttenuation > 0.0f)
+        {
+          float d = distanceToLight / spotLight.Range;
+          float falloff = saturate(1.0f - (d * d * d * d));
+          falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
+          float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
 
-        // Spotlight shadow visibility
-        const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+          // Spotlight shadow visibility
+          const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
 
-        float spotLightVisibility = SpotLightShadowVisibility(positionWS, positionNeighborX, positionNeighborY,
+          float spotLightVisibility = SpotLightShadowVisibility(positionWS, positionNeighborX, positionNeighborY,
                                                               input.LightCBuffer.ShadowMatrices[spotLightIdx],
                                                               spotLightIdx, shadowPosOffset, spotLightShadowMap, shadowSampler,
                                                               float2(SpotShadowNearClip, spotLight.Range));
 
-        output += CalcLighting(
-            normalWS,
-            surfaceToLight,
-            intensity,
-            diffuseAlbedo,
-            specularAlbedo,
-            roughness,
-            positionWS,
-            CBuffer.CameraPosWS) * (spotLightVisibility);
+          output += CalcLighting(
+              normalWS,
+              surfaceToLight,
+              intensity,
+              diffuseAlbedo,
+              specularAlbedo,
+              roughness,
+              positionWS,
+              CBuffer.CameraPosWS) * (spotLightVisibility);
+        }
+
+        ++numLights;
       }
     }
   }

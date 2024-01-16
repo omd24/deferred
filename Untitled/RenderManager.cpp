@@ -1464,7 +1464,7 @@ void RenderManager::renderDeferred()
   {
     DeferredConstants deferredConstants;
     deferredConstants.InvViewProj = glm::transpose(glm::inverse(camera.ViewProjectionMatrix()));
-    deferredConstants.Projection = camera.ProjectionMatrix();
+    deferredConstants.Projection = glm::transpose(camera.ProjectionMatrix());
     deferredConstants.RTSize =
         glm::vec2(float(deferredTarget.width()), float(deferredTarget.height()));
     deferredConstants.NumComputeTilesX = numComputeTilesX;

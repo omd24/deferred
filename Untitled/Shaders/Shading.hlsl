@@ -25,7 +25,6 @@ struct LightConstants
 struct ShadingConstants
 {
   float3 CameraPosWS;
-
   uint NumXTiles;
   uint NumXYTiles;
   float NearClip;

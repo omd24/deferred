@@ -6,6 +6,7 @@
 #include "ShadowHelper.hpp"
 
 #define ENABLE_PARTICLE_EXPERIMENTAL 0
+#define ENABLE_GPU_BASED_VALIDATION 0
 
 //---------------------------------------------------------------------------//
 // Internal variables
@@ -488,7 +489,19 @@ void RenderManager::loadD3D12Pipeline()
     ID3D12DebugPtr debugController;
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
     {
+      // d3d12 validation layer
       debugController->EnableDebugLayer();
+
+      // enable synchronization layer
+#  if (ENABLE_GPU_BASED_VALIDATION > 0)
+
+      Microsoft::WRL::ComPtr<ID3D12Debug1> debugController1;
+      D3D_EXEC_CHECKED(debugController->QueryInterface(IID_PPV_ARGS(&debugController1)));
+
+      debugController1->EnableDebugLayer();
+      debugController1->SetEnableGPUBasedValidation(true);
+      debugController1->SetEnableSynchronizedCommandQueueValidation(true);
+#  endif // (ENABLE_GPU_BASED_VALIDATION > 0)
 
       // Enable additional debug layers.
       dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -867,7 +880,7 @@ void RenderManager::createRenderTargets()
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     rtInit.Name = L"Main Target";
     deferredTarget.init(rtInit);
   }
@@ -1409,9 +1422,9 @@ void RenderManager::renderDeferred()
     }
   }
 
-  // Transition back G-Buffer stuff and shadow map:
+  // Transition back G-Buffer stuff:
   {
-    D3D12_RESOURCE_BARRIER barriers[5] = {};
+    D3D12_RESOURCE_BARRIER barriers[4] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1442,13 +1455,6 @@ void RenderManager::renderDeferred()
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.Subresource = 0;
 
-    barriers[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[4].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[4].Transition.pResource = spotLightShadowMap.getResource();
-    barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    barriers[4].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
 
@@ -1462,6 +1468,10 @@ void RenderManager::renderDeferred()
 
   const uint32_t numComputeTilesX = alignUp<uint32_t>(uint32_t(deferredTarget.width()), 8) / 8;
   const uint32_t numComputeTilesY = alignUp<uint32_t>(uint32_t(deferredTarget.height()), 8) / 8;
+
+  // prepare main render target as a UAV
+  deferredTarget.transition(
+      m_CmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
   m_CmdList->SetComputeRootSignature(deferredRootSig);
   m_CmdList->SetPipelineState(deferredPSO);
@@ -1511,6 +1521,20 @@ void RenderManager::renderDeferred()
       m_CmdList, uavs, arrayCount(uavs), DeferredParams_UAVDescriptors, CmdListMode::Compute);
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
+
+  // transition back shadow map
+  {
+    D3D12_RESOURCE_BARRIER barriers[1] = {};
+
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = spotLightShadowMap.getResource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
+  }
 
   PIXEndEvent(m_CmdList.GetInterfacePtr()); // End Render Deferred
 }
@@ -1651,6 +1675,10 @@ void RenderManager::populateCommandList()
   renderDeferred();
 
   renderParticles();
+
+  // prepare main render target for post processing
+  deferredTarget.transition(
+      m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 }

@@ -133,6 +133,7 @@ struct Quaternion
   Quaternion() { *this = Quaternion::Identity(); }
   Quaternion(float x_, float y_, float z_, float w_)
   {
+    // NOTE: glm component order differs
     x = x_;
     y = y_;
     z = z_;
@@ -142,6 +143,7 @@ struct Quaternion
 
   Quaternion& operator=(const glm::quat& other)
   {
+    // NOTE: glm component order differs
     x = other.x;
     y = other.y;
     z = other.z;
@@ -149,16 +151,22 @@ struct Quaternion
     return *this;
   }
 
-  static Quaternion Identity() { return Quaternion(0.0f, 0.0f, 0.0f, 1.0f); }
+  static Quaternion Identity()
+  {
+    // NOTE: glm component order differs
+    return Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
+  }
   static Quaternion FromAxisAngle(const glm::vec3& axis, float angle)
   {
     assert(false); // TODO!}
   };
 
-  glm::mat4 ToMat4()
+  glm::mat3 ToMat3()
   {
-    glm::quat q = glm::quat(x, y, z, w);
-    return glm::toMat4(q);
+    // glm component orders differs from human understanding ^^
+    // GLM_FUNC_QUALIFIER GLM_CONSTEXPR qua<T, Q>::qua(T _w, T _x, T _y, T _z)
+    glm::quat q = glm::quat(w, x, y, z);
+    return glm::mat3_cast(q);
   }
 };
 
@@ -1638,6 +1646,8 @@ void RenderManager::populateCommandList()
 
   renderClusters();
 
+  renderSpotLightShadowMap(m_CmdList, camera);
+
   renderDeferred();
 
   renderParticles();
@@ -1861,7 +1871,7 @@ void RenderManager::onUpdate()
 
   // Keyboard input handling
   {
-    float CamMoveSpeed = 5.0f * m_Timer.m_DeltaSecondsF;
+    float CamMoveSpeed = AppSettings::CameraSpeed * m_Timer.m_DeltaSecondsF;
     KeyboardState kbState = KeyboardState::GetKeyboardState(g_WinHandle);
     // Move the camera with keyboard input
     if (kbState.IsKeyDown(KeyboardState::LeftShift))
@@ -1915,9 +1925,6 @@ void RenderManager::onRender()
       // Prepare for [re]-recording commands:
       D3D_EXEC_CHECKED(m_CmdAllocs[m_FrameIndex]->Reset());
       D3D_EXEC_CHECKED(m_CmdList->Reset(m_CmdAllocs[m_FrameIndex].GetInterfacePtr(), gbufferPSO));
-
-      // Render spotlight shadow map
-      renderSpotLightShadowMap(m_CmdList, camera);
 
       // Swc begin-frame backbuffer transition:
       m_CmdList->ResourceBarrier(
@@ -2179,7 +2186,8 @@ void RenderManager::updateLights()
     for (uint64_t i = 0; i < numConeVerts; ++i)
     {
       glm::vec3 coneVert = coneVertices[i] * bounds.Scale;
-      coneVert = _transformVec3Mat4(coneVert, bounds.Orientation.ToMat4());
+      // coneVert = coneVert * bounds.Orientation.ToMat3(); // glm so mat * vec
+      coneVert = bounds.Orientation.ToMat3() * coneVert; // glm so mat * vec
       coneVert += bounds.Position;
 
       float vertZ = _transformVec3Mat4(coneVert, viewMatrix).z;
@@ -2361,6 +2369,8 @@ void RenderManager::renderClusterVisualizer()
   BindStandardDescriptorTable(
       m_CmdList, ClusterVisParams_StandardDescriptors, CmdListMode::Graphics);
 
+  // no need to transpose proj mat here as we use it temporarily here in a glm style vector-mat
+  // multiplication!
   glm::mat4 invProjection = glm::inverse(camera.ProjectionMatrix());
   glm::vec3 farTopRight = _transformVec3Mat4(glm::vec3(1.0f, 1.0f, 1.0f), invProjection);
   glm::vec3 farBottomLeft = _transformVec3Mat4(glm::vec3(-1.0f, -1.0f, 1.0f), invProjection);

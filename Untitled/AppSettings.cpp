@@ -8,6 +8,7 @@ float Exposure = -14.0f;
 float BloomExposure = -4.0f;
 float BloomMagnitude = 1.0f;
 float BloomBlurSigma = 2.5f;
+float CameraSpeed = 5.0f;
 bool32 ShowAlbedoMaps = false;
 bool32 ShowNormalMaps = false;
 bool32 ShowSpecular = false;

@@ -80,12 +80,13 @@ static void renderInternal()
     // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
     ImGui::SliderFloat(
         "Exposure", &AppSettings::Exposure, -24.0f, 24.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp);
-    ImGui::SliderFloat("Bloom-Xps", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
+    ImGui::SliderFloat("Bloom-Exposure", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
     ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f, "%.2f");
     ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f, "%.2f");
+    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 0.1f, 10.0f, "%.2f");
     ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
     ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
-    ImGui::Checkbox("Show Spec Albedo", (bool*)&AppSettings::ShowSpecular);
+    ImGui::Checkbox("Show Specular", (bool*)&AppSettings::ShowSpecular);
     // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
     ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
     ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);

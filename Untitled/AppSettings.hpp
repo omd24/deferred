@@ -21,6 +21,7 @@ extern float Exposure;
 extern float BloomExposure;
 extern float BloomMagnitude;
 extern float BloomBlurSigma;
+extern float CameraSpeed;
 extern bool32 ShowAlbedoMaps;
 extern bool32 ShowNormalMaps;
 extern bool32 ShowSpecular;

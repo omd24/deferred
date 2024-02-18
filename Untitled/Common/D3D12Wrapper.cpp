@@ -2373,6 +2373,101 @@ void RenderTexture::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
   barrier.UAV.pResource = m_Texture.Resource;
   cmdList->ResourceBarrier(1, &barrier);
 }
+
+//---------------------------------------------------------------------------//
+// Volume texture
+//---------------------------------------------------------------------------//
+void VolumeTexture::init(const VolumeTextureInit& p_Init)
+{
+  deinit();
+
+  assert(p_Init.Width > 0);
+  assert(p_Init.Height > 0);
+  assert(p_Init.Depth > 0);
+
+  D3D12_RESOURCE_DESC textureDesc = {};
+  textureDesc.MipLevels = 1;
+  textureDesc.Format = p_Init.Format;
+  textureDesc.Width = uint32_t(p_Init.Width);
+  textureDesc.Height = uint32_t(p_Init.Height);
+  textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  textureDesc.DepthOrArraySize = uint16_t(p_Init.Depth);
+  textureDesc.SampleDesc.Count = 1;
+  textureDesc.SampleDesc.Quality = 0;
+  textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+  textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+  textureDesc.Alignment = 0;
+
+  D3D_EXEC_CHECKED(g_Device->CreateCommittedResource(
+      GetDefaultHeapProps(),
+      D3D12_HEAP_FLAG_NONE,
+      &textureDesc,
+      p_Init.InitialState,
+      nullptr,
+      IID_PPV_ARGS(&Texture.Resource)));
+
+  if (p_Init.Name != nullptr)
+    Texture.Resource->SetName(p_Init.Name);
+
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  Texture.SRV = srvAlloc.Index;
+  for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
+    g_Device->CreateShaderResourceView(Texture.Resource, nullptr, srvAlloc.Handles[i]);
+
+  Texture.Width = uint32_t(p_Init.Width);
+  Texture.Height = uint32_t(p_Init.Height);
+  Texture.Depth = uint32_t(p_Init.Depth);
+  Texture.NumMips = 1;
+  Texture.ArraySize = 1;
+  Texture.Format = p_Init.Format;
+  Texture.Cubemap = false;
+
+  UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
+  g_Device->CreateUnorderedAccessView(Texture.Resource, nullptr, nullptr, UAV);
+}
+void VolumeTexture::deinit()
+{
+  UAVDescriptorHeap.FreePersistent(UAV);
+  Texture.Shutdown();
+}
+void VolumeTexture::transition(
+    ID3D12GraphicsCommandList* cmdList,
+    D3D12_RESOURCE_STATES before,
+    D3D12_RESOURCE_STATES after) const
+{
+  assert(Texture.Resource != nullptr);
+  TransitionResource(cmdList, Texture.Resource, before, after, 0);
+}
+void VolumeTexture::makeReadable(ID3D12GraphicsCommandList* cmdList) const
+{
+  assert(Texture.Resource != nullptr);
+  TransitionResource(
+      cmdList,
+      Texture.Resource,
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+      0);
+}
+void VolumeTexture::makeWritable(ID3D12GraphicsCommandList* cmdList) const
+{
+  assert(Texture.Resource != nullptr);
+  TransitionResource(
+      cmdList,
+      Texture.Resource,
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+      0);
+}
+void VolumeTexture::uavBarrier(ID3D12GraphicsCommandList* cmdList) const
+{
+
+  D3D12_RESOURCE_BARRIER barrier = {};
+  barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+  barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+  barrier.UAV.pResource = Texture.Resource;
+  cmdList->ResourceBarrier(1, &barrier);
+}
+
 //---------------------------------------------------------------------------//
 // Depth Buffers
 //---------------------------------------------------------------------------//

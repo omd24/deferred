@@ -9,6 +9,7 @@
 #include "PostProcessor.hpp"
 #include "SimpleParticle.hpp"
 #include "AppSettings.hpp"
+#include "VolumetricFog.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -173,6 +174,8 @@ private:
 
   // Asset objects.
   ID3D12GraphicsCommandListPtr m_CmdList;
+
+  VolumetricFog m_Fog;
 
   FirstPersonCamera camera;
   PostProcessor m_PostFx;

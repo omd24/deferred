@@ -866,9 +866,46 @@ struct RenderTexture
     return p_ArraySlice * m_Texture.NumMips + p_MipLevel;
   }
 };
+
+struct VolumeTextureInit
+{
+  uint64_t Width = 0;
+  uint64_t Height = 0;
+  uint64_t Depth = 0;
+  DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+  D3D12_RESOURCE_STATES InitialState =
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+  const wchar_t* Name = nullptr;
+};
 struct VolumeTexture
 {
-  // TODO
+  Texture Texture;
+  D3D12_CPU_DESCRIPTOR_HANDLE UAV = {};
+
+  VolumeTexture() {}
+  ~VolumeTexture() { assert(0 == UAV.ptr); }
+
+  void init(const VolumeTextureInit& p_Init);
+  void deinit();
+
+  void transition(
+      ID3D12GraphicsCommandList* cmdList,
+      D3D12_RESOURCE_STATES before,
+      D3D12_RESOURCE_STATES after) const;
+  void makeReadable(ID3D12GraphicsCommandList* cmdList) const;
+  void makeWritable(ID3D12GraphicsCommandList* cmdList) const;
+
+  void uavBarrier(ID3D12GraphicsCommandList* cmdList) const;
+
+  uint32_t getSRV() const { return Texture.SRV; }
+  uint64_t getWidth() const { return Texture.Width; }
+  uint64_t getHeight() const { return Texture.Height; }
+  uint64_t getDepth() const { return Texture.Depth; }
+  DXGI_FORMAT getFormat() const { return Texture.Format; }
+  ID3D12Resource* getResource() const { return Texture.Resource; }
+
+private:
+  VolumeTexture(const RenderTexture& other) {}
 };
 
 struct DepthBufferInit

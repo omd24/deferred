@@ -202,6 +202,7 @@
     <ClCompile Include="PostProcessor.cpp" />
     <ClCompile Include="RenderManager.cpp" />
     <ClCompile Include="SimpleParticle.cpp" />
+    <ClCompile Include="VolumetricFog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Externals\ImGui\imgui.h" />
@@ -226,6 +227,7 @@
     <ClInclude Include="PostProcessor.hpp" />
     <ClInclude Include="RenderManager.hpp" />
     <ClInclude Include="SimpleParticle.hpp" />
+    <ClInclude Include="VolumetricFog.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

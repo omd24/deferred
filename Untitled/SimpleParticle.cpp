@@ -245,7 +245,7 @@ void SimpleParticle::render(
     spriteConstants.WorldView = world * p_ViewMat;
     spriteConstants.ViewProj = p_ViewProj;
     spriteConstants.View = p_ViewMat;
-    glm::mat4 rotMat;
+    glm::mat4 rotMat = glm::mat4(1);
     glm::vec3 new_y = glm::normalize(p_Dir);
     glm::vec3 new_z = -glm::normalize(glm::cross(new_y, glm::vec3(0, 1, 0)));
     glm::vec3 new_x = glm::normalize(glm::cross(new_y, new_z));

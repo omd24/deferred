@@ -53,6 +53,7 @@
     <ClCompile Include="Common\ShadowHelper.cpp">
       <Filter>Common</Filter>
     </ClCompile>
+    <ClCompile Include="VolumetricFog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -113,6 +114,7 @@
     <ClInclude Include="Common\ShadowHelper.hpp">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="VolumetricFog.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

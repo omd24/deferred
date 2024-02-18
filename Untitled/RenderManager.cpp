@@ -1307,27 +1307,6 @@ void RenderManager::loadAssets()
       gbufferPSO,
       IID_PPV_ARGS(&m_CmdList)));
   D3D_NAME_OBJECT(m_CmdList);
-
-  // Close the command list and execute it to begin the initial GPU setup.
-  D3D_EXEC_CHECKED(m_CmdList->Close());
-  ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
-  m_CmdQue->ExecuteCommandLists(arrayCount32(ppCommandLists), ppCommandLists);
-
-  // Create synchronization objects and wait until assets have been uploaded
-  // to the GPU.
-  {
-    D3D_EXEC_CHECKED(m_Dev->CreateFence(
-        m_RenderContextFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_RenderContextFence)));
-    m_RenderContextFenceValue++;
-
-    m_RenderContextFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (m_RenderContextFenceEvent == nullptr)
-    {
-      D3D_EXEC_CHECKED(HRESULT_FROM_WIN32(GetLastError()));
-    }
-
-    waitForRenderContext();
-  }
 }
 void RenderManager::renderForward()
 {
@@ -1526,7 +1505,8 @@ void RenderManager::renderDeferred()
         materialIDTarget.srv(),
         uvTarget.srv(),
         depthBuffer.getSrv(),
-        tangentFrameTarget.srv()};
+        tangentFrameTarget.srv()
+    };
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
 
@@ -1711,6 +1691,13 @@ void RenderManager::populateCommandList()
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
+
+  // TEST fog
+  m_Fog.render(
+    m_CmdList,
+    spotLightClusterBuffer.SRV,
+    depthBuffer.getSrv(),
+    spotLightShadowMap.getSrv());
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()
@@ -1817,11 +1804,35 @@ void RenderManager::onLoad()
   // Load assets
   loadAssets();
 
+  // Init volumetric fog
+  m_Fog.init(m_Dev);
+
   // Init imgui
   ImGuiHelper::init(g_WinHandle, m_Dev);
 
   // General appsettings
   AppSettings::init();
+
+  // Close the command list and execute it to begin the initial GPU setup.
+  D3D_EXEC_CHECKED(m_CmdList->Close());
+  ID3D12CommandList* ppCommandLists[] = {m_CmdList.GetInterfacePtr()};
+  m_CmdQue->ExecuteCommandLists(arrayCount32(ppCommandLists), ppCommandLists);
+
+  // Create synchronization objects and wait until assets have been uploaded
+  // to the GPU.
+  {
+    D3D_EXEC_CHECKED(m_Dev->CreateFence(
+        m_RenderContextFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_RenderContextFence)));
+    m_RenderContextFenceValue++;
+
+    m_RenderContextFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (m_RenderContextFenceEvent == nullptr)
+    {
+      D3D_EXEC_CHECKED(HRESULT_FROM_WIN32(GetLastError()));
+    }
+
+    waitForRenderContext();
+  }
 }
 //---------------------------------------------------------------------------//
 void RenderManager::onDestroy()
@@ -1890,6 +1901,8 @@ void RenderManager::onDestroy()
   m_PostFx.deinit();
   AppSettings::deinit();
   ImGuiHelper::deinit();
+
+  m_Fog.deinit();
 
   // Shutdown uploads and other helpers
   shutdownHelpers();
@@ -2185,6 +2198,9 @@ void RenderManager::onShaderChange()
 
     m_PostFx.deinit();
     m_PostFx.init();
+
+    m_Fog.deinit();
+    m_Fog.init(m_Dev);
 
 #if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
     m_Particle.createPSOs();

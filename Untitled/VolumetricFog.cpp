@@ -261,12 +261,14 @@ void VolumetricFog::render(
 {
   assert(p_CmdList != nullptr);
 
+  PIXBeginEvent(p_CmdList, 0, "Volumetric Fog");
+  
   const uint32_t dispatchGroupX = std::ceilf(m_DataVolume.getWidth() / 8.0f);
   const uint32_t dispatchGroupY = std::ceilf(m_DataVolume.getHeight() / 8.0f);
 
   // 1. Data injection
   {
-    PIXBeginEvent(p_CmdList, 0, "VolumetricFog-DataInjection");
+    PIXBeginEvent(p_CmdList, 0, "Data Injection");
 
     // Prepare volume buffer for write
     m_DataVolume.makeWritable(p_CmdList);
@@ -298,7 +300,7 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_CmdList->Dispatch(8, 8, 1);
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupX, m_DataVolume.getDepth());
 
     // Sync back volume buffer to be read
     m_DataVolume.makeReadable(p_CmdList);
@@ -308,16 +310,18 @@ void VolumetricFog::render(
 
   // 2. Light contribution
   {
-    PIXBeginEvent(p_CmdList, 0, "VolumetricFog-LightContribution");
+    PIXBeginEvent(p_CmdList, 0, " Light Contribution");
 
     PIXEndEvent(p_CmdList);
   }
 
   // 3. Final integration
   {
-    PIXBeginEvent(p_CmdList, 0, "VolumetricFog-LightContribution");
+    PIXBeginEvent(p_CmdList, 0, " Final Integration");
 
     PIXEndEvent(p_CmdList);
   }
+
+  PIXEndEvent(p_CmdList);
 }
 //---------------------------------------------------------------------------//

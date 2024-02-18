@@ -11,10 +11,10 @@ static const uint64_t NumZTiles = 16;
 static const uint64_t SpotLightElementsPerCluster = 1;
 
 static const uint64_t MaxSpotLights = 32;
-static const uint64_t MaxLightClamp = 32;
 static const float SpotLightRange = 7.5000f;
 static const float SpotShadowNearClip = 0.1000f;
 
+extern uint64_t MaxLightClamp;
 extern bool32 RenderLights;
 extern bool32 ComputeUVGradients;
 extern float Exposure;
@@ -22,6 +22,7 @@ extern float BloomExposure;
 extern float BloomMagnitude;
 extern float BloomBlurSigma;
 extern float CameraSpeed;
+extern glm::vec3 CameraPosition;
 extern bool32 ShowAlbedoMaps;
 extern bool32 ShowNormalMaps;
 extern bool32 ShowSpecular;

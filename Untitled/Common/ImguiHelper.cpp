@@ -83,7 +83,7 @@ static void renderInternal()
     ImGui::SliderFloat("Bloom-Exposure", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
     ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f, "%.2f");
     ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f, "%.2f");
-    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 0.1f, 10.0f, "%.2f");
+    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 0.01f, 0.8f, "%.2f");
     ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
     ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
     ImGui::Checkbox("Show Specular", (bool*)&AppSettings::ShowSpecular);
@@ -91,6 +91,12 @@ static void renderInternal()
     ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
     ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
     // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
+
+    ImGui::Text(
+        "Camera position x = %.5f, y = %.2f, z = %.2f",
+        AppSettings::CameraPosition.x,
+        AppSettings::CameraPosition.y,
+        AppSettings::CameraPosition.z);
 
     ImGui::Text(
         "Application average %.3f ms/frame (%.1f FPS)",

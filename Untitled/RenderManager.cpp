@@ -12,12 +12,8 @@
 // Internal variables
 //---------------------------------------------------------------------------//
 static POINT prevMousePos = {};
-static constexpr uint32_t MaxSpotLights = 32;
 static const float SpotLightIntensityFactor = 25.0f;
-static uint32_t MaxLightClamp = 0;
-
 static const uint64_t SpotLightShadowMapSize = 1024;
-
 static const uint64_t NumConeSides = 16;
 
 //---------------------------------------------------------------------------//
@@ -46,6 +42,28 @@ static bool _sphereConeIntersection(
   float e = d * cosHalfAngle;
 
   return e < sphereRadius;
+}
+// Cone-sphere intersection test using Bart Wronski modified version:
+// https://bartwronski.com/2017/04/13/cull-that-cone/
+static bool _sphereConeIntersectionBartWronski(
+    const glm::vec3& coneTip,
+    const glm::vec3& coneDir,
+    float coneHeight,
+    float coneAngle,
+    const glm::vec3& sphereCenter,
+    float sphereRadius)
+{
+  const float angle = coneAngle * 0.5f;
+
+  const glm::vec3 V = sphereCenter - coneTip;
+  const float VlenSq = glm::dot(V, V);
+  const float V1len = glm::dot(V, coneDir);
+  const float distanceClosestPoint = cos(angle) * sqrt(VlenSq - V1len * V1len) - V1len * sin(angle);
+
+  const bool angleCull = distanceClosestPoint > sphereRadius;
+  const bool frontCull = V1len > sphereRadius + coneHeight;
+  const bool backCull = V1len < -sphereRadius;
+  return !(angleCull || frontCull || backCull);
 }
 
 // mimicking XMVector3TransofrmCoord
@@ -123,8 +141,8 @@ struct MaterialTextureIndices
 };
 struct LightConstants
 {
-  SpotLight Lights[MaxSpotLights];
-  glm::mat4x4 ShadowMatrices[MaxSpotLights];
+  SpotLight Lights[AppSettings::MaxSpotLights];
+  glm::mat4x4 ShadowMatrices[AppSettings::MaxSpotLights];
 };
 
 struct Quaternion
@@ -914,6 +932,18 @@ void RenderManager::loadAssets()
   camera.SetXRotation(0.0f);
   camera.SetYRotation(1.544f);
 
+  camera.SetPosition(glm::vec3(-1.25f, 1.31f, 0.2f));
+
+
+  // debugging the clustering bug
+  /*
+  {
+    camera.SetPosition(glm::vec3(3.49f, 1.76f, 0.49f));
+    camera.SetXRotation(-3.14f / 12.0f);
+    camera.SetYRotation(1.5f * 3.14f);
+  }
+  */
+
   // Model filename
   static const wchar_t* ScenePath = L"..\\Content\\Models\\Sponza\\Sponza.fbx";
 
@@ -929,7 +959,7 @@ void RenderManager::loadAssets()
   {
     // Initialize the spotlight data used for rendering
     const uint64_t numSpotLights =
-        std::min<uint64_t>(MaxSpotLights, sceneModel.SpotLights().size());
+        std::min<uint64_t>(AppSettings::MaxSpotLights, sceneModel.SpotLights().size());
     spotLights.resize(numSpotLights);
 
     for (uint64_t i = 0; i < numSpotLights; ++i)
@@ -945,7 +975,7 @@ void RenderManager::loadAssets()
       spotLight.Range = 7.5f;
     }
 
-    MaxLightClamp = static_cast<uint32_t>(numSpotLights);
+    AppSettings::MaxLightClamp = static_cast<uint32_t>(numSpotLights);
   }
 
   // Init post fx
@@ -1919,6 +1949,9 @@ void RenderManager::onUpdate()
     else if (kbState.IsKeyDown(KeyboardState::E))
       camPos += camera.Down() * CamMoveSpeed;
     camera.SetPosition(camPos);
+
+    // TODO: move this to proper place
+    AppSettings::CameraPosition = camera.Position();
   }
 
   // update light bound buffer for clustering
@@ -2173,9 +2206,18 @@ void RenderManager::updateLights()
   // An additional scale factor that is needed to make sure that our polygonal bounding cone fully
   // encloses the actual cone representing the light's area of influence
   const float inRadius = std::cos(Pi / NumConeSides);
-  const float scaleCorrection = 1.0f / inRadius;
+  float scaleCorrection = 1.0f / inRadius;
 
-  // TODO: CHECK!
+  // NOTE(OM): disabling scale correction for a visual bug 
+  /*
+    the bug can be reproduced by putting camera at the following position:
+
+    camera.SetPosition(glm::vec3(3.49f, 1.76f, 0.49f));
+    camera.SetXRotation(-3.14f / 12.0f);
+    camera.SetYRotation(1.5f * 3.14f);
+  */
+  scaleCorrection = 1.0f;
+
   const glm::mat4 viewMatrix = camera.ViewMatrix();
   const float nearClip = camera.NearClip();
   const float farClip = camera.FarClip();
@@ -2188,7 +2230,6 @@ void RenderManager::updateLights()
   // bounding geometry will end up getting clipped by the camera's near clipping plane
   glm::vec3 nearClipCenter = cameraPos + nearClip * camera.Forward();
   glm::mat4 invViewProjection = glm::inverse(camera.ViewProjectionMatrix());
-
   glm::vec3 nearTopRight = _transformVec3Mat4(glm::vec3(1.0f, 1.0f, 0.0f), invViewProjection);
   float nearClipRadius = glm::length(nearTopRight - nearClipCenter);
 
@@ -2223,8 +2264,8 @@ void RenderManager::updateLights()
       maxZ = std::max(maxZ, vertZ);
     }
 
-    minZ = clamp((minZ - nearClip) / zRange, 0.0f, 1.0f);
-    maxZ = clamp((maxZ - nearClip) / zRange, 0.0f, 1.0f);
+    minZ = saturate((minZ - nearClip) / zRange);
+    maxZ = saturate((maxZ - nearClip) / zRange);
 
     bounds.ZBounds.x = uint32_t(minZ * AppSettings::NumZTiles);
     bounds.ZBounds.y =
@@ -2240,7 +2281,31 @@ void RenderManager::updateLights()
         nearClipCenter,
         nearClipRadius);
 
+    // there is a random cluster flickering bug with spotlight #17
+    //if (spotLightIdx == 17)
+    //  intersectsCamera[spotLightIdx] = true;
+
     spotLights[spotLightIdx].Intensity = srcSpotLight.Intensity * SpotLightIntensityFactor;
+
+    //if (spotLightIdx == 17)
+    //  {
+    //    if (intersectsCamera[spotLightIdx] == true)
+    //    {
+    //        char msg[256]{};
+    //        sprintf_s<256>(msg, "spotlight %d intersected\n", uint32_t(spotLightIdx));
+    //        OutputDebugStringA(msg);
+    //    }
+    //    if (intersectsCamera[spotLightIdx] == false)
+    //    {
+    //      char msg[256]{};
+    //      sprintf_s<256>(msg, "spotlight %d not intersected\n", uint32_t(spotLightIdx));
+    //      OutputDebugStringA(msg);
+    //    }
+    //}
+
+
+    //if (spotLightIdx == 17)
+    //  spotLights[spotLightIdx].Intensity = glm::vec3(0.0f);
   }
 
   numIntersectingSpotLights = 0;
@@ -2248,7 +2313,13 @@ void RenderManager::updateLights()
 
   for (uint64_t spotLightIdx = 0; spotLightIdx < numSpotLights; ++spotLightIdx)
     if (intersectsCamera[spotLightIdx])
+    {
       instanceData[numIntersectingSpotLights++] = uint32_t(spotLightIdx);
+
+      char msg[256]{};
+      sprintf_s<256>(msg, "active index = %d\n", uint32_t(spotLightIdx));
+      //OutputDebugStringA(msg);
+    }
 
   uint64_t offset = numIntersectingSpotLights;
   for (uint64_t spotLightIdx = 0; spotLightIdx < numSpotLights; ++spotLightIdx)
@@ -2289,7 +2360,7 @@ void RenderManager::renderClusters()
   clusterConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
   clusterConstants.InstanceOffset = 0;
   clusterConstants.NumLights =
-      std::min<uint32_t>(uint32_t(spotLights.size()), AppSettings::MaxLightClamp);
+      std::min<uint32_t>(uint32_t(spotLights.size()), uint32_t(AppSettings::MaxLightClamp));
   clusterConstants.NumDecals = -1; // TODO: Decals
 
   m_CmdList->OMSetRenderTargets(0, nullptr, false, nullptr);

@@ -127,6 +127,7 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
   uint zTile = normalizedZ * NumZTiles;
   uint3 tileCoords = uint3(pixelPos / ClusterTileSize, zTile);
   uint clusterIdx = (tileCoords.z * CBuffer.NumXYTiles) + (tileCoords.y * CBuffer.NumXTiles) + tileCoords.x;
+  // clusterIdx = 0;
 
   float3 positionNeighborX = input.PositionWS + input.PositionWS_DX;
   float3 positionNeighborY = input.PositionWS + input.PositionWS_DY;

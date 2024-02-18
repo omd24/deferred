@@ -182,6 +182,8 @@ template <typename T> inline T lerp(const T& p_Begin, const T& p_End, float p_In
 //---------------------------------------------------------------------------//
 template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
 {
+  assert(p_Max > p_Min);
+
   if (p_Value < p_Min)
   {
     return p_Min;
@@ -192,6 +194,8 @@ template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
   }
   return p_Value;
 }
+// Clamps a value to [0, 1]
+template <typename T> T saturate(T p_Value) { return clamp<T>(p_Value, T(0.0f), T(1.0f)); }
 //---------------------------------------------------------------------------//
 // Converts a string to a wide-string
 inline std::wstring strToWideStr(const std::string& p_Str)

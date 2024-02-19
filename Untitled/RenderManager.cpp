@@ -1664,6 +1664,7 @@ void RenderManager::renderSpotLightShadowMap(
     shadowCamera.SetOrientation(light.Orientation);
     renderSpotLightShadowDepth(p_CmdList, shadowCamera);
 
+    // TODO: should the result get transposed?
     glm::mat4 shadowMatrix =
         shadowCamera.ViewProjectionMatrix() * ShadowHelper::ShadowScaleOffsetMatrix;
     spotLightShadowMatrices[i] = shadowMatrix;
@@ -1697,7 +1698,8 @@ void RenderManager::populateCommandList()
     m_CmdList,
     spotLightClusterBuffer.SRV,
     depthBuffer.getSrv(),
-    spotLightShadowMap.getSrv());
+    spotLightShadowMap.getSrv(),
+    camera);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()

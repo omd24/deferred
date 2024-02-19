@@ -8,6 +8,9 @@
 //=================================================================================================
 struct UniformConstants
 {
+  row_major float4x4 ProjMat;
+  row_major float4x4 InvViewProj;
+
   uint X;
   uint Y;
   float NearClip;
@@ -46,7 +49,19 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
 {
   const uint3 froxelCoord = DispatchID;
 
-  DataVolumeTexture[froxelCoord] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+  // transform froxel to world space
+  float2 uv = (froxelCoord.xy + 0.5f) / 128.0f;
+  float linearZ = (froxelCoord.z + 0.5f) / 128.0f;
+  float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
+
+  uv = 2.0f * uv - 1.0f;
+  uv.y *= -1.0f;
+
+  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
+  worldPos /= worldPos.w;
+
+  DataVolumeTexture[froxelCoord] = worldPos;
+  //DataVolumeTexture[froxelCoord] = float4(DispatchID, 1.0f);
 }
 
 //=================================================================================================

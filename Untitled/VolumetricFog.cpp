@@ -14,6 +14,9 @@ void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParamet
 
 struct FogConstants
 {
+  glm::mat4x4 ProjMat;
+  glm::mat4x4 InvViewProj;
+
   uint32_t Variable1 = 0;
   uint32_t Variable2 = 0;
   float NearClip = 0.0f;
@@ -256,8 +259,8 @@ void VolumetricFog::render(
     ID3D12GraphicsCommandList* p_CmdList,
     uint32_t p_ClusterBufferSrv,
     uint32_t p_DepthBufferSrv,
-    uint32_t p_SpotLightShadowSrv
-)
+    uint32_t p_SpotLightShadowSrv,
+    FirstPersonCamera const& p_Camera)
 {
   assert(p_CmdList != nullptr);
 
@@ -282,6 +285,9 @@ void VolumetricFog::render(
 
     {
       FogConstants uniforms;
+      // The transpose of a matrix is same as transpose of the inverse of that matrix.
+      uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
       uniforms.Variable1 = 0;
       uniforms.Variable2 = 0;
       uniforms.NearClip = 0;

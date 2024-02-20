@@ -46,6 +46,8 @@ struct DeferredConstants
   row_major float4x4 Projection;
   float2 RTSize;
   uint NumComputeTilesX;
+  float Near;
+  float Far;
 };
 struct SRVIndexConstants
 {
@@ -56,6 +58,7 @@ struct SRVIndexConstants
   uint UVMapIdx;
   uint DepthMapIdx;
   uint TangentFrameMapIndex;
+  uint FogVolumeIdx;
 };
 
 ConstantBuffer<ShadingConstants> PSCBuffer : register(b0);
@@ -107,6 +110,17 @@ float3 PosWSFromDepth(in float zw, in float2 uv)
   return positionWS.xyz / positionWS.w;
 }
 
+// http://www.aortiz.me/2018/12/21/CG.html
+// Convert linear depth (near...far) to (0...1) value distributed with exponential functions
+// This function is performing all calculations, a more optimized one precalculates factors on CPU.
+float linearDepthToUV( float near, float far, float linearDepth, int numSlices ) {
+    const float oneOverLog2FarOverNear = 1.0f / log2( far / near );
+    const float scale = numSlices * oneOverLog2FarOverNear;
+    const float bias = - ( numSlices * log2(near) * oneOverLog2FarOverNear );
+
+    return max(log2(linearDepth) * scale + bias, 0.0f) / float(numSlices);
+}
+
 //=================================================================================================
 // Shade a single sample point, given a pixel position
 //=================================================================================================
@@ -123,6 +137,7 @@ void ShadeSample(in uint2 pixelPos)
   Texture2D uvMap = Tex2DTable[SRVIndices.UVMapIdx];
   Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
   Texture2D depthMap = Tex2DTable[SRVIndices.DepthMapIdx];
+  Texture3D fogVolume = Tex3DTable[SRVIndices.FogVolumeIdx];
 
   Quaternion tangentFrame = UnpackQuaternion(tangentFrameMap[pixelPos]);
   float2 uv = uvMap[pixelPos].xy * DeferredUVScale;
@@ -242,6 +257,25 @@ void ShadeSample(in uint2 pixelPos)
   //     shadingResult = abs(float3(uvDX, uvDY.x)) * 64.0f;
 
   OutputTexture[pixelPos] = float4(shadingResult, 1.0f);
+
+  // TEST Fog volume:
+  const float near = DeferredCBuffer.Near;
+  const float far = DeferredCBuffer.Far;
+  const int numSlices = 128;
+  float depthUV = linearDepthToUV(near, far, linearDepth, numSlices );
+  float3 froxelUVW = float3(screenUV.xy, depthUV);
+
+  OutputTexture[pixelPos] *= fogVolume[froxelUVW];
+
+  // TEST
+  // float3 boxSize = float3(2.0, 2.0, 2.0);
+  // float3 boxPos = float3(-2, 3, -2);
+  // float3 boxDist = abs(positionWS - boxPos);
+  // if (all(boxDist <= boxSize)) {
+  //   OutputTexture[pixelPos] = (float4)1.0;
+  // }
+
+  // TEST
   // OutputTexture[pixelPos] = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
 }
 

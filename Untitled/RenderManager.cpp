@@ -130,6 +130,8 @@ struct DeferredConstants
   glm::mat4 Projection;
   glm::vec2 RTSize;
   uint32_t NumComputeTilesX = 0;
+  float nearClip = 0;
+  float farClip = 0;
 };
 
 struct MaterialTextureIndices
@@ -1495,6 +1497,8 @@ void RenderManager::renderDeferred()
     deferredConstants.RTSize =
         glm::vec2(float(deferredTarget.width()), float(deferredTarget.height()));
     deferredConstants.NumComputeTilesX = numComputeTilesX;
+    deferredConstants.nearClip = camera.NearClip();
+    deferredConstants.farClip = camera.FarClip();
     BindTempConstantBuffer(
         m_CmdList, deferredConstants, DeferredParams_DeferredCBuffer, CmdListMode::Compute);
 
@@ -1505,7 +1509,8 @@ void RenderManager::renderDeferred()
         materialIDTarget.srv(),
         uvTarget.srv(),
         depthBuffer.getSrv(),
-        tangentFrameTarget.srv()
+        tangentFrameTarget.srv(),
+        m_Fog.m_DataVolume.getSRV()
     };
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }

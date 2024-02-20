@@ -60,7 +60,17 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
   float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
   worldPos /= worldPos.w;
 
-  DataVolumeTexture[froxelCoord] = worldPos;
+  float4 scatteringExtinction = float4(1, 1, 1, 1);
+
+  // Add density from box
+  float3 boxSize = float3(2.0, 2.0, 2.0);
+  float3 boxPos = float3(0, 0, 0);
+  float3 boxDist = abs(worldPos - boxPos);
+  if (all(boxDist <= boxSize)) {
+    scatteringExtinction = (float4)0.1;
+  }
+
+  DataVolumeTexture[froxelCoord] = scatteringExtinction;
   //DataVolumeTexture[froxelCoord] = float4(DispatchID, 1.0f);
 }
 

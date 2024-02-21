@@ -259,6 +259,7 @@ void ShadeSample(in uint2 pixelPos)
   OutputTexture[pixelPos] = float4(shadingResult, 1.0f);
 
   // TEST Fog volume:
+#if 0
   const float near = DeferredCBuffer.Near;
   const float far = DeferredCBuffer.Far;
   const int numSlices = 128;
@@ -266,6 +267,7 @@ void ShadeSample(in uint2 pixelPos)
   float3 froxelUVW = float3(screenUV.xy, depthUV);
 
   OutputTexture[pixelPos] *= fogVolume[froxelUVW];
+#endif
 
   // TEST
   // float3 boxSize = float3(2.0, 2.0, 2.0);

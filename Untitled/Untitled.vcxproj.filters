@@ -54,6 +54,7 @@
       <Filter>Common</Filter>
     </ClCompile>
     <ClCompile Include="VolumetricFog.cpp" />
+    <ClCompile Include="TestPass.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -115,6 +116,7 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="VolumetricFog.hpp" />
+    <ClInclude Include="TestPass.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

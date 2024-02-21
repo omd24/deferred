@@ -10,6 +10,7 @@
 #include "SimpleParticle.hpp"
 #include "AppSettings.hpp"
 #include "VolumetricFog.hpp"
+#include "TestPass.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -176,6 +177,7 @@ private:
   ID3D12GraphicsCommandListPtr m_CmdList;
 
   VolumetricFog m_Fog;
+  TestCompute m_TestCompute;
 
   FirstPersonCamera camera;
   PostProcessor m_PostFx;

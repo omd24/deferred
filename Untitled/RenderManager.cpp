@@ -1696,7 +1696,18 @@ void RenderManager::populateCommandList()
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+  
+  m_TestCompute.render(m_CmdList, deferredTarget.srv(), m_Fog.m_DataVolume.getSRV(), camera);
+
+#if 1 // test pass
+  m_PostFx.render(m_CmdList, m_TestCompute.m_uavTarget, m_RenderTargets[m_FrameIndex]);
+
+#else // main pass
+
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
+#endif
+
+
 
   // TEST fog
   m_Fog.render(
@@ -1814,6 +1825,9 @@ void RenderManager::onLoad()
   // Init volumetric fog
   m_Fog.init(m_Dev);
 
+  // Init test compute
+  m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
+
   // Init imgui
   ImGuiHelper::init(g_WinHandle, m_Dev);
 
@@ -1910,6 +1924,7 @@ void RenderManager::onDestroy()
   ImGuiHelper::deinit();
 
   m_Fog.deinit();
+  m_TestCompute.deinit(true);
 
   // Shutdown uploads and other helpers
   shutdownHelpers();
@@ -2208,6 +2223,9 @@ void RenderManager::onShaderChange()
 
     m_Fog.deinit();
     m_Fog.init(m_Dev);
+
+    m_TestCompute.deinit(false);
+    m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
 #if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
     m_Particle.createPSOs();

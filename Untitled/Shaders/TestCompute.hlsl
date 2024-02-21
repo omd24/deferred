@@ -11,16 +11,13 @@ struct UniformConstants
   row_major float4x4 ProjMat;
   row_major float4x4 InvViewProj;
 
-  uint X;
-  uint Y;
-  float NearClip;
-  float FarClip;
+  uint sceneTexIdx;
+  uint fogTexIdx;
 
-  uint ClusterBufferIdx;
-  uint DepthBufferIdx;
-  uint SpotLightShadowIdx;
+  float X;
+  float Y;
+
 };
-
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 
 //=================================================================================================
@@ -39,19 +36,24 @@ ByteAddressBuffer RawBufferTable[] : register(t0, space5);
 Buffer<uint> BufferUintTable[] : register(t0, space6);
 
 // Render targets / UAVs
-RWTexture3D<float4> DataVolumeTexture : register(u0);
+RWTexture2D<float4> OutputTexture : register(u0);
+
+// Sampler(s)
+SamplerState PointSampler : register(s0);
 
 //=================================================================================================
-// 1. Data injection
+// Test compute shader
 //=================================================================================================
 [numthreads(8, 8, 1)]
-void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID) 
+void TestCS(in uint3 DispatchID : SV_DispatchThreadID) 
 {
-  const uint3 froxelCoord = DispatchID;
+    const uint2 pixelPos = DispatchID.xy;
 
-  // transform froxel to world space
-  float2 uv = (froxelCoord.xy + 0.5f) / 128.0f;
-  float linearZ = (froxelCoord.z + 0.5f) / 128.0f;
+  // transform to world space
+  // TODO: read actual depth buffer
+#if 0
+  float2 uv = (pixelPos.xy + 0.5f) / 128.0f;
+  float linearZ = (pixelPos.z + 0.5f) / 128.0f;
   float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
 
   uv = 2.0f * uv - 1.0f;
@@ -59,41 +61,21 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
 
   float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
   worldPos /= worldPos.w;
-
-  float4 scatteringExtinction = float4(1, 1, 1, 1);
-
-  // Add density from box
-#if 0
-  float3 boxSize = float3(2.0, 2.0, 2.0);
-  float3 boxPos = float3(0, 0, 0);
-  float3 boxDist = abs(worldPos - boxPos);
-  if (all(boxDist <= boxSize)) {
-    scatteringExtinction = (float4)0.1;
-  }
 #endif
 
-  DataVolumeTexture[froxelCoord] = scatteringExtinction;
-  //DataVolumeTexture[froxelCoord] = float4(DispatchID, 1.0f);
-}
+    // Sample scene texture
+    Texture2D sceneTexture = Tex2DTable[CBuffer.sceneTexIdx];
+    float2 inputSize = 0.0f;
+    sceneTexture.GetDimensions(inputSize.x, inputSize.y);
+    float2 texCoord = float2(pixelPos.x, pixelPos.y) / inputSize;
+    float4 sceneColor = sceneTexture.SampleLevel(PointSampler, texCoord, 0);
 
-//=================================================================================================
-// 2. Light contribution
-//=================================================================================================
-[numthreads(8, 8, 1)]
-void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID) 
-{
-  const uint3 froxelCoord = DispatchID;
-
-  DataVolumeTexture[froxelCoord] = float4(1.0f, 0.0f, 0.0f, 1.0f);
-}
-
-//=================================================================================================
-// 3. Light contribution
-//=================================================================================================
-[numthreads(8, 8, 1)]
-void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID) 
-{
-  const uint3 froxelCoord = DispatchID;
-
-  DataVolumeTexture[froxelCoord] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    // Sample fog volume
+    Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
+    float3 volCoord = float3(pixelPos.x, pixelPos.y, 0.5f);
+    float4 fogSample = fogVolume.SampleLevel(PointSampler, volCoord, 0);
+    
+    float4 blend = lerp(sceneColor, fogSample, 0.5);
+    OutputTexture[pixelPos] = blend;
+    //OutputTexture[pixelPos] = float4(DispatchID, 1.0f);
 }

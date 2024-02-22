@@ -17,8 +17,9 @@ struct ConstantData
 
   uint32_t sceneTexIdx = uint32_t(-1);
   uint32_t fogTexIdx = uint32_t(-1);
-  float x;
-  float y;
+  uint32_t depthMapIdx = uint32_t(-1);
+  float nearPlane = 0.0f;
+  float farPlane = 0.0f;
 };
 
 enum RootParams : uint32_t
@@ -194,6 +195,8 @@ void TestCompute::render(
     ID3D12GraphicsCommandList* p_CmdList,
     const uint32_t p_SceneTexIdx,
     const uint32_t p_FogTexIdx,
+    const uint32_t p_DepthTexIdx,
+    float p_Near, float p_Far,
     FirstPersonCamera const& p_Camera)
 {
   assert(p_CmdList != nullptr);
@@ -215,11 +218,12 @@ void TestCompute::render(
       ConstantData uniforms;
       uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.x = 0;
-      uniforms.y = 0;
+      uniforms.nearPlane = p_Near;
+      uniforms.farPlane = p_Far;
 
       uniforms.sceneTexIdx = p_SceneTexIdx;
       uniforms.fogTexIdx = p_FogTexIdx;
+      uniforms.depthMapIdx = p_DepthTexIdx;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

@@ -12,6 +12,9 @@ struct TestCompute
       ID3D12GraphicsCommandList* p_CmdList,
       const uint32_t p_SceneTexIdx,
       const uint32_t p_FogTexIdx,
+      const uint32_t p_DepthTexIdx,
+      float p_Near,
+      float p_Far,
       FirstPersonCamera const& p_Camera);
 
   ID3DBlobPtr m_TestComputeShader = nullptr;

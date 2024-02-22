@@ -103,7 +103,7 @@ SamplerComparisonState ShadowMapSampler : register(s1);
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv)
 {
-  float linearDepth = DeferredCBuffer.Projection._43 / (zw - DeferredCBuffer.Projection._33);
+  // float linearDepth = DeferredCBuffer.Projection._43 / (zw - DeferredCBuffer.Projection._33);
   float4 positionCS = float4(uv * 2.0f - 1.0f, zw, 1.0f);
   positionCS.y *= -1.0f;
   float4 positionWS = mul(positionCS, DeferredCBuffer.InvViewProj);
@@ -266,16 +266,18 @@ void ShadeSample(in uint2 pixelPos)
   float depthUV = linearDepthToUV(near, far, linearDepth, numSlices );
   float3 froxelUVW = float3(screenUV.xy, depthUV);
 
-  OutputTexture[pixelPos] *= fogVolume[froxelUVW];
-#endif
+  float t = 0;
+  float3 boxSize = float3(2.0, 2.0, 2.0);
+  float3 boxPos = float3(0, 1, 0);
+  float3 boxDist = abs(positionWS - boxPos);
+  if (all(boxDist <= boxSize)) {
+    t = 1.0;
+  }
 
-  // TEST
-  // float3 boxSize = float3(2.0, 2.0, 2.0);
-  // float3 boxPos = float3(-2, 3, -2);
-  // float3 boxDist = abs(positionWS - boxPos);
-  // if (all(boxDist <= boxSize)) {
-  //   OutputTexture[pixelPos] = (float4)1.0;
-  // }
+  float4 fogSample = fogVolume[froxelUVW];
+  float4 blend = lerp(OutputTexture[pixelPos], fogSample, t);
+  OutputTexture[pixelPos] = blend;
+#endif
 
   // TEST
   // OutputTexture[pixelPos] = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);

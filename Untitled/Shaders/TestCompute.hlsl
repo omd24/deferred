@@ -13,9 +13,10 @@ struct UniformConstants
 
   uint sceneTexIdx;
   uint fogTexIdx;
+  uint depthMapIdx;
 
-  float X;
-  float Y;
+  float near;
+  float far;
 
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
@@ -41,6 +42,27 @@ RWTexture2D<float4> OutputTexture : register(u0);
 // Sampler(s)
 SamplerState PointSampler : register(s0);
 
+// Computes world-space position from post-projection depth
+float3 PosWSFromDepth(in float zw, in float2 uv, in float4x4 invViewProj)
+{
+  // float linearDepth = CBuffer.Projection._43 / (zw - CBuffer.Projection._33);
+  float4 positionCS = float4(uv * 2.0f - 1.0f, zw, 1.0f);
+  positionCS.y *= -1.0f;
+  float4 positionWS = mul(positionCS, invViewProj);
+  return positionWS.xyz / positionWS.w;
+}
+
+// http://www.aortiz.me/2018/12/21/CG.html
+// Convert linear depth (near...far) to (0...1) value distributed with exponential functions
+// This function is performing all calculations, a more optimized one precalculates factors on CPU.
+float linearDepthToUV( float near, float far, float linearDepth, int numSlices ) {
+    const float oneOverLog2FarOverNear = 1.0f / log2( far / near );
+    const float scale = numSlices * oneOverLog2FarOverNear;
+    const float bias = - ( numSlices * log2(near) * oneOverLog2FarOverNear );
+
+    return max(log2(linearDepth) * scale + bias, 0.0f) / float(numSlices);
+}
+
 //=================================================================================================
 // Test compute shader
 //=================================================================================================
@@ -63,6 +85,12 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
   worldPos /= worldPos.w;
 #endif
 
+    Texture2D depthMap = Tex2DTable[CBuffer.depthMapIdx];
+    float z = depthMap[pixelPos].x;
+    float2 invRTSize = 1.0f / float2(1280, 720);
+    float2 screenUV = (pixelPos + 0.5f) * invRTSize;
+    float3 positionWS = PosWSFromDepth(z, screenUV, CBuffer.InvViewProj);
+
     // Sample scene texture
     Texture2D sceneTexture = Tex2DTable[CBuffer.sceneTexIdx];
     float2 inputSize = 0.0f;
@@ -71,11 +99,29 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     float4 sceneColor = sceneTexture.SampleLevel(PointSampler, texCoord, 0);
 
     // Sample fog volume
+    float linearDepth = CBuffer.ProjMat._43 / (z - CBuffer.ProjMat._33);
+    const float near = CBuffer.near;
+    const float far = CBuffer.far;
+    const int numSlices = 128;
+    float depthUV = linearDepthToUV(near, far, linearDepth, numSlices);
+    float3 froxelUVW = float3(screenUV.xy, depthUV);
+
     Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
-    float3 volCoord = float3(pixelPos.x, pixelPos.y, 0.5f);
-    float4 fogSample = fogVolume.SampleLevel(PointSampler, volCoord, 0);
+    float4 fogSample = fogVolume.SampleLevel(PointSampler, froxelUVW, 0);
     
-    float4 blend = lerp(sceneColor, fogSample, 0.5);
+    float4 blend = lerp(sceneColor, fogSample, 0.0 /*not blending for now*/);
     OutputTexture[pixelPos] = blend;
     //OutputTexture[pixelPos] = float4(DispatchID, 1.0f);
+  
+    float t = 0.1;
+    // float3 boxSize = float3(2.0, 2.0, 2.0);
+    // float3 boxPos = float3(0, 1, 0);
+    // float3 boxDist = abs(positionWS - boxPos);
+    // if (all(boxDist <= boxSize)) {
+    //   t = 1.0;
+    // }
+  
+    float4 fogSample2 = fogVolume[froxelUVW];
+    float4 blend2 = lerp(sceneColor, fogSample, t);
+    OutputTexture[pixelPos] = blend2;
 }

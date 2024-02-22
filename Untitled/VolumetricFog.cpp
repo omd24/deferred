@@ -25,6 +25,7 @@ struct FogConstants
   uint32_t ClusterBufferIdx = uint32_t(-1);
   uint32_t DepthBufferIdx = uint32_t(-1);
   uint32_t SpotLightShadowIdx = uint32_t(-1);
+  uint32_t DataVolumeIdx = uint32_t(-1);
 };
 
 enum RootParams : uint32_t
@@ -70,9 +71,10 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Data injection shader
     {
+      const D3D_SHADER_MACRO definesVS[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          nullptr,
+          definesVS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "DataInjectionCS",
           "cs_5_1",
@@ -114,9 +116,10 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Final integration shader
     {
+      const D3D_SHADER_MACRO definesVS[] = {{"FINAL_INTEGRATION", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          nullptr,
+          definesVS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "FinalIntegrationCS",
           "cs_5_1",
@@ -228,14 +231,26 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 // Create shader UAVs
 {
   VolumeTextureInit vtInit;
-  vtInit.Width = 128;
-  vtInit.Height = 128;
-  vtInit.Depth = 128;
+  vtInit.Width = m_Dimension.x;
+  vtInit.Height = m_Dimension.y;
+  vtInit.Depth = m_Dimension.z;
   vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
   vtInit.InitialState =
       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
   vtInit.Name = L"Data Volume Texture";
   m_DataVolume.init(vtInit);
+}
+
+{
+  VolumeTextureInit vtInit;
+  vtInit.Width = m_Dimension.x;
+  vtInit.Height = m_Dimension.y;
+  vtInit.Depth = m_Dimension.z;
+  vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  vtInit.InitialState =
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+  vtInit.Name = L"Final Volume Texture";
+  m_FinalVolume.init(vtInit);
 }
 }
 //---------------------------------------------------------------------------//
@@ -252,6 +267,7 @@ void VolumetricFog::deinit()
   m_LightContributionShader = nullptr;
   m_FinalIntegralShader = nullptr;
 
+  m_FinalVolume.deinit();
   m_DataVolume.deinit();
 }
 //---------------------------------------------------------------------------//
@@ -260,14 +276,15 @@ void VolumetricFog::render(
     uint32_t p_ClusterBufferSrv,
     uint32_t p_DepthBufferSrv,
     uint32_t p_SpotLightShadowSrv,
+    float p_Near, float p_Far,
     FirstPersonCamera const& p_Camera)
 {
   assert(p_CmdList != nullptr);
 
   PIXBeginEvent(p_CmdList, 0, "Volumetric Fog");
   
-  const uint32_t dispatchGroupX = std::ceilf(m_DataVolume.getWidth() / 8.0f);
-  const uint32_t dispatchGroupY = std::ceilf(m_DataVolume.getHeight() / 8.0f);
+  const uint32_t dispatchGroupX = alignUp<uint32_t>(m_Dimension.x, 8) / 8;
+  const uint32_t dispatchGroupY = alignUp<uint32_t>(m_Dimension.y, 8) / 8;
 
   // 1. Data injection
   {
@@ -290,8 +307,8 @@ void VolumetricFog::render(
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
       uniforms.Variable1 = 0;
       uniforms.Variable2 = 0;
-      uniforms.NearClip = 0;
-      uniforms.FarClip = 0;
+      uniforms.NearClip = p_Near;
+      uniforms.FarClip = p_Far;
 
       uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
       uniforms.DepthBufferIdx = p_DepthBufferSrv;
@@ -306,7 +323,7 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupX, m_DataVolume.getDepth());
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
 
     // Sync back volume buffer to be read
     m_DataVolume.makeReadable(p_CmdList);
@@ -324,6 +341,43 @@ void VolumetricFog::render(
   // 3. Final integration
   {
     PIXBeginEvent(p_CmdList, 0, " Final Integration");
+    
+    m_FinalVolume.makeWritable(p_CmdList);
+
+    p_CmdList->SetComputeRootSignature(m_RootSig);
+    p_CmdList->SetPipelineState(m_PSOs[RenderPass_FinalIntegration]);
+
+    BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
+
+    // Set constant buffers
+    {
+      FogConstants uniforms;
+      // The transpose of a matrix is same as transpose of the inverse of that matrix.
+      uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
+      uniforms.Variable1 = 0;
+      uniforms.Variable2 = 0;
+      uniforms.NearClip = p_Near;
+      uniforms.FarClip = p_Far;
+
+      uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+      uniforms.DataVolumeIdx = m_DataVolume.getSRV();
+
+      BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
+    }
+
+    AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_FinalVolume.UAV};
+    BindTempDescriptorTable(
+        p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
+
+    // Sync back final volume to be read
+    m_FinalVolume.makeReadable(p_CmdList);
 
     PIXEndEvent(p_CmdList);
   }

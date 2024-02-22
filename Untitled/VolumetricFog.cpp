@@ -303,7 +303,8 @@ void VolumetricFog::render(
     {
       FogConstants uniforms;
       // The transpose of a matrix is same as transpose of the inverse of that matrix.
-      uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
+
+      uniforms.InvViewProj = glm::transpose(glm::inverse(p_Camera.ViewMatrix() * p_Camera.ProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
       uniforms.Variable1 = 0;
       uniforms.Variable2 = 0;
@@ -352,9 +353,8 @@ void VolumetricFog::render(
     // Set constant buffers
     {
       FogConstants uniforms;
-      // The transpose of a matrix is same as transpose of the inverse of that matrix.
-      uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
+      uniforms.InvViewProj = glm::mat4();
+      uniforms.ProjMat = glm::mat4();
       uniforms.Variable1 = 0;
       uniforms.Variable2 = 0;
       uniforms.NearClip = p_Near;

@@ -77,7 +77,9 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
   // transform froxel to world space
   float2 uv = (froxelCoord.xy + 0.5f) / 128.0f;
   float linearZ = (froxelCoord.z + 0.5f) / 128.0f;
-  float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
+  //float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
+  float rawDepth = linearDepthToRawDepth(linearZ, 0.1, 35);
+  rawDepth = rawDepthToLinearDepth(rawDepth, 0.1, 35);
 
   uv = 2.0f * uv - 1.0f;
   uv.y *= -1.0f;
@@ -85,7 +87,13 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
   float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
   worldPos /= worldPos.w;
 
-  float4 scatteringExtinction = float4(1, 0, 0, 0);
+  if (false)
+  {
+    DataVolumeTexture[froxelCoord] = float4(worldPos.xyz, rawDepth);;
+    return;
+  }
+
+  float4 scatteringExtinction = float4(0.05, 0, 0, 0);
 
   // Add density from box
 #if 1
@@ -93,7 +101,7 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
   float3 boxPos = float3(0, 0, 0);
   float3 boxDist = abs(worldPos - boxPos);
   if (all(boxDist <= boxSize)) {
-    scatteringExtinction += float4(0, 1, 0, 1);
+    scatteringExtinction += float4(0, 0.1, 0, 1);
   }
 #endif
 
@@ -137,8 +145,8 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
 
         froxelCoord.z = z;
 
-        // float nextZ = sliceToExponentialDepth( CBuffer.Near, CBuffer.Far, z + 1, int(froxelDims.z) );
-        float nextZ = linearDepthToRawDepth((z + 1) / froxelDims.z, CBuffer.Near, CBuffer.Far);
+        float nextZ = sliceToExponentialDepth(CBuffer.Near, CBuffer.Far, z + 1, int(froxelDims.z) );
+        //float nextZ = linearDepthToRawDepth((z + 1) / froxelDims.z, CBuffer.Near, CBuffer.Far);
 
         const float zStep = abs(nextZ - currentZ);
         currentZ = nextZ;

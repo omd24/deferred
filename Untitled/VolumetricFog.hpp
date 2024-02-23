@@ -15,6 +15,8 @@ struct VolumetricFog
       uint32_t p_SpotLightShadowSrv,
       float p_Near,
       float p_Far,
+      float p_ScreenWidth,
+      float p_ScreenHeight,
       FirstPersonCamera const & p_Camera
     );
 
@@ -26,6 +28,7 @@ struct VolumetricFog
   ID3D12RootSignature* m_RootSig = nullptr;
 
   VolumeTexture m_DataVolume;
+  VolumeTexture m_ScatteringVolume;
   VolumeTexture m_FinalVolume;
 
   static constexpr glm::uvec3 m_Dimension = {128, 128, 128};

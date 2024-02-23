@@ -17,8 +17,7 @@ struct FogConstants
   glm::mat4x4 ProjMat;
   glm::mat4x4 InvViewProj;
 
-  uint32_t Variable1 = 0;
-  uint32_t Variable2 = 0;
+  glm::vec2 Resolution;
   float NearClip = 0.0f;
   float FarClip = 0.0f;
 
@@ -26,6 +25,9 @@ struct FogConstants
   uint32_t DepthBufferIdx = uint32_t(-1);
   uint32_t SpotLightShadowIdx = uint32_t(-1);
   uint32_t DataVolumeIdx = uint32_t(-1);
+  uint32_t ScatteringVolumeIdx = uint32_t(-1);
+
+  glm::uvec3 Dimensions;
 };
 
 enum RootParams : uint32_t
@@ -94,9 +96,10 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Light contribution shader
     {
+      const D3D_SHADER_MACRO definesVS[] = {{"LIGHT_SCATTERING", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          nullptr,
+          definesVS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "LightContributionCS",
           "cs_5_1",
@@ -249,6 +252,18 @@ void VolumetricFog::init(ID3D12Device * p_Device)
   vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
   vtInit.InitialState =
       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+  vtInit.Name = L"Scattering Volume Texture";
+  m_ScatteringVolume.init(vtInit);
+}
+
+{
+  VolumeTextureInit vtInit;
+  vtInit.Width = m_Dimension.x;
+  vtInit.Height = m_Dimension.y;
+  vtInit.Depth = m_Dimension.z;
+  vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+  vtInit.InitialState =
+      D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
   vtInit.Name = L"Final Volume Texture";
   m_FinalVolume.init(vtInit);
 }
@@ -268,6 +283,7 @@ void VolumetricFog::deinit()
   m_FinalIntegralShader = nullptr;
 
   m_FinalVolume.deinit();
+  m_ScatteringVolume.deinit();
   m_DataVolume.deinit();
 }
 //---------------------------------------------------------------------------//
@@ -277,6 +293,7 @@ void VolumetricFog::render(
     uint32_t p_DepthBufferSrv,
     uint32_t p_SpotLightShadowSrv,
     float p_Near, float p_Far,
+    float p_ScreenWidth, float p_ScreenHeight,
     FirstPersonCamera const& p_Camera)
 {
   assert(p_CmdList != nullptr);
@@ -306,14 +323,15 @@ void VolumetricFog::render(
 
       uniforms.InvViewProj = glm::transpose(glm::inverse(p_Camera.ViewMatrix() * p_Camera.ProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.Variable1 = 0;
-      uniforms.Variable2 = 0;
+      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
       uniforms.NearClip = p_Near;
       uniforms.FarClip = p_Far;
 
       uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
       uniforms.DepthBufferIdx = p_DepthBufferSrv;
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+
+      uniforms.Dimensions = m_Dimension;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
@@ -334,7 +352,44 @@ void VolumetricFog::render(
 
   // 2. Light contribution
   {
-    PIXBeginEvent(p_CmdList, 0, " Light Contribution");
+    PIXBeginEvent(p_CmdList, 0, " Light Scattering");
+
+    m_ScatteringVolume.makeWritable(p_CmdList);
+
+    p_CmdList->SetComputeRootSignature(m_RootSig);
+    p_CmdList->SetPipelineState(m_PSOs[RenderPass_FinalIntegration]);
+
+    BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
+
+    // Set constant buffers
+    {
+      FogConstants uniforms;
+      uniforms.InvViewProj = glm::mat4();
+      uniforms.ProjMat = glm::mat4();
+      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
+      uniforms.NearClip = p_Near;
+      uniforms.FarClip = p_Far;
+
+      uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+      uniforms.DataVolumeIdx = m_DataVolume.getSRV();
+
+      uniforms.Dimensions = m_Dimension;
+
+      BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
+    }
+
+    AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_ScatteringVolume.UAV};
+    BindTempDescriptorTable(
+        p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
+
+    // Sync back final volume to be read
+    m_ScatteringVolume.makeReadable(p_CmdList);
 
     PIXEndEvent(p_CmdList);
   }
@@ -355,15 +410,16 @@ void VolumetricFog::render(
       FogConstants uniforms;
       uniforms.InvViewProj = glm::mat4();
       uniforms.ProjMat = glm::mat4();
-      uniforms.Variable1 = 0;
-      uniforms.Variable2 = 0;
+      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
       uniforms.NearClip = p_Near;
       uniforms.FarClip = p_Far;
 
       uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
       uniforms.DepthBufferIdx = p_DepthBufferSrv;
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
-      uniforms.DataVolumeIdx = m_DataVolume.getSRV();
+      uniforms.ScatteringVolumeIdx = m_ScatteringVolume.getSRV();
+
+      uniforms.Dimensions = m_Dimension;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
@@ -374,7 +430,8 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
+    // NOTE: Z = 1 as we integrate inside the shader.
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, 1);
 
     // Sync back final volume to be read
     m_FinalVolume.makeReadable(p_CmdList);

@@ -11,8 +11,7 @@ struct UniformConstants
   row_major float4x4 ProjMat;
   row_major float4x4 InvViewProj;
 
-  uint X;
-  uint Y;
+  float2 Resolution;
   float Near;
   float Far;
 
@@ -20,9 +19,17 @@ struct UniformConstants
   uint DepthBufferIdx;
   uint SpotLightShadowIdx;
   uint DataVolumeIdx;
+  uint ScatterVolumeIdx;
+
+  uint3 Dimensions;
+  float PhaseAnisotropy01;
 };
 
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
+
+#define NUM_LIGHTS 32
+#define NUM_BINS 16.0
+#define BIN_WIDTH (1.0 / NUM_BINS)
 
 //=================================================================================================
 // Resources
@@ -42,6 +49,10 @@ Buffer<uint> BufferUintTable[] : register(t0, space6);
 // Render targets / UAVs
 #if (DATA_INJECTION > 0)
   RWTexture3D<float4> DataVolumeTexture : register(u0);
+#endif
+
+#if (LIGHT_SCATTERING > 0)
+  RWTexture3D<float4> ScatterVolumeTexture : register(u0);
 #endif
 
 #if (FINAL_INTEGRATION > 0)
@@ -64,28 +75,68 @@ float linearDepthToRawDepth( float linearDepth, float near, float far ) {
     return ( near * far ) / ( linearDepth * ( near - far ) ) - far / ( near - far );
 }
 
+float4 worldFromFroxel(uint3 froxelCoord)
+{
+  float2 uv = (froxelCoord.xy + 0.5f) / float2(CBuffer.Dimensions.x, CBuffer.Dimensions.y);
+
+#if 0 // THIS CAUSES A WEIRD ISSUE OF CAMERA-POSITION DEPENDENCY
+  float linearZ = (froxelCoord.z + 0.5f) / float(CBuffer.Dimensions.z);
+#endif
+
+  float linearZ = sliceToExponentialDepth(CBuffer.Near, CBuffer.Far, froxelCoord.z, CBuffer.Dimensions.z);
+
+  //float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
+  float rawDepth = linearDepthToRawDepth(linearZ, CBuffer.Near, CBuffer.Far);
+
+  uv = 2.0f * uv - 1.0f;
+  uv.y *= -1.0f;
+
+  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
+  worldPos.xyz /= worldPos.w;
+
+  return worldPos;
+}
+
+float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
+{
+    const float3 absolute_vec = abs(direction);
+    const float local_z_component = max(absolute_vec.x, max(absolute_vec.y, absolute_vec.z));
+
+    const float f = radius;
+    const float n = 0.01f;
+    // Original value, left for reference.
+    //const float normalized_z_component = -(f / (n - f) - (n * f) / (n - f) / local_z_component);
+    const float normalized_z_component = ( n * f * rcpNminusF ) / local_z_component - f * rcpNminusF;
+    return normalized_z_component;
+}
+
+float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
+{
+    const float distanceSquare = dot(positionToLight, positionToLight);
+    const float factor = distanceSquare * lightInverseRadius * lightInverseRadius;
+    const float smoothFactor = max(1.0 - factor * factor, 0.0);
+    return (smoothFactor * smoothFactor) / max(distanceSquare, 1e-4);
+}
+
+float phaseFunction(vec3 V, vec3 L, float g) {
+    float cosTheta = dot(V, L);
+
+    // TODO
+    return 1.0f;
+}
 
 //=================================================================================================
 // 1. Data injection
 //=================================================================================================
 #if (DATA_INJECTION > 0)
 [numthreads(8, 8, 1)]
-void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID) 
+void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,  in uint3 GroupID
+                                                            : SV_GroupID) 
 {
   const uint3 froxelCoord = DispatchID;
 
   // transform froxel to world space
-  float2 uv = (froxelCoord.xy + 0.5f) / 128.0f;
-  float linearZ = (froxelCoord.z + 0.5f) / 128.0f;
-  //float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
-  float rawDepth = linearDepthToRawDepth(linearZ, 0.1, 35);
-  rawDepth = rawDepthToLinearDepth(rawDepth, 0.1, 35);
-
-  uv = 2.0f * uv - 1.0f;
-  uv.y *= -1.0f;
-
-  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
-  worldPos /= worldPos.w;
+  float4 worldPos = worldFromFroxel(froxelCoord);
 
   if (false)
   {
@@ -93,7 +144,7 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
     return;
   }
 
-  float4 scatteringExtinction = float4(0.05, 0, 0, 0);
+  float4 scatteringExtinction = float4(0.1, 0, 0, 0);
 
   // Add density from box
 #if 1
@@ -101,28 +152,127 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID)
   float3 boxPos = float3(0, 0, 0);
   float3 boxDist = abs(worldPos - boxPos);
   if (all(boxDist <= boxSize)) {
-    scatteringExtinction += float4(0, 0.1, 0, 1);
+    scatteringExtinction += float4(0, .1, 0, 1);
   }
 #endif
+
+
+// if (GroupID.x == 0 && GroupID.y == 0 && GroupID.z == 0)
+//  scatteringExtinction = float4(1, 1, 1, 1);
+
+// if (GroupID.x == 2 && GroupID.y == 0 && GroupID.z == 0)
+//  scatteringExtinction = float4(0, 0, 1, 1);
+
+// if (GroupID.x == 1 && GroupID.y == 0 && GroupID.z == 0)
+//  scatteringExtinction = float4(1, 0, 1, 1);
+
+
+
 
   DataVolumeTexture[froxelCoord] = scatteringExtinction;
   //DataVolumeTexture[froxelCoord] = float4(DispatchID, 1.0f);
 }
 #endif //(DATA_INJECTION > 0)
 
+#if (LIGHT_SCATTERING > 0)
 //=================================================================================================
 // 2. Light contribution
 //=================================================================================================
 [numthreads(8, 8, 1)]
 void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID) 
 {
-  const uint3 froxelCoord = DispatchID;
+    const uint3 froxelCoord = DispatchID;
 
-  //DataVolumeTexture[froxelCoord] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    // Check coordinates boundaries
+    float3 worldPos = worldFromFroxel(froxelCoord);
+
+    float3 rcpFroxelDim = 1.0f / CBuffer.Dimensions.xyz;
+    float3 fogDataUVW = froxelCoord * rcpFroxelDim;
+
+    Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
+    float4 scatteringExtinction = fogData[fogDataUVW];
+
+    float extinction = scatteringExtinction.a;
+    float3 lighting = float3(0);
+
+    if ( extinction >= 0.01f ) {
+        float3 V = normalize(cameraPosition.xyz - worldPos);
+
+        // Read clustered lighting data
+        // Calculate linear depth.
+        float linearZ = froxelCoord.z * rcpFroxelDim.z;
+        linearZ = rawDepthToLinearDepth(linearZ, CBuffer.Near, CBuffer.Far) / CBuffer.Far;
+        // Select bin
+        int binIndex = int( linearZ / BIN_WIDTH );
+        uint binValue = bins[ binIndex ];
+
+        uint minLightId = binValue & 0xFFFF;
+        uint maxLightId = ( binValue >> 16 ) & 0xFFFF;
+
+        uvec2 position = uvec2(uint(froxelCoord.x * 1.0f / CBuffer.Dimensions.x * CBuffer.Resolution.x),
+                               uint(froxelCoord.y * 1.0f / CBuffer.Dimensions.y * CBuffer.Resolution.y));
+        uvec2 tile = position / uint( TILE_SIZE );
+
+        uint stride = uint( NUM_WORDS ) * ( uint( resolution.x ) / uint( TILE_SIZE ) );
+        // Select base address
+        uint address = tile.y * stride + tile.x;
+
+        if ( minLightId != NUM_LIGHTS + 1 ) {
+            for ( uint lightId = minLightId; lightId <= maxLightId; ++lightId ) {
+                uint wordId = lightId / 32;
+                uint bitId = lightId % 32;
+
+                if ( ( tiles[ address + wordId ] & ( 1 << bitId ) ) != 0 ) {
+                    // uint globalLightIndex = lightIndices[ lightId ];
+                    // Light spotlight = lights[ globalLightIndex ];
+
+                    // TODO: properly use light clustering.
+                    float3 lightPosition = spotlight.worldPos;
+                    float lightRadius = spotlight.radius;
+                    if (length(worldPos - lightPosition) < lightRadius) {
+
+                        // Calculate point light contribution
+                        
+                        // TODO: add shadows
+                        float3 shadowPositionToLight = worldPos - lightPosition;
+                        const float currentDepth = vectorToDepthValue(shadowPositionToLight, lightRadius, spotlight.rcpNminusF);
+                        const float bias = 0.0001f;
+                        const uint shadowLightIndex = globalLightIndex;
+
+                        const uint samples = 4;
+                        float shadow = 0;
+                        for(uint i = 0; i < samples; ++i) {
+
+                            vec2 diskOffset = vogelDiskOffset(i, 4, 0.1f);
+                            float3 samplingPosition = shadowPositionToLight + diskOffset.xyx * 0.0005f;
+
+                            Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
+                            float4 scatteringExtinction = fogData[fogDataUVW];
+                            TextureCube cubemapShadows =  TexCubeTable[CBuffer.cubemapShadowsIndex];
+                            // const float closestDepth = cubemapShadows.SampleLevel(float4(samplingPosition, shadowLightIndex)).r
+                            shadow += currentDepth - bias < closestDepth ? 1 : 0;
+                        }
+
+                        shadow /= samples;
+
+                        const float3 L = normalize(lightPosition - worldPos);
+                        float attenuation = attenuationSquareFalloff(L, 1.0f / lightRadius) * shadow;
+
+                        lighting += spotlight.color * spotlight.intensity * phaseFunction(V, -L, PhaseAnisotropy01) * attenuation;
+                    }
+                }
+            }
+        }
+    }
+
+    float3 scattering = scatteringExtinction.rgb * lighting;
+
+    ScatterVolumeTexture[froxelCoord] = float4(scattering, extinction);
 }
+#endif //(LIGHT_SCATTERING > 0)
 
 //=================================================================================================
-// 3. Light contribution
+// 3. Final integration
 //=================================================================================================
 #if (FINAL_INTEGRATION > 0)
 [numthreads(8, 8, 1)]
@@ -130,15 +280,18 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
 {
     uint3 froxelCoord = DispatchID;
 
-    // FinalIntegrationVolume[froxelCoord] = float4(1, 1, 0, 0);
-    // return;
+#if 0
+    Texture3D fog = Tex3DTable[CBuffer.ScatterVolumeIdx];
+    FinalIntegrationVolume[froxelCoord] = fog[froxelCoord];
+    return;
+#endif
 
     float3 integratedScattering = float3(0,0,0);
     float integratedTransmittance = 1.0f;
 
     float currentZ = 0;
 
-    float3 froxelDims = float3(128, 128, 128);
+    float3 froxelDims = float3(CBuffer.Dimensions.x, CBuffer.Dimensions.y, CBuffer.Dimensions.z);
     float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
 
     for ( int z = 0; z < froxelDims.z; ++z ) {
@@ -152,7 +305,7 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
         currentZ = nextZ;
 
         // Following equations from Physically Based Sky, Atmosphere and Cloud Rendering by Hillaire
-        Texture3D fogVolume = Tex3DTable[CBuffer.DataVolumeIdx];
+        Texture3D fogVolume = Tex3DTable[CBuffer.ScatterVolumeIdx];
         const float4 sampledScatteringExtinction = fogVolume[froxelCoord * rcpFroxelDim];
 
 #if 1 // TEST

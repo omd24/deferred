@@ -63,6 +63,44 @@ float linearDepthToUV( float near, float far, float linearDepth, int numSlices )
     return max(log2(linearDepth) * scale + bias, 0.0f) / float(numSlices);
 }
 
+// Convert rawDepth (0..1) to linear depth (near...far)
+float rawDepthToLinearDepth( float rawDepth, float near, float far ) {
+    return near * far / (far + rawDepth * (near - far));
+}
+
+// Volumetric fog application
+float4 getVolumetricFog( float2 screenUV, float rawDepth, float near, float far, int numSlices)
+{
+    // Fog linear depth distribution
+    float linearDepth = rawDepthToLinearDepth( rawDepth, near, far );
+    //float depthUV = linearDepth / far;
+    // Exponential
+    float depthUV = linearDepthToUV(near, far, linearDepth, numSlices);
+    float3 froxelUVW = float3(screenUV.xy, depthUV);
+    float4 scatteringTransmittance = float4(0,0,0,0);
+
+    
+    Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
+    float4 fogSample = fogVolume.SampleLevel(PointSampler, froxelUVW, 0);
+
+    return fogSample;
+
+    // Add animated noise to transmittance to remove banding.
+    // float2 blue_noise = texture(global_textures[nonuniformEXT(blue_noise_128_rg_texture_index)], screenUV ).rg;
+    // const float k_golden_ratio_conjugate = 0.61803398875;
+    // float blue_noise0 = fract(ToLinear1(blue_noise.r) + float(current_frame % 256) * k_golden_ratio_conjugate);
+    // float blue_noise1 = fract(ToLinear1(blue_noise.g) + float(current_frame % 256) * k_golden_ratio_conjugate);
+
+    // float noise_modifier = triangular_noise(blue_noise0, blue_noise1) * volumetric_fog_application_dithering_scale;
+    // scatteringTransmittance.a += noise_modifier;
+
+    // const float scattering_modifier = enable_volumetric_fog_opacity_anti_aliasing() ? max( 1 - scatteringTransmittance.a, 0.00000001f ) : 1.0f;
+
+    // color.rgb = color.rgb * scatteringTransmittance.a + scatteringTransmittance.rgb * scattering_modifier;
+
+    // return color;
+}
+
 //=================================================================================================
 // Test compute shader
 //=================================================================================================
@@ -113,7 +151,7 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     OutputTexture[pixelPos] = blend;
     //OutputTexture[pixelPos] = float4(DispatchID, 1.0f);
   
-    float t = 0.1;
+    float t = 0.5;
     // float3 boxSize = float3(2.0, 2.0, 2.0);
     // float3 boxPos = float3(0, 1, 0);
     // float3 boxDist = abs(positionWS - boxPos);
@@ -122,6 +160,9 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     // }
   
     float4 fogSample2 = fogVolume[froxelUVW];
-    float4 blend2 = lerp(sceneColor, fogSample, t);
+
+    float4 fogSample3 = getVolumetricFog(screenUV, z, near, far, 128);
+
+    float4 blend2 = lerp(sceneColor, fogSample3, t);
     OutputTexture[pixelPos] = blend2;
 }

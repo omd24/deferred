@@ -612,6 +612,10 @@ void RenderManager::loadD3D12Pipeline()
 
   // Create frame resources.
   {
+    // NOTE: We cannot directly use SRGB format on swapchain
+    // instead we use srgb rendertargets as described here:
+    // https://learn.microsoft.com/en-us/previous-versions/windows/desktop/legacy/bb173064(v=vs.85)?redirectedfrom=MSDN
+
     // Create a RTV and a command allocator for each frame.
     for (UINT n = 0; n < FRAME_COUNT; n++)
     {
@@ -620,7 +624,7 @@ void RenderManager::loadD3D12Pipeline()
 
       D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
       rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-      rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
       rtvDesc.Texture2D.MipSlice = 0;
       rtvDesc.Texture2D.PlaneSlice = 0;
       m_Dev->CreateRenderTargetView(
@@ -633,7 +637,7 @@ void RenderManager::loadD3D12Pipeline()
       m_RenderTargets[n].m_Texture.Width = m_Info.m_Width;
       m_RenderTargets[n].m_Texture.Height = m_Info.m_Height;
       m_RenderTargets[n].m_Texture.ArraySize = 1;
-      m_RenderTargets[n].m_Texture.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+      m_RenderTargets[n].m_Texture.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
       m_RenderTargets[n].m_Texture.NumMips = 1;
       m_RenderTargets[n].m_MSAASamples = 1;
 

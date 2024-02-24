@@ -149,7 +149,7 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,  in uint3 GroupI
   float3 boxPos = float3(0, 2, 0);
   float3 boxDist = abs(worldPos.xyz - boxPos);
   if (all(boxDist <= boxSize)) {
-    scatteringExtinction = float4(0, .4, 0, 1);
+    scatteringExtinction = float4(0, .07, 0, 1);
   }
 
   DataVolumeTexture[froxelCoord] = scatteringExtinction;
@@ -225,7 +225,7 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
                     float lightRadius = spotlight.radius;
                     if (length(worldPos - lightPosition) < lightRadius) {
 
-                        // Calculate point light contribution
+                        // Calculate spot light contribution
                         
                         // TODO: add shadows
                         float3 shadowPositionToLight = worldPos - lightPosition;

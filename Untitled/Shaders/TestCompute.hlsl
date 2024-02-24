@@ -47,6 +47,8 @@ RWTexture2D<float4> OutputTexture : register(u0);
 // Sampler(s)
 SamplerState PointSampler : register(s0);
 SamplerState LinearSampler : register(s1);
+SamplerState LinearBorderSampler : register(s2);
+SamplerState LinearClampSampler : register(s3);
 
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv, in float4x4 invViewProj)
@@ -83,7 +85,6 @@ float4 getVolumetricFog( float2 screenUV, float rawDepth, float near, float far,
     // Exponential
     float depthUV = linearDepthToUV(near, far, linearDepth, numSlices);
     float3 froxelUVW = float3(screenUV.xy, depthUV);
-
     
     Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
     float4 fogSample = fogVolume.SampleLevel(LinearSampler, froxelUVW, 0);

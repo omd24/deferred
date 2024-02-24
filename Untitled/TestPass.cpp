@@ -135,11 +135,15 @@ void TestCompute::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     rootParameters[RootParam_AppSettings].Descriptor.RegisterSpace = 0;
     rootParameters[RootParam_AppSettings].Descriptor.ShaderRegister = AppSettings::CBufferRegister;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Point, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[1] =
         GetStaticSamplerState(SamplerState::Linear, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[2] =
+        GetStaticSamplerState(SamplerState::LinearBorder, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[3] =
+        GetStaticSamplerState(SamplerState::LinearClamp, 3, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);

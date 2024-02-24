@@ -15,6 +15,9 @@ struct TestCompute
       const uint32_t p_DepthTexIdx,
       float p_Near,
       float p_Far,
+      float p_ScreenWidth,
+      float p_ScreenHeight,
+      glm::vec3 p_FogGridDims,
       FirstPersonCamera const& p_Camera);
 
   ID3DBlobPtr m_TestComputeShader = nullptr;

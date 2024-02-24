@@ -1697,8 +1697,16 @@ void RenderManager::populateCommandList()
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
   
-  m_TestCompute.render(
-      m_CmdList, deferredTarget.srv(), m_Fog.m_FinalVolume.getSRV(), depthBuffer.getSrv(), camera.NearClip(), camera.FarClip(), camera);
+  m_TestCompute.render(m_CmdList,
+                       deferredTarget.srv(),
+                       m_Fog.m_FinalVolume.getSRV(),
+                       depthBuffer.getSrv(),
+                       camera.NearClip(),
+                       camera.FarClip(),
+                       static_cast<float>(m_Info.m_Width),
+                       static_cast<float>(m_Info.m_Height),
+                       m_Fog.m_Dimensions,
+                       camera);
 
 #if 1 // test pass
   m_PostFx.render(m_CmdList, m_TestCompute.m_uavTarget, m_RenderTargets[m_FrameIndex]);

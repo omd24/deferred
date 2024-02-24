@@ -19,7 +19,13 @@ struct ConstantData
   uint32_t fogTexIdx = uint32_t(-1);
   uint32_t depthMapIdx = uint32_t(-1);
   float nearPlane = 0.0f;
+
   float farPlane = 0.0f;
+  glm::vec2 resolution;
+  float pad0;
+
+  glm::vec3 gridDimensions;
+  float pad1;
 };
 
 enum RootParams : uint32_t
@@ -129,9 +135,11 @@ void TestCompute::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     rootParameters[RootParam_AppSettings].Descriptor.RegisterSpace = 0;
     rootParameters[RootParam_AppSettings].Descriptor.ShaderRegister = AppSettings::CBufferRegister;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[1] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Point, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[1] =
+        GetStaticSamplerState(SamplerState::Linear, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -197,6 +205,8 @@ void TestCompute::render(
     const uint32_t p_FogTexIdx,
     const uint32_t p_DepthTexIdx,
     float p_Near, float p_Far,
+    float p_ScreenWidth, float p_ScreenHeight,
+    glm::vec3 p_FogGridDims,
     FirstPersonCamera const& p_Camera)
 {
   assert(p_CmdList != nullptr);
@@ -224,6 +234,9 @@ void TestCompute::render(
       uniforms.sceneTexIdx = p_SceneTexIdx;
       uniforms.fogTexIdx = p_FogTexIdx;
       uniforms.depthMapIdx = p_DepthTexIdx;
+
+      uniforms.gridDimensions = p_FogGridDims;
+      uniforms.resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

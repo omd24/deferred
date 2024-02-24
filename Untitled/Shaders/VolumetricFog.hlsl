@@ -14,8 +14,8 @@ struct UniformConstants
   float2 Resolution;
   float Near;
   float Far;
-
   uint ClusterBufferIdx;
+  
   uint DepthBufferIdx;
   uint SpotLightShadowIdx;
   uint DataVolumeIdx;
@@ -142,40 +142,17 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,  in uint3 GroupI
   // transform froxel to world space
   float4 worldPos = worldFromFroxel(froxelCoord);
 
-
-  if (false)
-  {
-    //DataVolumeTexture[froxelCoord] = float4(worldPos.xyz, rawDepth);
-    return;
-  }
-
   float4 scatteringExtinction = float4(0.005, 0.005, 0.005, 1);
 
   // Add density from box
-#if 1
   float3 boxSize = float3(1.0, 1.0, 1.0);
-  float3 boxPos = float3(0, 0, 0);
+  float3 boxPos = float3(0, 2, 0);
   float3 boxDist = abs(worldPos.xyz - boxPos);
   if (all(boxDist <= boxSize)) {
     scatteringExtinction = float4(0, .4, 0, 1);
   }
-#endif
-
-
-// if (GroupID.x == 0 && GroupID.y == 0 && GroupID.z == 0)
-//  scatteringExtinction = float4(1, 1, 1, 1);
-
-// if (GroupID.x == 2 && GroupID.y == 0 && GroupID.z == 0)
-//  scatteringExtinction = float4(0, 0, 1, 1);
-
-// if (GroupID.x == 1 && GroupID.y == 0 && GroupID.z == 0)
-//  scatteringExtinction = float4(1, 0, 1, 1);
-
-
-
 
   DataVolumeTexture[froxelCoord] = scatteringExtinction;
-  //DataVolumeTexture[froxelCoord] = float4(DispatchID, 1.0f);
 }
 #endif //(DATA_INJECTION > 0)
 
@@ -313,7 +290,6 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
 
         FinalIntegrationVolume[froxelCoord] = float4(integratedScattering, 1.0);
     }
-
 
     return;
 #endif

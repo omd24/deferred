@@ -31,5 +31,5 @@ struct VolumetricFog
   VolumeTexture m_ScatteringVolume;
   VolumeTexture m_FinalVolume;
 
-  static constexpr glm::uvec3 m_Dimension = {128, 128, 128};
+  static constexpr glm::uvec3 m_Dimensions = {128, 128, 128};
 };

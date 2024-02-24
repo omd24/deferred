@@ -237,9 +237,9 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 // Create shader UAVs
 {
   VolumeTextureInit vtInit;
-  vtInit.Width = m_Dimension.x;
-  vtInit.Height = m_Dimension.y;
-  vtInit.Depth = m_Dimension.z;
+  vtInit.Width = m_Dimensions.x;
+  vtInit.Height = m_Dimensions.y;
+  vtInit.Depth = m_Dimensions.z;
   vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
   vtInit.InitialState =
       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -249,9 +249,9 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
 {
   VolumeTextureInit vtInit;
-  vtInit.Width = m_Dimension.x;
-  vtInit.Height = m_Dimension.y;
-  vtInit.Depth = m_Dimension.z;
+  vtInit.Width = m_Dimensions.x;
+  vtInit.Height = m_Dimensions.y;
+  vtInit.Depth = m_Dimensions.z;
   vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
   vtInit.InitialState =
       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -261,9 +261,9 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
 {
   VolumeTextureInit vtInit;
-  vtInit.Width = m_Dimension.x;
-  vtInit.Height = m_Dimension.y;
-  vtInit.Depth = m_Dimension.z;
+  vtInit.Width = m_Dimensions.x;
+  vtInit.Height = m_Dimensions.y;
+  vtInit.Depth = m_Dimensions.z;
   vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
   vtInit.InitialState =
       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -303,8 +303,8 @@ void VolumetricFog::render(
 
   PIXBeginEvent(p_CmdList, 0, "Volumetric Fog");
   
-  const uint32_t dispatchGroupX = alignUp<uint32_t>(m_Dimension.x, 8) / 8;
-  const uint32_t dispatchGroupY = alignUp<uint32_t>(m_Dimension.y, 8) / 8;
+  const uint32_t dispatchGroupX = alignUp<uint32_t>(m_Dimensions.x, 8) / 8;
+  const uint32_t dispatchGroupY = alignUp<uint32_t>(m_Dimensions.y, 8) / 8;
 
   // 1. Data injection
   {
@@ -334,7 +334,7 @@ void VolumetricFog::render(
       uniforms.DepthBufferIdx = p_DepthBufferSrv;
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
 
-      uniforms.Dimensions = m_Dimension;
+      uniforms.Dimensions = m_Dimensions;
 
       uniforms.CameraPos = p_Camera.Position();
 
@@ -347,7 +347,7 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
     // Sync back volume buffer to be read
     m_DataVolume.makeReadable(p_CmdList);
@@ -380,7 +380,7 @@ void VolumetricFog::render(
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
       uniforms.DataVolumeIdx = m_DataVolume.getSRV();
 
-      uniforms.Dimensions = m_Dimension;
+      uniforms.Dimensions = m_Dimensions;
 
       uniforms.CameraPos = p_Camera.Position();
       
@@ -393,7 +393,7 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
     // Sync back scatter volume to be read
     m_ScatteringVolume.makeReadable(p_CmdList);
@@ -426,7 +426,7 @@ void VolumetricFog::render(
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
       uniforms.ScatteringVolumeIdx = m_ScatteringVolume.getSRV();
 
-      uniforms.Dimensions = m_Dimension;
+      uniforms.Dimensions = m_Dimensions;
 
       uniforms.CameraPos = p_Camera.Position();
 

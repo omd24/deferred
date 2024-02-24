@@ -28,6 +28,9 @@ struct FogConstants
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
 
   glm::uvec3 Dimensions;
+
+  float PhaseAnisotropy01;
+  glm::vec3 CameraPos;
 };
 
 enum RootParams : uint32_t
@@ -144,7 +147,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     if (res)
     {
       m_DataInjectionShader = tempDataInjShader;
-      m_LightContributionShader = tempFinalIntegralShader;
+      m_LightContributionShader = tempLightContributionShader;
       m_FinalIntegralShader = tempFinalIntegralShader;
     }
     assert(m_DataInjectionShader && m_LightContributionShader && m_FinalIntegralShader);
@@ -333,6 +336,8 @@ void VolumetricFog::render(
 
       uniforms.Dimensions = m_Dimension;
 
+      uniforms.CameraPos = p_Camera.Position();
+
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
@@ -357,7 +362,7 @@ void VolumetricFog::render(
     m_ScatteringVolume.makeWritable(p_CmdList);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
-    p_CmdList->SetPipelineState(m_PSOs[RenderPass_FinalIntegration]);
+    p_CmdList->SetPipelineState(m_PSOs[RenderPass_LightContribution]);
 
     BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
 
@@ -377,6 +382,8 @@ void VolumetricFog::render(
 
       uniforms.Dimensions = m_Dimension;
 
+      uniforms.CameraPos = p_Camera.Position();
+      
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
@@ -388,7 +395,7 @@ void VolumetricFog::render(
 
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimension.z);
 
-    // Sync back final volume to be read
+    // Sync back scatter volume to be read
     m_ScatteringVolume.makeReadable(p_CmdList);
 
     PIXEndEvent(p_CmdList);
@@ -420,6 +427,8 @@ void VolumetricFog::render(
       uniforms.ScatteringVolumeIdx = m_ScatteringVolume.getSRV();
 
       uniforms.Dimensions = m_Dimension;
+
+      uniforms.CameraPos = p_Camera.Position();
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

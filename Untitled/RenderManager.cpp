@@ -1718,7 +1718,7 @@ void RenderManager::populateCommandList()
     spotLightShadowMap.getSrv(),
     camera.NearClip(),
     camera.FarClip(),
-    m_Info.m_Width, m_Info.m_Height,
+    static_cast<float>(m_Info.m_Width), static_cast<float>(m_Info.m_Height),
     camera);
 }
 //---------------------------------------------------------------------------//

@@ -92,7 +92,7 @@ float4 getVolumetricFog( float2 screenUV, float rawDepth, float near, float far,
     // return float4(screenUV.xy, linearDepth, depthUV);
     return fogSample;
 
-    float4 scatteringTransmittance = float4(0,0,0,0);
+    // float4 scatteringTransmittance = float4(0,0,0,0);
     // Add animated noise to transmittance to remove banding.
     // float2 blue_noise = texture(global_textures[nonuniformEXT(blue_noise_128_rg_texture_index)], screenUV ).rg;
     // const float k_golden_ratio_conjugate = 0.61803398875;
@@ -121,9 +121,8 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
 
     Texture2D depthMap = Tex2DTable[CBuffer.depthMapIdx];
     float z = depthMap[pixelPos].x;
-    float2 invRTSize = 1.0f / float2(1280, 720);
+    float2 invRTSize = 1.0f / float2(CBuffer.Resolution.x, CBuffer.Resolution.y);
     float2 screenUV = (pixelPos + 0.5f) * invRTSize;
-    float3 positionWS = PosWSFromDepth(z, screenUV, CBuffer.InvViewProj);
 
     // Sample scene texture
     Texture2D sceneTexture = Tex2DTable[CBuffer.sceneTexIdx];

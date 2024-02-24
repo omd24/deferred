@@ -14,16 +14,16 @@ struct UniformConstants
   float2 Resolution;
   float Near;
   float Far;
+
   uint ClusterBufferIdx;
-  
   uint DepthBufferIdx;
   uint SpotLightShadowIdx;
   uint DataVolumeIdx;
+  
   uint ScatterVolumeIdx;
-
   uint3 Dimensions;
-  float PhaseAnisotropy01;
 
+  float PhaseAnisotropy01;
   float3 CameraPos;
 };
 

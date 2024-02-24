@@ -1688,6 +1688,18 @@ void RenderManager::populateCommandList()
 
   renderSpotLightShadowMap(m_CmdList, camera);
 
+  // TEST fog
+  m_Fog.render(
+      m_CmdList,
+      spotLightClusterBuffer.SRV,
+      depthBuffer.getSrv(),
+      spotLightShadowMap.getSrv(),
+      camera.NearClip(),
+      camera.FarClip(),
+      static_cast<float>(m_Info.m_Width),
+      static_cast<float>(m_Info.m_Height),
+      camera);
+
   renderDeferred();
 
   renderParticles();
@@ -1696,19 +1708,20 @@ void RenderManager::populateCommandList()
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-  
-  m_TestCompute.render(m_CmdList,
-                       deferredTarget.srv(),
-                       m_Fog.m_FinalVolume.getSRV(),
-                       depthBuffer.getSrv(),
-                       camera.NearClip(),
-                       camera.FarClip(),
-                       static_cast<float>(m_Info.m_Width),
-                       static_cast<float>(m_Info.m_Height),
-                       m_Fog.m_Dimensions,
-                       camera);
-
 #if 1 // test pass
+
+  m_TestCompute.render(
+      m_CmdList,
+      deferredTarget.srv(),
+      m_Fog.m_FinalVolume.getSRV(),
+      depthBuffer.getSrv(),
+      camera.NearClip(),
+      camera.FarClip(),
+      static_cast<float>(m_Info.m_Width),
+      static_cast<float>(m_Info.m_Height),
+      m_Fog.m_Dimensions,
+      camera);
+
   m_PostFx.render(m_CmdList, m_TestCompute.m_uavTarget, m_RenderTargets[m_FrameIndex]);
 
 #else // main pass
@@ -1716,18 +1729,6 @@ void RenderManager::populateCommandList()
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 #endif
 
-
-
-  // TEST fog
-  m_Fog.render(
-    m_CmdList,
-    spotLightClusterBuffer.SRV,
-    depthBuffer.getSrv(),
-    spotLightShadowMap.getSrv(),
-    camera.NearClip(),
-    camera.FarClip(),
-    static_cast<float>(m_Info.m_Width), static_cast<float>(m_Info.m_Height),
-    camera);
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()

@@ -50,6 +50,12 @@ Texture2DMS<float4> Tex2DMSTable[] : register(t0, space4);
 ByteAddressBuffer RawBufferTable[] : register(t0, space5);
 Buffer<uint> BufferUintTable[] : register(t0, space6);
 
+// Samplers:
+SamplerState PointSampler : register(s0);
+SamplerState LinearClampSampler : register(s1);
+SamplerState LinearWrapSampler : register(s2);
+SamplerState LinearBorderSampler : register(s3);
+
 // Render targets / UAVs
 #if (DATA_INJECTION > 0)
   RWTexture3D<float4> DataVolumeTexture : register(u0);
@@ -172,7 +178,12 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     float3 fogDataUVW = froxelCoord * rcpFroxelDim;
 
     Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
-    float4 scatteringExtinction = fogData[froxelCoord];
+
+    float4 scatteringExtinction = float4(0, 0, 0, 0);
+    if (AppSettings.FOG_UseLinearClamp)
+        scatteringExtinction = fogData.SampleLevel(LinearClampSampler, fogDataUVW, 0);
+    else // use load
+        scatteringExtinction = fogData[froxelCoord];
 
 #if 1
 
@@ -285,8 +296,17 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
     for ( int z = 0; z < froxelDims.z; ++z ) {
         froxelCoord.z = z;
 
-        //integratedScattering += fog.SampleLevel(PointSampler, froxelCoord * rcpFroxelDim, 0).rgb;
-        integratedScattering += fog[froxelCoord].rgb;
+        if (AppSettings.FOG_UseLinearClamp)
+        {
+            float3 sampledScatterng =
+                fog.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0).rgb;
+            integratedScattering += sampledScatterng;
+        }
+        else
+        {
+            // Load
+            integratedScattering += fog[froxelCoord].rgb;
+        }
 
         FinalIntegrationVolume[froxelCoord] = float4(integratedScattering, 1.0);
     }

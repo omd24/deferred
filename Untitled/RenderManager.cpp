@@ -933,13 +933,14 @@ void RenderManager::loadAssets()
 
   // set up camera
   float aspect = float(m_Info.m_Width) / m_Info.m_Height;
-  camera.Initialize(aspect, glm::quarter_pi<float>(), 0.1f, 35.0f, float(m_Info.m_Width));
+  camera.Initialize(aspect, glm::quarter_pi<float>(), 0.1f, 100.0f, float(m_Info.m_Width));
   camera.SetPosition(glm::vec3(-11.5f, 1.85f, -0.45f));
   camera.SetXRotation(0.0f);
   camera.SetYRotation(1.544f);
 
-  camera.SetPosition(glm::vec3(-1.25f, 1.31f, 0.2f));
-
+  // camera.SetPosition(glm::vec3(-1.25f, 1.31f, 0.2f));
+   camera.SetPosition(glm::vec3(-5.25f, 4.31f, 0.2f));
+   camera.SetXRotation(0.5f);
 
   // debugging the clustering bug
   /*

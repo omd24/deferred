@@ -31,6 +31,9 @@ extern bool32 ShowClusterVisualizer;
 extern bool32 ShowUVGradients;
 extern bool32 AnimateLightIntensity;
 
+// Volumetric fog
+extern bool32 FOG_UseLinearClamp;
+
 struct AppSettingsCBuffer
 {
   bool32 RenderLights;
@@ -45,6 +48,9 @@ struct AppSettingsCBuffer
   bool32 ShowLightCounts;
   bool32 ShowUVGradients;
   bool32 AnimateLightIntensity;
+
+  // Volumetric fog
+  bool32 FOG_UseLinearClamp;
 };
 
 extern ConstantBuffer CBuffer;

@@ -12,6 +12,9 @@ struct AppSettingsCbuffer
   bool ShowLightCounts;
   bool ShowUVGradients;
   bool AnimateLightIntensity;
+
+  // use linear clamp sampler for fog
+  bool FOG_UseLinearClamp;
 };
 
 ConstantBuffer<AppSettingsCbuffer> AppSettings : register(b12);

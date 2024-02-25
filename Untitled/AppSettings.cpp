@@ -19,6 +19,9 @@ bool32 ShowLightCounts = false;
 bool32 ShowUVGradients = false;
 bool32 AnimateLightIntensity = false;
 
+// Volumetric fog:
+bool32 FOG_UseLinearClamp = true;
+
 ConstantBuffer CBuffer;
 const uint32_t CBufferRegister = 12;
 
@@ -46,6 +49,9 @@ void updateCBuffer()
   cbData.ShowLightCounts = ShowLightCounts;
   cbData.ShowUVGradients = ShowUVGradients;
   cbData.AnimateLightIntensity = AnimateLightIntensity;
+  
+  // Volumetric data
+  cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
 
   CBuffer.mapAndSetData(&cbData, sizeof(AppSettingsCBuffer));
 }

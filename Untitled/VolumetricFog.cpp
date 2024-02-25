@@ -196,10 +196,13 @@ void VolumetricFog::init(ID3D12Device * p_Device)
         AppSettings::CBufferRegister;
 
     D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
-    staticSamplers[0] = GetStaticSamplerState(SamplerState::Point, 0);
-    staticSamplers[1] = GetStaticSamplerState(SamplerState::LinearClamp, 1);
-    staticSamplers[2] = GetStaticSamplerState(SamplerState::Linear, 2);
-    staticSamplers[3] = GetStaticSamplerState(SamplerState::LinearBorder, 3);
+    staticSamplers[0] = GetStaticSamplerState(SamplerState::Point, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[1] =
+        GetStaticSamplerState(SamplerState::LinearClamp, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[2] =
+        GetStaticSamplerState(SamplerState::Linear, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[3] =
+        GetStaticSamplerState(SamplerState::LinearBorder, 3, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);

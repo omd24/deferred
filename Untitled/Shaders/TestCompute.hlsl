@@ -81,16 +81,19 @@ float4 getVolumetricFog( float2 screenUV, float rawDepth, float near, float far,
 {
     // Fog linear depth distribution
     float linearDepth = rawDepthToLinearDepth(rawDepth, near, far );
-    //float depthUV = linearDepth / far;
+
     // Exponential
     float depthUV = linearDepthToUV(near, far, linearDepth, numSlices);
     float3 froxelUVW = float3(screenUV.xy, depthUV);
     
     Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
-    float4 fogSample = fogVolume.SampleLevel(LinearSampler, froxelUVW, 0);
-    //float4 fogSample = fogVolume[froxelUVW];
 
-    // return float4(screenUV.xy, linearDepth, depthUV);
+    float4 fogSample = float4(0, 0, 0, 0);
+    if (AppSettings.FOG_UseLinearClamp)
+      fogSample = fogVolume.SampleLevel(LinearClampSampler, froxelUVW, 0);
+    else
+      fogSample = fogVolume[froxelUVW * CBuffer.FogGridDimensions];
+
     return fogSample;
 
     // float4 scatteringTransmittance = float4(0,0,0,0);

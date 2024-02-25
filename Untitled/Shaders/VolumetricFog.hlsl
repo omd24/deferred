@@ -89,11 +89,11 @@ float4 worldFromFroxel(uint3 froxelCoord)
 {
   float2 uv = (froxelCoord.xy + 0.5f) / float2(CBuffer.Dimensions.x, CBuffer.Dimensions.y);
 
-#if 0 // THIS CAUSES A WEIRD ISSUE OF CAMERA-POSITION DEPENDENCY
+#if 0 // THIS CAUSES A CAMERA-DEPENDENT ISSUE (also depends on fog USAGE code)
   float linearZ = (froxelCoord.z + 0.5f) / float(CBuffer.Dimensions.z);
-#endif
-
+#else
   float linearZ = sliceToExponentialDepth(CBuffer.Near, CBuffer.Far, froxelCoord.z, CBuffer.Dimensions.z);
+#endif
 
   //float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
   float rawDepth = linearDepthToRawDepth(linearZ, CBuffer.Near, CBuffer.Far);
@@ -109,15 +109,15 @@ float4 worldFromFroxel(uint3 froxelCoord)
 
 float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
 {
-    const float3 absolute_vec = abs(direction);
-    const float local_z_component = max(absolute_vec.x, max(absolute_vec.y, absolute_vec.z));
+    const float3 absoluteVec = abs(direction);
+    const float localZComponent = max(absoluteVec.x, max(absoluteVec.y, absoluteVec.z));
 
     const float f = radius;
     const float n = 0.01f;
     // Original value, left for reference.
-    //const float normalized_z_component = -(f / (n - f) - (n * f) / (n - f) / local_z_component);
-    const float normalized_z_component = ( n * f * rcpNminusF ) / local_z_component - f * rcpNminusF;
-    return normalized_z_component;
+    //const float normalizedZComponent = -(f / (n - f) - (n * f) / (n - f) / localZComponent);
+    const float normalizedZComponent = ( n * f * rcpNminusF ) / localZComponent - f * rcpNminusF;
+    return normalizedZComponent;
 }
 
 float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
@@ -293,7 +293,8 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
 
 #if 1
     Texture3D fog = Tex3DTable[CBuffer.ScatterVolumeIdx];
-    for ( int z = 0; z < froxelDims.z; ++z ) {
+    for ( int z = 0; z < froxelDims.z; ++z )
+    {
         froxelCoord.z = z;
 
         if (AppSettings.FOG_UseLinearClamp)

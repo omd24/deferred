@@ -135,12 +135,11 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     float2 texCoord = float2(pixelPos.x, pixelPos.y) / inputSize;
     float4 sceneColor = sceneTexture.SampleLevel(PointSampler, texCoord, 0);
 
-    float t = 1;
-
     const float near = CBuffer.near;
     const float far = CBuffer.far;
     float4 fogSample3 = getVolumetricFog(screenUV, z, near, far, CBuffer.FogGridDimensions.z);
 
+    float t = 1;
     float4 blend2 = lerp(sceneColor, fogSample3, t);
     OutputTexture[pixelPos] = blend2;
 }

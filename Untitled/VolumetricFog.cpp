@@ -40,12 +40,20 @@ struct FogConstants
   uint32_t DepthBufferIdx = uint32_t(-1);
   uint32_t SpotLightShadowIdx = uint32_t(-1);
   uint32_t DataVolumeIdx = uint32_t(-1);
-  uint32_t ScatteringVolumeIdx = uint32_t(-1);
 
+  uint32_t ScatteringVolumeIdx = uint32_t(-1);
   glm::uvec3 Dimensions;
 
   float PhaseAnisotropy01;
   glm::vec3 CameraPos;
+
+  float ScatteringFactor;
+  float ConstantFogDensityModifier;
+  float HeightFogDenisty;
+  float HeightFogFalloff;
+  
+  float BoxFogDensity;
+
 };
 
 enum RootParams : uint32_t
@@ -353,8 +361,13 @@ void VolumetricFog::render(
       uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
 
       uniforms.Dimensions = m_Dimensions;
-
       uniforms.CameraPos = p_Camera.Position();
+
+      uniforms.ScatteringFactor = 0.05f;
+      uniforms.ConstantFogDensityModifier = 0.05f;
+      uniforms.HeightFogDenisty = 0.05f;
+      uniforms.HeightFogFalloff = 0.1f;
+      uniforms.BoxFogDensity = 0.75f;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
@@ -401,7 +414,13 @@ void VolumetricFog::render(
       uniforms.Dimensions = m_Dimensions;
 
       uniforms.CameraPos = p_Camera.Position();
-      
+
+      uniforms.ScatteringFactor = 0.05f;
+      uniforms.ConstantFogDensityModifier = 0.05f;
+      uniforms.HeightFogDenisty = 0.05f;
+      uniforms.HeightFogFalloff = 0.1f;
+      uniforms.BoxFogDensity = 0.75f;
+
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
@@ -447,6 +466,12 @@ void VolumetricFog::render(
       uniforms.Dimensions = m_Dimensions;
 
       uniforms.CameraPos = p_Camera.Position();
+
+      uniforms.ScatteringFactor = 0.05f;
+      uniforms.ConstantFogDensityModifier = 0.05f;
+      uniforms.HeightFogDenisty = 0.05f;
+      uniforms.HeightFogFalloff = 0.1f;
+      uniforms.BoxFogDensity = 0.75f;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

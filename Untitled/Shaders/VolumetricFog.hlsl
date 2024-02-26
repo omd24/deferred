@@ -4,7 +4,7 @@
 #include "AppSettings.hlsl"
 
 //=================================================================================================
-// Constant buffers
+// Uniforms
 //=================================================================================================
 struct UniformConstants
 {
@@ -25,8 +25,13 @@ struct UniformConstants
 
   float PhaseAnisotropy01;
   float3 CameraPos;
-};
 
+  float ScatteringFactor;
+  float ConstantFogDensityModifier;
+  float HeightFogDenisty;
+  float HeightFogFalloff;
+  float BoxFogDensity;
+};
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 
 #define NUM_LIGHTS 32
@@ -34,6 +39,18 @@ ConstantBuffer<UniformConstants> CBuffer : register(b0);
 #define BIN_WIDTH (1.0 / NUM_BINS)
 #define TILE_SIZE 8
 #define NUM_WORDS ( ( NUM_LIGHTS + 31 ) / 32 )
+
+#define ubo_proj_matrix             CBuffer.ProjMat
+#define ubo_inv_view_proj           CBuffer.InvViewProj
+#define ubo_screen_resolution       CBuffer.Resolution
+#define ubo_near_distance           CBuffer.Near
+#define ubo_far_distance            CBuffer.Far
+#define ubo_grid_dimensions         CBuffer.Dimensions
+#define ubo_scattering_factor       CBuffer.ScatteringFactor
+#define ubo_constant_fog_modifier   CBuffer.ConstantFogDensityModifier
+#define ubo_height_fog_density      CBuffer.HeightFogDenisty
+#define ubo_height_fog_falloff      CBuffer.HeightFogFalloff
+#define ubo_box_fog_density         CBuffer.BoxFogDensity
 
 //=================================================================================================
 // Resources
@@ -69,7 +86,7 @@ SamplerState LinearBorderSampler : register(s3);
   RWTexture3D<float4> FinalIntegrationVolume : register(u0);
 #endif
 
-// Exponential distribution as in https://advances.realtimerendering.com/s2016/Siggraph2016_idTech6.pdf
+// Exponential distribution as in https://advances.realtimerendering.com/s2016/Siggraph2016_idTech6.pdf Page 5.
 // Convert slice index to (near...far) value distributed with exponential function.
 float sliceToExponentialDepth( float near, float far, int slice, int numSlices ) {
     return near * pow( far / near, (float(slice) + 0.5f) / float(numSlices) );
@@ -87,21 +104,21 @@ float linearDepthToRawDepth( float linearDepth, float near, float far ) {
 
 float4 worldFromFroxel(uint3 froxelCoord)
 {
-  float2 uv = (froxelCoord.xy + 0.5f) / float2(CBuffer.Dimensions.x, CBuffer.Dimensions.y);
+  float2 uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
 
 #if 0 // THIS CAUSES A CAMERA-DEPENDENT ISSUE (also depends on fog USAGE code)
-  float linearZ = (froxelCoord.z + 0.5f) / float(CBuffer.Dimensions.z);
+  float linearZ = (froxelCoord.z + 0.5f) / float(ubo_grid_dimensions.z);
 #else
-  float linearZ = sliceToExponentialDepth(CBuffer.Near, CBuffer.Far, froxelCoord.z, CBuffer.Dimensions.z);
+  float linearZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, froxelCoord.z, ubo_grid_dimensions.z);
 #endif
 
-  //float rawDepth = linearZ * CBuffer.ProjMat._33 + CBuffer.ProjMat._43 / linearZ;
-  float rawDepth = linearDepthToRawDepth(linearZ, CBuffer.Near, CBuffer.Far);
+  //float rawDepth = linearZ * ubo_proj_matrix._33 + ubo_proj_matrix._43 / linearZ;
+  float rawDepth = linearDepthToRawDepth(linearZ, ubo_near_distance, ubo_far_distance);
 
   uv = 2.0f * uv - 1.0f;
   uv.y *= -1.0f;
 
-  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), CBuffer.InvViewProj);
+  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), ubo_inv_view_proj);
   worldPos.xyz /= worldPos.w;
 
   return worldPos;
@@ -128,11 +145,19 @@ float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
     return (smoothFactor * smoothFactor) / max(distanceSquare, 1e-4);
 }
 
-float phaseFunction(float3 V, float3 L, float g) {
+float phaseFunction(float3 V, float3 L, float g)
+{
     float cosTheta = dot(V, L);
 
     // TODO
     return 1.0f;
+}
+
+
+float4 scatteringExtinctionFromColorDensity(float3 color, float density )
+{
+    const float extinction = ubo_scattering_factor * density;
+    return float4(color * extinction, extinction);
 }
 
 //=================================================================================================
@@ -140,25 +165,37 @@ float phaseFunction(float3 V, float3 L, float g) {
 //=================================================================================================
 #if (DATA_INJECTION > 0)
 [numthreads(8, 8, 1)]
-void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,  in uint3 GroupID
-                                                            : SV_GroupID) 
-{
-  const uint3 froxelCoord = DispatchID;
+void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,
+                     in uint3 GroupID : SV_GroupID) 
+{   
+    const uint3 froxelCoord = DispatchID;
 
-  // transform froxel to world space
-  float4 worldPos = worldFromFroxel(froxelCoord);
+    // transform froxel to world space
+    float4 worldPos = worldFromFroxel(froxelCoord);
+  
+    float fogNoise = 1.0f; // TODO.
 
-  float4 scatteringExtinction = float4(0.005, 0.005, 0.005, 1);
+    float4 scatteringExtinction = (float4)0;
+  
+    // Add constant fog
+    float constatnFogDensity = ubo_constant_fog_modifier * fogNoise;
+    scatteringExtinction += scatteringExtinctionFromColorDensity((float3)0.5, constatnFogDensity);
 
-  // Add density from box
-  float3 boxSize = float3(1.0, 1.0, 1.0);
-  float3 boxPos = float3(0, 2, 0);
-  float3 boxDist = abs(worldPos.xyz - boxPos);
-  if (all(boxDist <= boxSize)) {
-    scatteringExtinction = float4(0, .07, 0, 1);
-  }
+    // Add height fog
+    float heightfog = ubo_height_fog_density * exp(-ubo_height_fog_falloff * max(worldPos.y, 0)) * fogNoise;
+    scatteringExtinction += scatteringExtinctionFromColorDensity((float3)0.5, heightfog);
 
-  DataVolumeTexture[froxelCoord] = scatteringExtinction;
+    // Add density from box
+    float3 boxSize = float3(1.0, 1.0, 1.0);
+    float3 boxPos = float3(0, 2, 0);
+    float3 boxDist = abs(worldPos.xyz - boxPos);
+    if (all(boxDist <= boxSize))
+    {
+        float4 boxFogColor = float4(0, .07, 0, 1);
+        scatteringExtinction += scatteringExtinctionFromColorDensity(boxFogColor.rgb, ubo_box_fog_density * fogNoise);
+    }
+  
+    DataVolumeTexture[froxelCoord] = scatteringExtinction;
 }
 #endif //(DATA_INJECTION > 0)
 
@@ -174,7 +211,7 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     // Check coordinates boundaries
     float3 worldPos = worldFromFroxel(froxelCoord).xyz;
 
-    float3 rcpFroxelDim = 1.0f / CBuffer.Dimensions.xyz;
+    float3 rcpFroxelDim = 1.0f / ubo_grid_dimensions.xyz;
     float3 fogDataUVW = froxelCoord * rcpFroxelDim;
 
     Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
@@ -202,7 +239,7 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
         // Read clustered lighting data
         // Calculate linear depth.
         float linearZ = froxelCoord.z * rcpFroxelDim.z;
-        linearZ = rawDepthToLinearDepth(linearZ, CBuffer.Near, CBuffer.Far) / CBuffer.Far;
+        linearZ = rawDepthToLinearDepth(linearZ, ubo_near_distance, ubo_far_distance) / ubo_far_distance;
         // Select bin
         int binIndex = int( linearZ / BIN_WIDTH );
         int clusterIdx = 0; //TODO
@@ -213,11 +250,11 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
         uint minLightId = binValue & 0xFFFF;
         uint maxLightId = ( binValue >> 16 ) & 0xFFFF;
 
-        uint2 position = uint2(uint(froxelCoord.x * 1.0f / CBuffer.Dimensions.x * CBuffer.Resolution.x),
-                               uint(froxelCoord.y * 1.0f / CBuffer.Dimensions.y * CBuffer.Resolution.y));
+        uint2 position = uint2(uint(froxelCoord.x * 1.0f / ubo_grid_dimensions.x * ubo_screen_resolution.x),
+                               uint(froxelCoord.y * 1.0f / ubo_grid_dimensions.y * ubo_screen_resolution.y));
         uint2 tile = position / uint( TILE_SIZE );
 
-        uint stride = uint(NUM_WORDS) * (uint(CBuffer.Resolution.x) / uint(TILE_SIZE));
+        uint stride = uint(NUM_WORDS) * (uint(ubo_screen_resolution.x) / uint(TILE_SIZE));
         // Select base address
         uint address = tile.y * stride + tile.x;
 
@@ -288,7 +325,7 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
     float3 integratedScattering = float3(0,0,0);
     float integratedTransmittance = 1.0f;
 
-    float3 froxelDims = float3(CBuffer.Dimensions.x, CBuffer.Dimensions.y, CBuffer.Dimensions.z);
+    float3 froxelDims = float3(ubo_grid_dimensions.x, ubo_grid_dimensions.y, ubo_grid_dimensions.z);
     float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
 
 #if 1
@@ -328,8 +365,8 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
             continue;
 #endif
 
-        float nextZ = sliceToExponentialDepth(CBuffer.Near, CBuffer.Far, z + 1, int(froxelDims.z) );
-        //float nextZ = linearDepthToRawDepth((z + 1) / froxelDims.z, CBuffer.Near, CBuffer.Far);
+        float nextZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, z + 1, int(froxelDims.z) );
+        //float nextZ = linearDepthToRawDepth((z + 1) / froxelDims.z, ubo_near_distance, ubo_far_distance);
 
         const float zStep = abs(nextZ - currentZ);
         currentZ = nextZ;

@@ -13,8 +13,13 @@ struct AppSettingsCbuffer
   bool ShowUVGradients;
   bool AnimateLightIntensity;
 
-  // use linear clamp sampler for fog
+  // Volumetric fog settings
   bool FOG_UseLinearClamp;
+  float FOG_ScatteringFactor;
+  float FOG_ConstantFogDensityModifier;
+  float FOG_HeightFogDenisty;
+  float FOG_HeightFogFalloff;
+  float FOG_BoxFogDensity;
 };
 
 ConstantBuffer<AppSettingsCbuffer> AppSettings : register(b12);

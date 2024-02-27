@@ -33,6 +33,11 @@ extern bool32 AnimateLightIntensity;
 
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
+extern float FOG_ScatteringFactor;
+extern float FOG_ConstantFogDensityModifier;
+extern float FOG_HeightFogDenisty;
+extern float FOG_HeightFogFalloff;
+extern float FOG_BoxFogDensity;
 
 struct AppSettingsCBuffer
 {
@@ -51,6 +56,11 @@ struct AppSettingsCBuffer
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
+  float FOG_ScatteringFactor;
+  float FOG_ConstantFogDensityModifier;
+  float FOG_HeightFogDenisty;
+  float FOG_HeightFogFalloff;
+  float FOG_BoxFogDensity;
 };
 
 extern ConstantBuffer CBuffer;

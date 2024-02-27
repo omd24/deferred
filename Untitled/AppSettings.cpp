@@ -21,6 +21,11 @@ bool32 AnimateLightIntensity = false;
 
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
+float FOG_ScatteringFactor = 0.05f;
+float FOG_ConstantFogDensityModifier = 0.05f;
+float FOG_HeightFogDenisty = 0.05f;
+float FOG_HeightFogFalloff = 0.1f;
+float FOG_BoxFogDensity = 0.75f;
 
 ConstantBuffer CBuffer;
 const uint32_t CBufferRegister = 12;
@@ -52,6 +57,11 @@ void updateCBuffer()
   
   // Volumetric data
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
+  cbData.FOG_ScatteringFactor = FOG_ScatteringFactor;
+  cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
+  cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
+  cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;
+  cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
 
   CBuffer.mapAndSetData(&cbData, sizeof(AppSettingsCBuffer));
 }

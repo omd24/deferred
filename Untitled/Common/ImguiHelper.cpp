@@ -79,7 +79,7 @@ static void renderInternal()
     ImGui::Checkbox("Render Lights", (bool*)&AppSettings::RenderLights);
     // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
 
-    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 0.01f, 0.8f, "%.2f");
+    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 1.0f, 5.0f, "%.2f");
     ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
     ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
     ImGui::Checkbox("Show Specular", (bool*)&AppSettings::ShowSpecular);
@@ -102,11 +102,14 @@ static void renderInternal()
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))
     {
       ImGui::Checkbox("Use Linear Sampler", (bool*)&AppSettings::FOG_UseLinearClamp);
-
-      // other fog-related settings...
+      ImGui::SliderFloat("Scattering Factor", &AppSettings::FOG_ScatteringFactor, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Constant Fog Modifier", &AppSettings::FOG_ConstantFogDensityModifier, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Box Fog Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 1.0f, "%.2f");
     }
 
-
+    ImGui::Separator();
     ImGui::Text(
         "Camera position x = %.5f, y = %.2f, z = %.2f",
         AppSettings::CameraPosition.x,

@@ -25,12 +25,6 @@ struct UniformConstants
 
   float PhaseAnisotropy01;
   float3 CameraPos;
-
-  float ScatteringFactor;
-  float ConstantFogDensityModifier;
-  float HeightFogDenisty;
-  float HeightFogFalloff;
-  float BoxFogDensity;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 
@@ -46,11 +40,11 @@ ConstantBuffer<UniformConstants> CBuffer : register(b0);
 #define ubo_near_distance           CBuffer.Near
 #define ubo_far_distance            CBuffer.Far
 #define ubo_grid_dimensions         CBuffer.Dimensions
-#define ubo_scattering_factor       CBuffer.ScatteringFactor
-#define ubo_constant_fog_modifier   CBuffer.ConstantFogDensityModifier
-#define ubo_height_fog_density      CBuffer.HeightFogDenisty
-#define ubo_height_fog_falloff      CBuffer.HeightFogFalloff
-#define ubo_box_fog_density         CBuffer.BoxFogDensity
+#define ubo_scattering_factor       AppSettings.FOG_ScatteringFactor
+#define ubo_constant_fog_modifier   AppSettings.FOG_ConstantFogDensityModifier
+#define ubo_height_fog_density      AppSettings.FOG_HeightFogDenisty
+#define ubo_height_fog_falloff      AppSettings.FOG_HeightFogFalloff
+#define ubo_box_fog_density         AppSettings.FOG_BoxFogDensity
 
 //=================================================================================================
 // Resources

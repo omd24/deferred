@@ -74,16 +74,6 @@ static const uint ThreadGroupSize = DeferredTileSize * DeferredTileSize;
 // Resources
 //=================================================================================================
 
-// This is the standard set of descriptor tables that shaders use for accessing the SRV's that they
-// need. These must match "NumStandardDescriptorRanges" and "StandardDescriptorRanges()"
-Texture2D Tex2DTable[] : register(t0, space0);
-Texture2DArray Tex2DArrayTable[] : register(t0, space1);
-TextureCube TexCubeTable[] : register(t0, space2);
-Texture3D Tex3DTable[] : register(t0, space3);
-Texture2DMS<float4> Tex2DMSTable[] : register(t0, space4);
-ByteAddressBuffer RawBufferTable[] : register(t0, space5);
-Buffer<uint> BufferUintTable[] : register(t0, space6);
-
 RWTexture2D<float4> OutputTexture : register(u0);
 
 struct MaterialTextureIndices
@@ -99,6 +89,7 @@ Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
 
 SamplerState AnisoSampler : register(s0);
 SamplerComparisonState ShadowMapSampler : register(s1);
+SamplerState LinearSampler : register(s2);
 
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv)
@@ -108,17 +99,6 @@ float3 PosWSFromDepth(in float zw, in float2 uv)
   positionCS.y *= -1.0f;
   float4 positionWS = mul(positionCS, DeferredCBuffer.InvViewProj);
   return positionWS.xyz / positionWS.w;
-}
-
-// http://www.aortiz.me/2018/12/21/CG.html
-// Convert linear depth (near...far) to (0...1) value distributed with exponential functions
-// This function is performing all calculations, a more optimized one precalculates factors on CPU.
-float linearDepthToUV( float near, float far, float linearDepth, int numSlices ) {
-    const float oneOverLog2FarOverNear = 1.0f / log2( far / near );
-    const float scale = numSlices * oneOverLog2FarOverNear;
-    const float bias = - ( numSlices * log2(near) * oneOverLog2FarOverNear );
-
-    return max(log2(linearDepth) * scale + bias, 0.0f) / float(numSlices);
 }
 
 //=================================================================================================
@@ -232,6 +212,7 @@ void ShadeSample(in uint2 pixelPos)
   shadingInput.PositionWS_DX = positionDX;
   shadingInput.PositionWS_DY = positionDY;
   shadingInput.DepthVS = linearDepth;
+  shadingInput.RawDepth = zw;
   shadingInput.TangentFrame = tangentFrameMatrix;
 
   shadingInput.AlbedoMap = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
@@ -240,11 +221,15 @@ void ShadeSample(in uint2 pixelPos)
   shadingInput.MetallicMap = MetallicMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY).x;
 
   shadingInput.SpotLightClusterBuffer = spotLightClusterBuffer;
+  shadingInput.FogVolume = fogVolume;
 
   shadingInput.AnisoSampler = AnisoSampler;
+  shadingInput.LinearSampler = LinearSampler;
 
   shadingInput.ShadingCBuffer = PSCBuffer;
   shadingInput.LightCBuffer = LightCBuffer;
+
+  shadingInput.InvRTSize = invRTSize;
 
   float3 shadingResult = ShadePixel(shadingInput, spotLightShadowMap, ShadowMapSampler);
 

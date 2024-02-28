@@ -60,6 +60,7 @@ struct ShadingConstants
   uint32_t NumXYTiles = 0;
   float NearClip = 0.0f;
   float FarClip = 0.0f;
+  uint32_t NumFroxelGridSlices;
 };
 static_assert(sizeof(ShadingConstants) == 32);
 //---------------------------------------------------------------------------//

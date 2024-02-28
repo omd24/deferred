@@ -60,7 +60,7 @@ float Smith_G(in float g1i, in float g1o)
 // h = half-vector (instead of microfacet normals, m, in the paper)
 // n = macroscopic surface normal
 //-------------------------------------------------------------------------------------------------
-float3 Beckmann_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
+float Beckmann_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 {
     float nDotH = saturate(dot(n, h));
     float nDotH2 = nDotH * nDotH;
@@ -79,7 +79,7 @@ float3 Beckmann_D(in float alpha, in float3 n, in float3 h, in float3 v, in floa
 // h = half-vector (instead of microfacet normals, m, in the paper)
 // n = macroscopic surface normal
 //-------------------------------------------------------------------------------------------------
-float3 GGX_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
+float GGX_D(in float alpha, in float3 n, in float3 h, in float3 v, in float3 l)
 {
     float nDotH = saturate(dot(n, h));
     float nDotH2 = nDotH * nDotH;

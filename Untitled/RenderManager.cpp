@@ -1196,11 +1196,13 @@ void RenderManager::loadAssets()
 
     // AppSettings
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[2] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[3] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[1] =
         GetStaticSamplerState(SamplerState::ShadowMapPCF, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[2] =
+        GetStaticSamplerState(SamplerState::LinearClamp, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -1515,7 +1517,7 @@ void RenderManager::renderDeferred()
         uvTarget.srv(),
         depthBuffer.getSrv(),
         tangentFrameTarget.srv(),
-        m_Fog.m_DataVolume.getSRV()
+        m_Fog.m_FinalVolume.getSRV()
     };
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
@@ -1527,6 +1529,7 @@ void RenderManager::renderDeferred()
     shadingConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
     shadingConstants.NearClip = camera.NearClip();
     shadingConstants.FarClip = camera.FarClip();
+    shadingConstants.NumFroxelGridSlices = m_Fog.m_Dimensions.z;
 
     BindTempConstantBuffer(
         m_CmdList, shadingConstants, DeferredParams_PSCBuffer, CmdListMode::Compute);
@@ -1713,7 +1716,7 @@ void RenderManager::populateCommandList()
   deferredTarget.transition(
       m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-#if 1 // test pass
+#if 0 // test pass
 
   m_TestCompute.render(
       m_CmdList,

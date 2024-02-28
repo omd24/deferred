@@ -1,6 +1,9 @@
+#include "GlobalResources.hlsl"
 #include "Shadows.hlsl"
 #include "BRDF.hlsl"
 #include "AppSettings.hlsl"
+
+#include "VolumetricFogHelpers.hlsl"
 
 // Max value that we can store in an fp16 buffer (actually a little less so that we have room for
 // error, real max is 65504)
@@ -29,6 +32,7 @@ struct ShadingConstants
   uint NumXYTiles;
   float NearClip;
   float FarClip;
+  uint NumFroxelGridSlices;
 };
 
 struct ShadingInput
@@ -38,6 +42,7 @@ struct ShadingInput
   float3 PositionWS_DX;
   float3 PositionWS_DY;
   float DepthVS;
+  float RawDepth;
   float3x3 TangentFrame;
 
   float4 AlbedoMap;
@@ -46,11 +51,15 @@ struct ShadingInput
   float MetallicMap;
 
   ByteAddressBuffer SpotLightClusterBuffer;
+  Texture3D         FogVolume;
 
   SamplerState AnisoSampler;
+  SamplerState LinearSampler;
 
   ShadingConstants ShadingCBuffer;
   LightConstants LightCBuffer;
+
+  float2 InvRTSize;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -223,5 +232,19 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
   }
 
   output = clamp(output, 0.0f, FP16Max);
+
+    // Apply Fog
+
+    float z = input.RawDepth;
+    float2 invRTSize = input.InvRTSize;
+    float2 screenUV = (pixelPos + 0.5f) * invRTSize;
+
+    const float near = CBuffer.NearClip;
+    const float far = CBuffer.FarClip;
+    float3 fogSample3 = getVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearSampler).rgb;
+
+    float t = 1;
+    output = lerp(output, fogSample3, t);
+
   return output;
 }

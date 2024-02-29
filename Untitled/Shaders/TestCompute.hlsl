@@ -66,10 +66,10 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     const float near = CBuffer.near;
     const float far = CBuffer.far;
     Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
-    float3 fogSample3 = getVolumetricFog(
-        screenUV, z, near, far, CBuffer.FogGridDimensions.z, fogVolume, LinearClampSampler).rgb;
+    float3 output = applyVolumetricFog(
+        screenUV, z, near, far, CBuffer.FogGridDimensions.z, fogVolume, LinearClampSampler, sceneColor.rgb);
 
-    float t = 1;
-    float4 blend2 = lerp(sceneColor, float4(fogSample3, 1), t);
-    OutputTexture[pixelPos] = blend2;
+    // float t = 1;
+    // float4 blend2 = lerp(sceneColor, float4(fogSample3, 1), t);
+    OutputTexture[pixelPos] = float4(output, 1.0f);
 }

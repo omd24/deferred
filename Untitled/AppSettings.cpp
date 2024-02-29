@@ -25,6 +25,7 @@ float FOG_ScatteringFactor = 0.05f;
 float FOG_ConstantFogDensityModifier = 0.05f;
 float FOG_HeightFogDenisty = 0.05f;
 float FOG_HeightFogFalloff = 0.1f;
+float FOG_BoxPosition[3] = {0.0f, 2.0f, 0.0f};
 float FOG_BoxFogDensity = 0.75f;
 
 ConstantBuffer CBuffer;
@@ -62,6 +63,9 @@ void updateCBuffer()
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;
   cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
+
+  memcpy(cbData.FOG_BoxPosition, FOG_BoxPosition, sizeof(cbData.FOG_BoxPosition));
+  static_assert(12 == sizeof(cbData.FOG_BoxPosition));
 
   CBuffer.mapAndSetData(&cbData, sizeof(AppSettingsCBuffer));
 }

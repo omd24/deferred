@@ -106,7 +106,8 @@ static void renderInternal()
       ImGui::SliderFloat("Constant Fog Modifier", &AppSettings::FOG_ConstantFogDensityModifier, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
-      ImGui::SliderFloat("Box Fog Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 10.0f, "%.2f");
+      ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_Logarithmic);
+      ImGui::SliderFloat("Box Fog Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
     }
 
     ImGui::Separator();

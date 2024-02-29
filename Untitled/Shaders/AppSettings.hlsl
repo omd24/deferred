@@ -4,10 +4,12 @@ struct AppSettingsCbuffer
   bool ComputeUVGradients;
   float Exposure;
   float BloomExposure;
+
   float BloomMagnitude;
   float BloomBlurSigma;
   bool ShowAlbedoMaps;
   bool ShowNormalMaps;
+
   bool ShowSpecular;
   bool ShowLightCounts;
   bool ShowUVGradients;
@@ -18,7 +20,10 @@ struct AppSettingsCbuffer
   float FOG_ScatteringFactor;
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;
+
   float FOG_HeightFogFalloff;
+  float3 FOG_BoxPosition;
+  
   float FOG_BoxFogDensity;
 };
 

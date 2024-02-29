@@ -29,7 +29,7 @@ float rawDepthToLinearDepth( float rawDepth, float near, float far ) {
 }
 // ==========================================================================
 // Volumetric fog application
-float4 getVolumetricFog(float2 screenUV, float rawDepth, float near, float far, int numSlices, in Texture3D fogVolume, in SamplerState fogSampler)
+float3 applyVolumetricFog(float2 screenUV, float rawDepth, float near, float far, int numSlices, in Texture3D fogVolume, in SamplerState fogSampler, in float3 color)
 {
     // Fog linear depth distribution
     float linearDepth = rawDepthToLinearDepth(rawDepth, near, far );
@@ -38,13 +38,13 @@ float4 getVolumetricFog(float2 screenUV, float rawDepth, float near, float far, 
     float depthUV = linearDepthToUV(near, far, linearDepth, numSlices);
     float3 froxelUVW = float3(screenUV.xy, depthUV);
     
-    float4 fogSample = float4(0, 0, 0, 0);
+    float4 scatteringTransmittance = float4(0, 0, 0, 0);
     if (AppSettings.FOG_UseLinearClamp)
-      fogSample = fogVolume.SampleLevel(fogSampler, froxelUVW, 0);
+      scatteringTransmittance = fogVolume.SampleLevel(fogSampler, froxelUVW, 0);
     else
-      fogSample = fogVolume[froxelUVW * float3(128, 128, 128)];
+      scatteringTransmittance = fogVolume[froxelUVW * float3(128, 128, 128)];
 
-    return fogSample;
+    return color.rgb * scatteringTransmittance.a + scatteringTransmittance.rgb;
 
     // float4 scatteringTransmittance = float4(0,0,0,0);
     // Add animated noise to transmittance to remove banding.

@@ -130,8 +130,8 @@ float4 ToneMap(in PSInput input) : SV_Target0
 
     float3 color = inputTexture0.Sample(PointSampler, input.TexCoord).xyz;
 
-// Disable postfx for now to better study volumetric fog
-#if 0
+// Disable postfx for testing purposes
+#if 1
     // Add bloom
     color += inputTexture1.Sample(LinearSampler, input.TexCoord).xyz * AppSettings.BloomMagnitude * exp2(AppSettings.BloomExposure);
 

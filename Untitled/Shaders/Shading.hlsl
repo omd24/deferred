@@ -231,7 +231,6 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
     return specularAlbedo.xyz;
   }
 
-  output = clamp(output, 0.0f, FP16Max);
 
     // Apply Fog
 
@@ -241,10 +240,12 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
 
     const float near = CBuffer.NearClip;
     const float far = CBuffer.FarClip;
-    float3 fogSample3 = getVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearSampler).rgb;
+    output = applyVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearSampler, output);
 
-    float t = 1;
-    output = lerp(output, fogSample3, t);
+    // float t = 1;
+    // output = lerp(output, fogSample3, t);
+
+    output = clamp(output, 0.0f, FP16Max);
 
   return output;
 }

@@ -45,6 +45,7 @@ ConstantBuffer<UniformConstants> CBuffer : register(b0);
 #define ubo_constant_fog_modifier   AppSettings.FOG_ConstantFogDensityModifier
 #define ubo_height_fog_density      AppSettings.FOG_HeightFogDenisty
 #define ubo_height_fog_falloff      AppSettings.FOG_HeightFogFalloff
+#define ubo_box_position            AppSettings.FOG_BoxPosition
 #define ubo_box_fog_density         AppSettings.FOG_BoxFogDensity
 
 //=================================================================================================
@@ -170,11 +171,11 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,
 
     // Add density from box
     float3 boxSize = float3(1.0, 1.0, 1.0);
-    float3 boxPos = float3(0, 2, 0);
+    float3 boxPos = ubo_box_position;
     float3 boxDist = abs(worldPos.xyz - boxPos);
     if (all(boxDist <= boxSize))
     {
-        float4 boxFogColor = float4(0, .07, 0, 1);
+        float4 boxFogColor = float4(0, 1, 0, 1);
         scatteringExtinction += scatteringExtinctionFromColorDensity(boxFogColor.rgb, ubo_box_fog_density * fogNoise);
     }
   

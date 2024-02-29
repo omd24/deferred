@@ -37,6 +37,7 @@ extern float FOG_ScatteringFactor;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
+extern float FOG_BoxPosition[3];
 extern float FOG_BoxFogDensity;
 
 struct AppSettingsCBuffer
@@ -60,6 +61,7 @@ struct AppSettingsCBuffer
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;
   float FOG_HeightFogFalloff;
+  float FOG_BoxPosition[3];
   float FOG_BoxFogDensity;
 };
 

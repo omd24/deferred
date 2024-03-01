@@ -312,7 +312,7 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
     float3 froxelDims = float3(ubo_grid_dimensions.x, ubo_grid_dimensions.y, ubo_grid_dimensions.z);
     float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
 
-#if 1
+#if 0
     Texture3D fog = Tex3DTable[CBuffer.ScatterVolumeIdx];
     for ( int z = 0; z < froxelDims.z; ++z )
     {
@@ -340,30 +340,26 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
     for ( int z = 0; z < froxelDims.z; ++z )
     {
         froxelCoord.z = z;
-#if 1
-            Texture3D fog = Tex3DTable[CBuffer.ScatterVolumeIdx];
-            float4 c = fog[froxelCoord];
-            integratedScattering += c.rgb;
-            integratedTransmittance = 1.0;
-            FinalIntegrationVolume[froxelCoord] = float4(integratedScattering, integratedTransmittance);
-            continue;
-#endif
-
-        float nextZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, z + 1, int(froxelDims.z) );
-        //float nextZ = linearDepthToRawDepth((z + 1) / froxelDims.z, ubo_near_distance, ubo_far_distance);
+        float nextZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, z + 1, int(froxelDims.z));
 
         const float zStep = abs(nextZ - currentZ);
         currentZ = nextZ;
 
         // Following equations from Physically Based Sky, Atmosphere and Cloud Rendering by Hillaire
-        Texture3D fogVolume = Tex3DTable[CBuffer.ScatterVolumeIdx];
-        const float4 sampledScatteringExtinction = fogVolume[froxelCoord * rcpFroxelDim];
+        Texture3D fogScatterData = Tex3DTable[CBuffer.ScatterVolumeIdx];
+        float4 sampledScatteringExtinction = 0;
 
-#if 1 // TEST
-        integratedScattering += sampledScatteringExtinction;
-        integratedTransmittance = 1.0f;
+        if (AppSettings.FOG_UseLinearClamp)
+        {
+            sampledScatteringExtinction =
+                fogScatterData.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0);
+        }
+        else
+        {
+            // Load
+            sampledScatteringExtinction = fogScatterData[froxelCoord];
+        }
 
-#else
         const float3 sampledScattering = sampledScatteringExtinction.xyz;
         const float sampledExtinction = sampledScatteringExtinction.w;
         const float clampedExtinction = max(sampledExtinction, 0.00001f);
@@ -374,7 +370,6 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
 
         integratedScattering += scattering * integratedTransmittance;
         integratedTransmittance *= transmittance;
-#endif
 
         float3 storedScattering = integratedScattering;
         FinalIntegrationVolume[froxelCoord] = float4(storedScattering, integratedTransmittance);

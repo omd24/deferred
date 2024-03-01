@@ -7,18 +7,14 @@
 static const uint32_t MaxInputs = 8;
 
 // TODOs:
-// - Add correct scattering-transmittance calculation logic (Beer's law)
-// - Add imgui support for box density
-// - Add constant fog and exponential height fog (with imgui support)
 // - Add spatial filter
-// - Add imgui support for box position and size
 // - Add noise baking pass
 // - Add noise (several possibilities)
 // - Add temporal filter
 // - Add spot light contribution
 // - Add shadows contribution
 // - Add GI (separate system) and its contribution here
-// - 
+// - Add froxel debug view
 
 
 namespace AppSettings

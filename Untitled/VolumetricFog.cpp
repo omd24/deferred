@@ -7,6 +7,7 @@
 static const uint32_t MaxInputs = 8;
 
 // TODOs:
+// - Add spotlight(s) intensity and color controls (UI)
 // - Add spatial filter
 // - Add noise baking pass
 // - Add noise (several possibilities)

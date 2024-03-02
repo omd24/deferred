@@ -43,7 +43,6 @@ struct FogConstants
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
   glm::uvec3 Dimensions;
 
-  float PhaseAnisotropy = 1.0f; // between [0, 1]
   glm::vec3 CameraPos;
 
   uint32_t NumXTiles;

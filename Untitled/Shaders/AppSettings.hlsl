@@ -19,15 +19,22 @@ struct AppSettingsCbuffer
 
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
+
   bool FOG_DisableLightScattering;
+  bool FOG_UseClusteredLighting;
   float FOG_ScatteringFactor;
   float FOG_ConstantFogDensityModifier;
-  float FOG_HeightFogDenisty;
 
+  float FOG_HeightFogDenisty;
   float FOG_HeightFogFalloff;
+  float unused0;
+  float unused1;
+
   float3 FOG_BoxPosition;
-  
   float FOG_BoxFogDensity;
+
+  float3 FOG_BoxColor;
+  float FOG_PhaseAnisotropy;
 };
 
 ConstantBuffer<AppSettingsCbuffer> AppSettings : register(b12);

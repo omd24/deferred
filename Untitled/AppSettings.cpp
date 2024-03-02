@@ -23,12 +23,15 @@ float LightColor[3] = {1.0f, 1.0f, 1.0f};
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
 bool32 FOG_DisableLightScattering = false;
-float FOG_ScatteringFactor = 1.0f;
-float FOG_ConstantFogDensityModifier = 0.05f;
-float FOG_HeightFogDenisty = 1.0f;
-float FOG_HeightFogFalloff = 1.0f;
+bool32 FOG_UseClusteredLighting = false;
+float FOG_ScatteringFactor = 0.5f;
+float FOG_ConstantFogDensityModifier = 0.0f;
+float FOG_HeightFogDenisty = 0.5f;
+float FOG_HeightFogFalloff = 0.3f;
 float FOG_BoxPosition[3] = {0.0f, 2.0f, 0.0f};
-float FOG_BoxFogDensity = .2f;
+float FOG_BoxFogDensity = .9f;
+float FOG_BoxColor[3] = {0.0f, 1.0f, 0.0f};
+float FOG_PhaseAnisotropy = 0.5f;
 
 ConstantBuffer CBuffer;
 const uint32_t CBufferRegister = 12;
@@ -61,15 +64,21 @@ void updateCBuffer()
   // Volumetric data
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
   cbData.FOG_DisableLightScattering = FOG_DisableLightScattering;
+  cbData.FOG_UseClusteredLighting = FOG_UseClusteredLighting;
   cbData.FOG_ScatteringFactor = FOG_ScatteringFactor;
   cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;
   cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
+  cbData.FOG_PhaseAnisotropy = FOG_PhaseAnisotropy;
 
   // Box position (float3)
   memcpy(cbData.FOG_BoxPosition, FOG_BoxPosition, sizeof(cbData.FOG_BoxPosition));
   static_assert(12 == sizeof(cbData.FOG_BoxPosition));
+
+  // Box color (float3)
+  memcpy(cbData.FOG_BoxColor, FOG_BoxColor, sizeof(cbData.FOG_BoxColor));
+  static_assert(12 == sizeof(cbData.FOG_BoxColor));
 
   // Light color (float3)
   memcpy(cbData.LightColor, LightColor, sizeof(cbData.LightColor));

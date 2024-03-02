@@ -1,5 +1,7 @@
 
 
+#define PI 3.1415926538
+
 struct SpotLight
 {
   float3 Position;

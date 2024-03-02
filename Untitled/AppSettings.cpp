@@ -22,12 +22,12 @@ float LightColor[3] = {1.0f, 1.0f, 1.0f};
 
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
-float FOG_ScatteringFactor = 0.05f;
+float FOG_ScatteringFactor = 1.0f;
 float FOG_ConstantFogDensityModifier = 0.05f;
-float FOG_HeightFogDenisty = 0.05f;
-float FOG_HeightFogFalloff = 0.1f;
+float FOG_HeightFogDenisty = 1.0f;
+float FOG_HeightFogFalloff = 1.0f;
 float FOG_BoxPosition[3] = {0.0f, 2.0f, 0.0f};
-float FOG_BoxFogDensity = 0.75f;
+float FOG_BoxFogDensity = .2f;
 
 ConstantBuffer CBuffer;
 const uint32_t CBufferRegister = 12;

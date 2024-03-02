@@ -34,6 +34,7 @@ extern float LightColor[3];
 
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
+extern bool32 FOG_DisableLightScattering;
 extern float FOG_ScatteringFactor;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
@@ -61,6 +62,7 @@ struct AppSettingsCBuffer
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
+  bool32 FOG_DisableLightScattering;
   float FOG_ScatteringFactor;
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

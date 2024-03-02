@@ -3,6 +3,7 @@
 //=================================================================================================
 #include "GlobalResources.hlsl"
 #include "AppSettings.hlsl"
+#include "LightingHelpers.hlsl"
 
 //=================================================================================================
 // Uniforms
@@ -24,10 +25,14 @@ struct UniformConstants
   uint ScatterVolumeIdx;
   uint3 Dimensions;
 
-  float PhaseAnisotropy01;
+  float PhaseAnisotropy;
   float3 CameraPos;
+
+  uint NumXTiles;
+  uint NumXYTiles;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
+ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 
 #define NUM_LIGHTS 32
 #define NUM_BINS 16.0
@@ -41,6 +46,10 @@ ConstantBuffer<UniformConstants> CBuffer : register(b0);
 #define ubo_near_distance           CBuffer.Near
 #define ubo_far_distance            CBuffer.Far
 #define ubo_grid_dimensions         CBuffer.Dimensions
+#define ubo_phase_anisotropy        CBuffer.PhaseAnisotropy
+#define ubo_camera_pos              CBuffer.CameraPos
+#define ubo_num_tiles_x             CBuffer.NumXTiles
+#define ubo_num_tiles_xy            CBuffer.NumXYTiles
 #define ubo_scattering_factor       AppSettings.FOG_ScatteringFactor
 #define ubo_constant_fog_modifier   AppSettings.FOG_ConstantFogDensityModifier
 #define ubo_height_fog_density      AppSettings.FOG_HeightFogDenisty
@@ -134,7 +143,7 @@ float phaseFunction(float3 V, float3 L, float g)
     float cosTheta = dot(V, L);
 
     // TODO
-    return 1.0f;
+    return 0.1f;
 }
 
 
@@ -206,93 +215,101 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     else // use load
         scatteringExtinction = fogData[froxelCoord];
 
-#if 1
+    if (AppSettings.FOG_DisableLightScattering)
+    {
+        ScatterVolumeTexture[froxelCoord] = scatteringExtinction;
 
-    ScatterVolumeTexture[froxelCoord] = scatteringExtinction;
-    return;
-#endif
+        // skip light scattering
+        return;
+    }
 
     float extinction = scatteringExtinction.a;
     float3 lighting = float3(0, 0, 0);
 
     ByteAddressBuffer spotLightClusterBuffer = RawBufferTable[CBuffer.ClusterBufferIdx];
 
-    if ( extinction >= 0.01f ) {
-        float3 V = normalize(CBuffer.CameraPos.xyz - worldPos);
+    if (extinction >= 0.01f)
+    {
+        float3 V = normalize(ubo_camera_pos.xyz - worldPos);
 
-        // Read clustered lighting data
+        // Read clustered lighting data:
+
         // Calculate linear depth.
         float linearZ = froxelCoord.z * rcpFroxelDim.z;
         linearZ = rawDepthToLinearDepth(linearZ, ubo_near_distance, ubo_far_distance) / ubo_far_distance;
-        // Select bin
-        int binIndex = int( linearZ / BIN_WIDTH );
-        int clusterIdx = 0; //TODO
-        uint clusterOffset = clusterIdx * SpotLightElementsPerCluster; // TODO 
-        uint clusterElemMask = spotLightClusterBuffer.Load((clusterOffset + binIndex) * 4); // TODO
-        uint binValue = clusterElemMask; // TODO: Remove
 
-        uint minLightId = binValue & 0xFFFF;
-        uint maxLightId = ( binValue >> 16 ) & 0xFFFF;
-
-        uint2 position = uint2(uint(froxelCoord.x * 1.0f / ubo_grid_dimensions.x * ubo_screen_resolution.x),
+        // Compute shared cluster lookup data
+        uint2 pixelPos = uint2(uint(froxelCoord.x * 1.0f / ubo_grid_dimensions.x * ubo_screen_resolution.x),
                                uint(froxelCoord.y * 1.0f / ubo_grid_dimensions.y * ubo_screen_resolution.y));
-        uint2 tile = position / uint( TILE_SIZE );
+        float zRange = ubo_far_distance - ubo_near_distance;
+        float normalizedZ = saturate((linearZ - ubo_near_distance) / zRange);
+        uint zTile = normalizedZ * NumZTiles;
+        uint3 tileCoords = uint3(pixelPos / ClusterTileSize, zTile);
+        uint clusterIdx = (tileCoords.z * ubo_num_tiles_xy) + (tileCoords.y * ubo_num_tiles_x) + tileCoords.x;
 
-        uint stride = uint(NUM_WORDS) * (uint(ubo_screen_resolution.x) / uint(TILE_SIZE));
-        // Select base address
-        uint address = tile.y * stride + tile.x;
+        uint clusterOffset = clusterIdx * SpotLightElementsPerCluster;
+    
+        // Loop over the number of 4-byte elements needed for each cluster
+        [unroll]
+        for (uint elemIdx = 0; elemIdx < SpotLightElementsPerCluster; ++elemIdx)
+        {
+          // Loop until we've processed every raised bit
+          uint clusterElemMask = spotLightClusterBuffer.Load((clusterOffset + elemIdx) * 4);
+    
+          while (clusterElemMask)
+          {
+            uint bitIdx = firstbitlow(clusterElemMask);
+            clusterElemMask &= ~(1u << bitIdx);
+            uint spotLightIdx = bitIdx + (elemIdx * 32);
+            SpotLight spotLight = LightsBuffer.Lights[spotLightIdx];
+          
+            float3 surfaceToLight = spotLight.Position - worldPos;
+            float distanceToLight = length(surfaceToLight);
+            surfaceToLight /= distanceToLight;
+            float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
+            float angularAttenuation =
+                smoothstep(spotLight.AngularAttenuationY, spotLight.AngularAttenuationX, angleFactor);
+            
+            if (angularAttenuation > 0.0f)
+            {
+                float d = distanceToLight / spotLight.Range;
+                float falloff = saturate(1.0f - (d * d * d * d)) + 0.5;
+                falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
+                float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
 
-        if ( minLightId != NUM_LIGHTS + 1 ) {
-            for ( uint lightId = minLightId; lightId <= maxLightId; ++lightId ) {
-                uint wordId = lightId / 32;
-                uint bitId = lightId % 32;
-
-#if 0
-                if ( ( tiles[ address + wordId ] & ( 1 << bitId ) ) != 0 ) {
-                    // uint globalLightIndex = lightIndices[ lightId ];
-                    // Light spotlight = lights[ globalLightIndex ];
-
-                    // TODO: properly use light clustering.
-                    float3 lightPosition = spotlight.worldPos;
-                    float lightRadius = spotlight.radius;
-                    if (length(worldPos - lightPosition) < lightRadius) {
-
-                        // Calculate spot light contribution
-                        
-                        // TODO: add shadows
-                        float3 shadowPositionToLight = worldPos - lightPosition;
-                        const float currentDepth = vectorToDepthValue(shadowPositionToLight, lightRadius, spotlight.rcpNminusF);
-                        const float bias = 0.0001f;
-                        const uint shadowLightIndex = globalLightIndex;
-
-                        const uint samples = 4;
-                        float shadow = 0;
-                        for(uint i = 0; i < samples; ++i) {
-
-                            vec2 diskOffset = vogelDiskOffset(i, 4, 0.1f);
-                            float3 samplingPosition = shadowPositionToLight + diskOffset.xyx * 0.0005f;
-
-                            Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
-                            TextureCube cubemapShadows =  TexCubeTable[CBuffer.cubemapShadowsIndex];
-                            // const float closestDepth = cubemapShadows.SampleLevel(float4(samplingPosition, shadowLightIndex)).r
-                            shadow += currentDepth - bias < closestDepth ? 1 : 0;
-                        }
-
-                        shadow /= samples;
-
-                        const float3 L = normalize(lightPosition - worldPos);
-                        float attenuation = attenuationSquareFalloff(L, 1.0f / lightRadius) * shadow;
-
-                        lighting += spotlight.color * spotlight.intensity * phaseFunction(V, -L, PhaseAnisotropy01) * attenuation;
-                    }
-                }
+                float spotLightVisibility = 1.0f;
+#if 0   
+                // Spotlight shadow visibility
+                const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+      
+                float spotLightVisibility = SpotLightShadowVisibility(worldPos, positionNeighborX, positionNeighborY,
+                                                                    LightsBuffer.ShadowMatrices[spotLightIdx],
+                                                                    spotLightIdx, shadowPosOffset, spotLightShadowMap, shadowSampler,
+                                                                    float2(SpotShadowNearClip, spotLight.Range));
+      
+                output += CalcLighting(
+                    normalWS,
+                    surfaceToLight,
+                    intensity,
+                    diffuseAlbedo,
+                    specularAlbedo,
+                    roughness,
+                    worldPos,
+                    ubo_camera_pos) * AppSettings.LightColor * (spotLightVisibility);
 #endif
+
+                // TODO: add phase function
+                const float3 L = surfaceToLight; // normalized
+                float p = phaseFunction(V, -L, ubo_phase_anisotropy);
+
+                lighting += AppSettings.LightColor * intensity * p * spotLightVisibility;
             }
-        }
-    }
-
+    
+          } // end of while(clusterElemMask)
+        } // end of for(elemIdx : SpotLightElementsPerCluster)
+    } // end of if(extinction >= 0.01f)
+    
     float3 scattering = scatteringExtinction.rgb * lighting;
-
     ScatterVolumeTexture[froxelCoord] = float4(scattering, extinction);
 }
 #endif //(LIGHT_SCATTERING > 0)

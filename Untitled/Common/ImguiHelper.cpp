@@ -103,6 +103,7 @@ static void renderInternal()
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))
     {
       ImGui::Checkbox("Use Linear Sampler", (bool*)&AppSettings::FOG_UseLinearClamp);
+      ImGui::Checkbox("Disable Light Scattering", (bool*)&AppSettings::FOG_DisableLightScattering);
       ImGui::SliderFloat("Scattering Factor", &AppSettings::FOG_ScatteringFactor, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Constant Fog Modifier", &AppSettings::FOG_ConstantFogDensityModifier, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");

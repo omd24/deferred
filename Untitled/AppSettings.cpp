@@ -22,6 +22,7 @@ float LightColor[3] = {1.0f, 1.0f, 1.0f};
 
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
+bool32 FOG_DisableLightScattering = false;
 float FOG_ScatteringFactor = 1.0f;
 float FOG_ConstantFogDensityModifier = 0.05f;
 float FOG_HeightFogDenisty = 1.0f;
@@ -59,6 +60,7 @@ void updateCBuffer()
   
   // Volumetric data
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
+  cbData.FOG_DisableLightScattering = FOG_DisableLightScattering;
   cbData.FOG_ScatteringFactor = FOG_ScatteringFactor;
   cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;

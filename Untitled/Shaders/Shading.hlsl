@@ -2,30 +2,13 @@
 #include "Shadows.hlsl"
 #include "BRDF.hlsl"
 #include "AppSettings.hlsl"
+#include "LightingHelpers.hlsl"
 
 #include "VolumetricFogHelpers.hlsl"
 
 // Max value that we can store in an fp16 buffer (actually a little less so that we have room for
 // error, real max is 65504)
 static const float FP16Max = 65000.0f;
-
-struct SpotLight
-{
-  float3 Position;
-  float AngularAttenuationX;
-
-  float3 Direction;
-  float AngularAttenuationY;
-
-  float3 Intensity;
-  float Range;
-};
-
-struct LightConstants
-{
-  SpotLight Lights[MaxSpotLights];
-  float4x4 ShadowMatrices[MaxSpotLights];
-};
 
 struct ShadingConstants
 {
@@ -101,119 +84,119 @@ float3 CalcLighting(
 //-------------------------------------------------------------------------------------------------
 float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, in SamplerComparisonState shadowSampler)
 {
-  float3 vtxNormalWS = input.TangentFrame._m20_m21_m22;
-  float3 normalWS = vtxNormalWS;
-  float3 positionWS = input.PositionWS;
-
-  const ShadingConstants CBuffer = input.ShadingCBuffer;
-
-  float3 viewWS = normalize(CBuffer.CameraPosWS - positionWS);
-
-  if (true) // TODO: toggle normal mapping
-  {
-    // Sample the normal map, and convert the normal to world space
-    float3 normalTS;
-    normalTS.xy = input.NormalMap * 2.0f - 1.0f;
-    normalTS.z = sqrt(1.0f - saturate(normalTS.x * normalTS.x + normalTS.y * normalTS.y));
-    normalWS = normalize(mul(normalTS, input.TangentFrame));
-  }
-
-  float4 albedoMap = 1.0f;
-  if (true) // TODO: toggle albedo usage
-    albedoMap = input.AlbedoMap;
-
-  float metallic = saturate(input.MetallicMap);
-  float3 diffuseAlbedo = lerp(albedoMap.xyz, 0.0f, metallic);
-  float3 specularAlbedo = lerp(0.03f, albedoMap.xyz, metallic);
-
-  float roughnessMap = input.RoughnessMap;
-  float roughness = roughnessMap * roughnessMap;
-
-  float depthVS = input.DepthVS;
-
-  // Compute shared cluster lookup data
-  uint2 pixelPos = uint2(input.PositionSS);
-  float zRange = CBuffer.FarClip - CBuffer.NearClip;
-  float normalizedZ = saturate((depthVS - CBuffer.NearClip) / zRange);
-  uint zTile = normalizedZ * NumZTiles;
-  uint3 tileCoords = uint3(pixelPos / ClusterTileSize, zTile);
-  uint clusterIdx = (tileCoords.z * CBuffer.NumXYTiles) + (tileCoords.y * CBuffer.NumXTiles) + tileCoords.x;
-  // clusterIdx = 0;
-
-  float3 positionNeighborX = input.PositionWS + input.PositionWS_DX;
-  float3 positionNeighborY = input.PositionWS + input.PositionWS_DY;
-
-  // Add in the primary directional light
-  float3 output = 0.0f;
-
-  // TODO:
-  // if(true) // enable sun
-  // {
-
-  // }
-
-  // Apply the spot lights
-  uint numLights = 0;
-  if (AppSettings.RenderLights)
-  {
-    // Spotlight shadow
-    float2 shadowMapSize;
-    float numSlices;
-    spotLightShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);    
-
-    uint clusterOffset = clusterIdx * SpotLightElementsPerCluster;
-
-    // Loop over the number of 4-byte elements needed for each cluster
-    [unroll]
-    for (uint elemIdx = 0; elemIdx < SpotLightElementsPerCluster; ++elemIdx)
+    float3 vtxNormalWS = input.TangentFrame._m20_m21_m22;
+    float3 normalWS = vtxNormalWS;
+    float3 positionWS = input.PositionWS;
+  
+    const ShadingConstants CBuffer = input.ShadingCBuffer;
+  
+    float3 viewWS = normalize(CBuffer.CameraPosWS - positionWS);
+  
+    if (true) // TODO: toggle normal mapping
     {
-      // Loop until we've processed every raised bit
-      uint clusterElemMask = input.SpotLightClusterBuffer.Load((clusterOffset + elemIdx) * 4);
-
-      while(clusterElemMask)
-      {
-        uint bitIdx = firstbitlow(clusterElemMask);
-        clusterElemMask &= ~(1u << bitIdx);
-        uint spotLightIdx = bitIdx + (elemIdx * 32);
-        SpotLight spotLight = input.LightCBuffer.Lights[spotLightIdx];
-      
-        float3 surfaceToLight = spotLight.Position - positionWS;
-        float distanceToLight = length(surfaceToLight);
-        surfaceToLight /= distanceToLight;
-        float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
-        float angularAttenuation =
-          smoothstep(spotLight.AngularAttenuationY, spotLight.AngularAttenuationX, angleFactor);
-
-        if (angularAttenuation > 0.0f)
-        {
-          float d = distanceToLight / spotLight.Range;
-          float falloff = saturate(1.0f - (d * d * d * d));
-          falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
-          float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
-
-          // Spotlight shadow visibility
-          const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
-
-          float spotLightVisibility = SpotLightShadowVisibility(positionWS, positionNeighborX, positionNeighborY,
-                                                              input.LightCBuffer.ShadowMatrices[spotLightIdx],
-                                                              spotLightIdx, shadowPosOffset, spotLightShadowMap, shadowSampler,
-                                                              float2(SpotShadowNearClip, spotLight.Range));
-
-          output += CalcLighting(
-              normalWS,
-              surfaceToLight,
-              intensity,
-              diffuseAlbedo,
-              specularAlbedo,
-              roughness,
-              positionWS,
-              CBuffer.CameraPosWS) * AppSettings.LightColor * (spotLightVisibility);
-        }
-
-        ++numLights;
-      }
+      // Sample the normal map, and convert the normal to world space
+      float3 normalTS;
+      normalTS.xy = input.NormalMap * 2.0f - 1.0f;
+      normalTS.z = sqrt(1.0f - saturate(normalTS.x * normalTS.x + normalTS.y * normalTS.y));
+      normalWS = normalize(mul(normalTS, input.TangentFrame));
     }
-  }
+  
+    float4 albedoMap = 1.0f;
+    if (true) // TODO: toggle albedo usage
+      albedoMap = input.AlbedoMap;
+  
+    float metallic = saturate(input.MetallicMap);
+    float3 diffuseAlbedo = lerp(albedoMap.xyz, 0.0f, metallic);
+    float3 specularAlbedo = lerp(0.03f, albedoMap.xyz, metallic);
+  
+    float roughnessMap = input.RoughnessMap;
+    float roughness = roughnessMap * roughnessMap;
+  
+    float depthVS = input.DepthVS;
+  
+    // Compute shared cluster lookup data
+    uint2 pixelPos = uint2(input.PositionSS);
+    float zRange = CBuffer.FarClip - CBuffer.NearClip;
+    float normalizedZ = saturate((depthVS - CBuffer.NearClip) / zRange);
+    uint zTile = normalizedZ * NumZTiles;
+    uint3 tileCoords = uint3(pixelPos / ClusterTileSize, zTile);
+    uint clusterIdx = (tileCoords.z * CBuffer.NumXYTiles) + (tileCoords.y * CBuffer.NumXTiles) + tileCoords.x;
+    // clusterIdx = 0;
+  
+    float3 positionNeighborX = input.PositionWS + input.PositionWS_DX;
+    float3 positionNeighborY = input.PositionWS + input.PositionWS_DY;
+  
+    // Add in the primary directional light
+    float3 output = 0.0f;
+  
+    // TODO:
+    // if(true) // enable sun
+    // {
+  
+    // }
+  
+    // Apply the spot lights
+    uint numLights = 0;
+    if (AppSettings.RenderLights)
+    {
+      // Spotlight shadow
+      float2 shadowMapSize;
+      float numSlices;
+      spotLightShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);    
+  
+      uint clusterOffset = clusterIdx * SpotLightElementsPerCluster;
+  
+      // Loop over the number of 4-byte elements needed for each cluster
+      [unroll]
+      for (uint elemIdx = 0; elemIdx < SpotLightElementsPerCluster; ++elemIdx)
+      {
+        // Loop until we've processed every raised bit
+        uint clusterElemMask = input.SpotLightClusterBuffer.Load((clusterOffset + elemIdx) * 4);
+  
+        while(clusterElemMask)
+        {
+          uint bitIdx = firstbitlow(clusterElemMask);
+          clusterElemMask &= ~(1u << bitIdx);
+          uint spotLightIdx = bitIdx + (elemIdx * 32);
+          SpotLight spotLight = input.LightCBuffer.Lights[spotLightIdx];
+        
+          float3 surfaceToLight = spotLight.Position - positionWS;
+          float distanceToLight = length(surfaceToLight);
+          surfaceToLight /= distanceToLight;
+          float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
+          float angularAttenuation =
+            smoothstep(spotLight.AngularAttenuationY, spotLight.AngularAttenuationX, angleFactor);
+  
+          if (angularAttenuation > 0.0f)
+          {
+            float d = distanceToLight / spotLight.Range;
+            float falloff = saturate(1.0f - (d * d * d * d));
+            falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
+            float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
+  
+            // Spotlight shadow visibility
+            const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+  
+            float spotLightVisibility = SpotLightShadowVisibility(positionWS, positionNeighborX, positionNeighborY,
+                                                                input.LightCBuffer.ShadowMatrices[spotLightIdx],
+                                                                spotLightIdx, shadowPosOffset, spotLightShadowMap, shadowSampler,
+                                                                float2(SpotShadowNearClip, spotLight.Range));
+  
+            output += CalcLighting(
+                normalWS,
+                surfaceToLight,
+                intensity,
+                diffuseAlbedo,
+                specularAlbedo,
+                roughness,
+                positionWS,
+                CBuffer.CameraPosWS) * AppSettings.LightColor * (spotLightVisibility);
+          }
+  
+          ++numLights;
+        } // end of while(clusterElemMask)
+      } // end of for(elemIdx : SpotLightElementsPerCluster)
+    } // end of if(AppSettings.RenderLights)
 
   float3 ambient = 1.0f; // TODO!
   output += ambient * diffuseAlbedo;
@@ -235,7 +218,6 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
 
 
     // Apply Fog
-
     float z = input.RawDepth;
     float2 invRTSize = input.InvRTSize;
     float2 screenUV = (pixelPos + 0.5f) * invRTSize;
@@ -244,9 +226,7 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
     const float far = CBuffer.FarClip;
     output = applyVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearSampler, output);
 
-    // float t = 1;
-    // output = lerp(output, fogSample3, t);
-
+    // Clamp output value
     output = clamp(output, 0.0f, FP16Max);
 
   return output;

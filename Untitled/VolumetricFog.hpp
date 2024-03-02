@@ -17,7 +17,8 @@ struct VolumetricFog
       float p_Far,
       float p_ScreenWidth,
       float p_ScreenHeight,
-      FirstPersonCamera const & p_Camera
+      FirstPersonCamera const & p_Camera,
+      ConstantBuffer const & p_LightsBuffer
     );
 
   ID3DBlobPtr m_DataInjectionShader = nullptr;

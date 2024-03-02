@@ -1706,7 +1706,8 @@ void RenderManager::populateCommandList()
       camera.FarClip(),
       static_cast<float>(m_Info.m_Width),
       static_cast<float>(m_Info.m_Height),
-      camera);
+      camera,
+      spotLightBuffer);
 
   renderDeferred();
 

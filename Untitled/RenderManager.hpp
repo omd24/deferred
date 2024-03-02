@@ -47,8 +47,10 @@ struct SpotLight
 {
   glm::vec3 Position;
   float AngularAttenuationX;
+
   glm::vec3 Direction;
   float AngularAttenuationY;
+
   glm::vec3 Intensity;
   float Range;
 };

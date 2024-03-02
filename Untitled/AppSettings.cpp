@@ -18,6 +18,7 @@ bool32 ShowClusterVisualizer = false;
 bool32 ShowLightCounts = false;
 bool32 ShowUVGradients = false;
 bool32 AnimateLightIntensity = false;
+float LightColor[3] = {1.0f, 1.0f, 1.0f};
 
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
@@ -64,8 +65,13 @@ void updateCBuffer()
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;
   cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
 
+  // Box position (float3)
   memcpy(cbData.FOG_BoxPosition, FOG_BoxPosition, sizeof(cbData.FOG_BoxPosition));
   static_assert(12 == sizeof(cbData.FOG_BoxPosition));
+
+  // Light color (float3)
+  memcpy(cbData.LightColor, LightColor, sizeof(cbData.LightColor));
+  static_assert(12 == sizeof(cbData.LightColor));
 
   CBuffer.mapAndSetData(&cbData, sizeof(AppSettingsCBuffer));
 }

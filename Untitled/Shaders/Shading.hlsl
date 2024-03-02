@@ -13,8 +13,10 @@ struct SpotLight
 {
   float3 Position;
   float AngularAttenuationX;
+
   float3 Direction;
   float AngularAttenuationY;
+
   float3 Intensity;
   float Range;
 };
@@ -205,7 +207,7 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
               specularAlbedo,
               roughness,
               positionWS,
-              CBuffer.CameraPosWS) * (spotLightVisibility);
+              CBuffer.CameraPosWS) * AppSettings.LightColor * (spotLightVisibility);
         }
 
         ++numLights;

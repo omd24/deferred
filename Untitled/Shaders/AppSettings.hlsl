@@ -15,6 +15,8 @@ struct AppSettingsCbuffer
   bool ShowUVGradients;
   bool AnimateLightIntensity;
 
+  float3 LightColor;
+
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
   float FOG_ScatteringFactor;

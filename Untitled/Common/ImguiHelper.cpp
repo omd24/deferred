@@ -87,6 +87,7 @@ static void renderInternal()
     ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
     ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
     // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
+    ImGui::ColorEdit3("Lights Color", AppSettings::LightColor, ImGuiColorEditFlags_DisplayRGB);
 
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Post Processing", ImGuiTreeNodeFlags_None))
@@ -106,7 +107,7 @@ static void renderInternal()
       ImGui::SliderFloat("Constant Fog Modifier", &AppSettings::FOG_ConstantFogDensityModifier, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
-      ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_Logarithmic);
+      ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);
       ImGui::SliderFloat("Box Fog Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
     }
 

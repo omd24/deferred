@@ -30,6 +30,7 @@ extern bool32 ShowLightCounts;
 extern bool32 ShowClusterVisualizer;
 extern bool32 ShowUVGradients;
 extern bool32 AnimateLightIntensity;
+extern float LightColor[3];
 
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
@@ -46,20 +47,24 @@ struct AppSettingsCBuffer
   bool32 ComputeUVGradients;
   float Exposure;
   float BloomExposure;
+
   float BloomMagnitude;
   float BloomBlurSigma;
   bool32 ShowAlbedoMaps;
   bool32 ShowNormalMaps;
+
   bool32 ShowSpecular;
   bool32 ShowLightCounts;
   bool32 ShowUVGradients;
   bool32 AnimateLightIntensity;
+  float LightColor[3];
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
   float FOG_ScatteringFactor;
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;
+
   float FOG_HeightFogFalloff;
   float FOG_BoxPosition[3];
   float FOG_BoxFogDensity;

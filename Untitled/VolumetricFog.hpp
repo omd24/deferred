@@ -8,18 +8,26 @@ struct VolumetricFog
   void init(ID3D12Device* p_Device);
   void deinit();
 
-  void render(
-      ID3D12GraphicsCommandList* p_CmdList,
-      uint32_t p_ClusterBufferSrv,
-      uint32_t p_DepthBufferSrv,
-      uint32_t p_SpotLightShadowSrv,
-      float p_Near,
-      float p_Far,
-      float p_ScreenWidth,
-      float p_ScreenHeight,
-      FirstPersonCamera const & p_Camera,
-      ConstantBuffer const & p_LightsBuffer
-    );
+  // Helper wrapper for rendering parameters
+  struct RenderDesc
+  {
+    uint32_t ClusterBufferSrv;
+    uint32_t DepthBufferSrv;
+    uint32_t SpotLightShadowSrv;
+    uint32_t UVMapSrv;
+    uint32_t TangentFrameSrv;
+    uint32_t MaterialIdMapSrv;
+
+    float Near;
+    float Far;
+    float ScreenWidth;
+    float ScreenHeight;
+
+    FirstPersonCamera Camera;
+    ConstantBuffer LightsBuffer;
+  };
+
+  void render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc);
 
   ID3DBlobPtr m_DataInjectionShader = nullptr;
   ID3DBlobPtr m_LightContributionShader = nullptr;

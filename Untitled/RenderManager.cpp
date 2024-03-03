@@ -1696,18 +1696,29 @@ void RenderManager::populateCommandList()
 
   renderSpotLightShadowMap(m_CmdList, camera);
 
-  // TEST fog
-  m_Fog.render(
-      m_CmdList,
-      spotLightClusterBuffer.SRV,
-      depthBuffer.getSrv(),
-      spotLightShadowMap.getSrv(),
-      camera.NearClip(),
-      camera.FarClip(),
-      static_cast<float>(m_Info.m_Width),
-      static_cast<float>(m_Info.m_Height),
-      camera,
-      spotLightBuffer);
+  // Volumetric fog
+  {
+
+    VolumetricFog::RenderDesc desc = {
+      .ClusterBufferSrv = spotLightClusterBuffer.SRV,
+      .DepthBufferSrv = depthBuffer.getSrv(),
+      .SpotLightShadowSrv = spotLightShadowMap.getSrv(),
+
+      .UVMapSrv = uvTarget.srv(),
+      .TangentFrameSrv = tangentFrameTarget.srv(),
+      .MaterialIdMapSrv = materialIDTarget.srv(),
+
+      .Near = camera.NearClip(),
+      .Far = camera.FarClip(),
+      .ScreenWidth = static_cast<float>(m_Info.m_Width),
+      .ScreenHeight = static_cast<float>(m_Info.m_Height),
+
+      .Camera = camera,
+      .LightsBuffer = spotLightBuffer
+    };
+
+    m_Fog.render(m_CmdList, desc);
+  }
 
   renderDeferred();
 

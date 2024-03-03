@@ -36,15 +36,19 @@ extern float LightColor[3];
 extern bool32 FOG_UseLinearClamp;
 extern bool32 FOG_DisableLightScattering;
 extern bool32 FOG_UseClusteredLighting;
+extern bool32 FOG_EnableShadowMapSampling;
 extern float FOG_ScatteringFactor;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
+extern float FOG_BoxSize;
 extern float FOG_BoxPosition[3];
 extern float FOG_BoxFogDensity;
 extern float FOG_BoxColor[3];
 extern float FOG_PhaseAnisotropy;
 
+// Be ware of the alignment rules:
+// https://maraneshi.github.io/HLSL-ConstantBufferLayoutVisualizer/
 struct AppSettingsCBuffer
 {
   bool32 RenderLights;
@@ -69,13 +73,13 @@ struct AppSettingsCBuffer
 
   bool32 FOG_DisableLightScattering;
   bool32 FOG_UseClusteredLighting;
+  bool32 FOG_EnableShadowMapSampling;
   float FOG_ScatteringFactor;
-  float FOG_ConstantFogDensityModifier;
 
+  float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;
   float FOG_HeightFogFalloff;
-  float unused0;
-  float unused1;
+  float FOG_BoxSize;
 
   float FOG_BoxPosition[3];
   float FOG_BoxFogDensity;

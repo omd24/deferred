@@ -35,15 +35,21 @@ struct FogConstants
   float NearClip = 0.0f;
   float FarClip = 0.0f;
 
+  uint32_t MaterialIDMapIdx = uint32_t(-1);
+  uint32_t TangentFrameMapIndex = uint32_t(-1);
   uint32_t ClusterBufferIdx = uint32_t(-1);
   uint32_t DepthBufferIdx = uint32_t(-1);
+
   uint32_t SpotLightShadowIdx = uint32_t(-1);
   uint32_t DataVolumeIdx = uint32_t(-1);
+  uint32_t UVMapIdx = uint32_t(-1);
+  uint32_t unused0 = uint32_t(-1);
 
-  uint32_t ScatteringVolumeIdx = uint32_t(-1);
   glm::uvec3 Dimensions;
+  uint32_t ScatteringVolumeIdx = uint32_t(-1);
 
   glm::vec3 CameraPos;
+  uint32_t unused1 = uint32_t(-1);
 
   uint32_t NumXTiles;
   uint32_t NumXYTiles;
@@ -219,7 +225,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     rootParameters[RootParam_AppSettings].Descriptor.RegisterSpace = 0;
     rootParameters[RootParam_AppSettings].Descriptor.ShaderRegister = AppSettings::CBufferRegister;
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[5] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Point, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[1] =
@@ -228,6 +234,8 @@ void VolumetricFog::init(ID3D12Device * p_Device)
         GetStaticSamplerState(SamplerState::Linear, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[3] =
         GetStaticSamplerState(SamplerState::LinearBorder, 3, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[4] =
+        GetStaticSamplerState(SamplerState::ShadowMapPCF, 4, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -318,17 +326,7 @@ void VolumetricFog::deinit()
   m_DataVolume.deinit();
 }
 //---------------------------------------------------------------------------//
-void VolumetricFog::render(
-    ID3D12GraphicsCommandList* p_CmdList,
-    uint32_t p_ClusterBufferSrv,
-    uint32_t p_DepthBufferSrv,
-    uint32_t p_SpotLightShadowSrv,
-    float p_Near,
-    float p_Far,
-    float p_ScreenWidth,
-    float p_ScreenHeight,
-    FirstPersonCamera const& p_Camera,
-    ConstantBuffer const& p_LightsBuffer)
+void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc)
 {
   assert(p_CmdList != nullptr);
 
@@ -355,19 +353,22 @@ void VolumetricFog::render(
       FogConstants uniforms;
       // The transpose of a matrix is same as transpose of the inverse of that matrix.
 
-      uniforms.InvViewProj =
-          glm::transpose(glm::inverse(p_Camera.ViewMatrix() * p_Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
-      uniforms.NearClip = p_Near;
-      uniforms.FarClip = p_Far;
+      uniforms.InvViewProj = glm::transpose(
+          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
+      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
+      uniforms.NearClip = p_RenderDesc.Near;
+      uniforms.FarClip = p_RenderDesc.Far;
 
-      uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
+      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
+      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
+      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
 
       uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_Camera.Position();
+      uniforms.CameraPos = p_RenderDesc.Camera.Position();
 
       uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
       uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
@@ -381,7 +382,7 @@ void VolumetricFog::render(
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
+    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
 
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
@@ -405,20 +406,24 @@ void VolumetricFog::render(
     // Set constant buffers
     {
       FogConstants uniforms;
-      uniforms.InvViewProj =
-          glm::transpose(glm::inverse(p_Camera.ViewMatrix() * p_Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
-      uniforms.NearClip = p_Near;
-      uniforms.FarClip = p_Far;
+      uniforms.InvViewProj = glm::transpose(
+          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
+      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
+      uniforms.NearClip = p_RenderDesc.Near;
+      uniforms.FarClip = p_RenderDesc.Far;
 
-      uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
+      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
+      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
+      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
+
       uniforms.DataVolumeIdx = m_DataVolume.getSRV();
 
       uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_Camera.Position();
+      uniforms.CameraPos = p_RenderDesc.Camera.Position();
 
       uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
       uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
@@ -431,6 +436,8 @@ void VolumetricFog::render(
     D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_ScatteringVolume.UAV};
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
 
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
@@ -454,20 +461,24 @@ void VolumetricFog::render(
     // Set constant buffers
     {
       FogConstants uniforms;
-      uniforms.InvViewProj =
-          glm::transpose(glm::inverse(p_Camera.ViewMatrix() * p_Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_ScreenWidth, p_ScreenHeight);
-      uniforms.NearClip = p_Near;
-      uniforms.FarClip = p_Far;
+      uniforms.InvViewProj = glm::transpose(
+          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
+      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
+      uniforms.NearClip = p_RenderDesc.Near;
+      uniforms.FarClip = p_RenderDesc.Far;
 
-      uniforms.ClusterBufferIdx = p_ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_SpotLightShadowSrv;
+      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
+      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
+      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
+      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
+
       uniforms.ScatteringVolumeIdx = m_ScatteringVolume.getSRV();
 
       uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_Camera.Position();
+      uniforms.CameraPos = p_RenderDesc.Camera.Position();
 
       uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
       uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
@@ -480,6 +491,8 @@ void VolumetricFog::render(
     D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_FinalVolume.UAV};
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
 
     // NOTE: Z = 1 as we integrate inside the shader.
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, 1);

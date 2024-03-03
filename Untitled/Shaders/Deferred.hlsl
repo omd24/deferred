@@ -1,41 +1,5 @@
 #include "Shading.hlsl"
-
-typedef float4 Quaternion;
-Quaternion UnpackQuaternion(in float4 packed)
-{
-  uint maxCompIdx = uint(packed.w * 3.0f);
-  packed.xyz = packed.xyz * 2.0f - 1.0f;
-  const float maxRange = 1.0f / sqrt(2.0f);
-  packed.xyz *= maxRange;
-  float maxComponent =
-      sqrt(1.0f - saturate(packed.x * packed.x + packed.y * packed.y + packed.z * packed.z));
-
-  Quaternion q;
-  if (maxCompIdx == 0)
-    q = Quaternion(maxComponent, packed.xyz);
-  else if (maxCompIdx == 1)
-    q = Quaternion(packed.x, maxComponent, packed.yz);
-  else if (maxCompIdx == 2)
-    q = Quaternion(packed.xy, maxComponent, packed.z);
-  else
-    q = Quaternion(packed.xyz, maxComponent);
-
-  return q;
-}
-float3x3 QuatTo3x3(in Quaternion q)
-{
-  float3x3 m = float3x3(
-      1.0f - 2.0f * q.y * q.y - 2.0f * q.z * q.z,
-      2.0f * q.x * q.y - 2.0f * q.z * q.w,
-      2.0f * q.x * q.z + 2.0f * q.y * q.w,
-      2.0f * q.x * q.y + 2.0f * q.z * q.w,
-      1.0f - 2.0f * q.x * q.x - 2.0f * q.z * q.z,
-      2.0f * q.y * q.z - 2.0f * q.x * q.w,
-      2.0f * q.x * q.z - 2.0f * q.y * q.w,
-      2.0f * q.y * q.z + 2.0f * q.x * q.w,
-      1.0f - 2.0f * q.x * q.x - 2.0f * q.y * q.y);
-  return transpose(m);
-}
+#include "Quaternion.hlsl"
 
 //=================================================================================================
 // Uniforms

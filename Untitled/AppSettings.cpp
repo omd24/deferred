@@ -24,10 +24,12 @@ float LightColor[3] = {1.0f, 1.0f, 1.0f};
 bool32 FOG_UseLinearClamp = true;
 bool32 FOG_DisableLightScattering = false;
 bool32 FOG_UseClusteredLighting = false;
+bool32 FOG_EnableShadowMapSampling = true;
 float FOG_ScatteringFactor = 0.5f;
 float FOG_ConstantFogDensityModifier = 0.0f;
 float FOG_HeightFogDenisty = 0.5f;
 float FOG_HeightFogFalloff = 0.3f;
+float FOG_BoxSize = 0.5f;
 float FOG_BoxPosition[3] = {0.0f, 2.0f, 0.0f};
 float FOG_BoxFogDensity = .9f;
 float FOG_BoxColor[3] = {0.0f, 1.0f, 0.0f};
@@ -65,10 +67,12 @@ void updateCBuffer()
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
   cbData.FOG_DisableLightScattering = FOG_DisableLightScattering;
   cbData.FOG_UseClusteredLighting = FOG_UseClusteredLighting;
+  cbData.FOG_EnableShadowMapSampling = FOG_EnableShadowMapSampling;
   cbData.FOG_ScatteringFactor = FOG_ScatteringFactor;
   cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;
+  cbData.FOG_BoxSize = FOG_BoxSize;
   cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
   cbData.FOG_PhaseAnisotropy = FOG_PhaseAnisotropy;
 

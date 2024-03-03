@@ -105,14 +105,17 @@ static void renderInternal()
       ImGui::Checkbox("Use Linear Sampler", (bool*)&AppSettings::FOG_UseLinearClamp);
       ImGui::Checkbox("Disable Light Scattering", (bool*)&AppSettings::FOG_DisableLightScattering);
       ImGui::Checkbox("Use Clustered Lighting", (bool*)&AppSettings::FOG_UseClusteredLighting);
+      ImGui::Checkbox("Enable Shadow Map Sampling", (bool*)&AppSettings::FOG_EnableShadowMapSampling);
       ImGui::SliderFloat("Scattering Factor", &AppSettings::FOG_ScatteringFactor, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Constant Fog Modifier", &AppSettings::FOG_ConstantFogDensityModifier, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
-      ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);
-      ImGui::SliderFloat("Box Fog Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
-      ImGui::ColorEdit3("Box Color", AppSettings::FOG_BoxColor, ImGuiColorEditFlags_DisplayRGB);
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
+      ImGui::Separator();
+      ImGui::SliderFloat("Box Size", &AppSettings::FOG_BoxSize, 0.0f, 10.0f, "%.2f");
+      ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);
+      ImGui::SliderFloat("Box Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
+      ImGui::ColorEdit3("Box Color", AppSettings::FOG_BoxColor, ImGuiColorEditFlags_DisplayRGB);
     }
 
     ImGui::Separator();

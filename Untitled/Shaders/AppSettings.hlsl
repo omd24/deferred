@@ -22,13 +22,13 @@ struct AppSettingsCbuffer
 
   bool FOG_DisableLightScattering;
   bool FOG_UseClusteredLighting;
+  bool FOG_EnableShadowMapSampling;
   float FOG_ScatteringFactor;
-  float FOG_ConstantFogDensityModifier;
 
+  float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;
   float FOG_HeightFogFalloff;
-  float unused0;
-  float unused1;
+  float FOG_BoxSize;
 
   float3 FOG_BoxPosition;
   float FOG_BoxFogDensity;

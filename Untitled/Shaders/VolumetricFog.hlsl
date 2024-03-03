@@ -3,7 +3,9 @@
 //=================================================================================================
 #include "GlobalResources.hlsl"
 #include "AppSettings.hlsl"
+#include "Shadows.hlsl"
 #include "LightingHelpers.hlsl"
+#include "Quaternion.hlsl"
 
 //=================================================================================================
 // Uniforms
@@ -17,27 +19,27 @@ struct UniformConstants
   float Near;
   float Far;
 
+  uint MaterialIDMapIdx;
+  uint TangentFrameMapIndex;
   uint ClusterBufferIdx;
   uint DepthBufferIdx;
+
   uint SpotLightShadowIdx;
   uint DataVolumeIdx;
+  uint UVMapIdx;
+  uint unused0;
   
-  uint ScatterVolumeIdx;
   uint3 Dimensions;
+  uint ScatterVolumeIdx;
 
   float3 CameraPos;
+  uint unused1;
 
   uint NumXTiles;
   uint NumXYTiles;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 ConstantBuffer<LightConstants> LightsBuffer : register(b1);
-
-#define NUM_LIGHTS 32
-#define NUM_BINS 16.0
-#define BIN_WIDTH (1.0 / NUM_BINS)
-#define TILE_SIZE 8
-#define NUM_WORDS ( ( NUM_LIGHTS + 31 ) / 32 )
 
 #define ubo_proj_matrix             CBuffer.ProjMat
 #define ubo_inv_view_proj           CBuffer.InvViewProj
@@ -52,6 +54,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_constant_fog_modifier   AppSettings.FOG_ConstantFogDensityModifier
 #define ubo_height_fog_density      AppSettings.FOG_HeightFogDenisty
 #define ubo_height_fog_falloff      AppSettings.FOG_HeightFogFalloff
+#define ubo_box_size                AppSettings.FOG_BoxSize
 #define ubo_box_position            AppSettings.FOG_BoxPosition
 #define ubo_box_color               AppSettings.FOG_BoxColor
 #define ubo_box_fog_density         AppSettings.FOG_BoxFogDensity
@@ -60,11 +63,15 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 //=================================================================================================
 // Resources
 //=================================================================================================
+
+Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
+
 // Samplers:
 SamplerState PointSampler : register(s0);
 SamplerState LinearClampSampler : register(s1);
 SamplerState LinearWrapSampler : register(s2);
 SamplerState LinearBorderSampler : register(s3);
+SamplerComparisonState ShadowMapSampler : register(s4);
 
 // Render targets / UAVs
 #if (DATA_INJECTION > 0)
@@ -161,6 +168,16 @@ float4 scatteringExtinctionFromColorDensity(float3 color, float density )
     return float4(color * extinction, extinction);
 }
 
+// Computes world-space position from post-projection depth
+float3 PosWSFromDepth(in float zw, in float2 uv)
+{
+  // float linearDepth = DeferredCBuffer.Projection._43 / (zw - DeferredCBuffer.Projection._33);
+  float4 positionCS = float4(uv * 2.0f - 1.0f, zw, 1.0f);
+  positionCS.y *= -1.0f;
+  float4 positionWS = mul(positionCS, ubo_inv_view_proj);
+  return positionWS.xyz / positionWS.w;
+}
+
 //=================================================================================================
 // 1. Data injection
 //=================================================================================================
@@ -187,7 +204,7 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,
     scatteringExtinction += scatteringExtinctionFromColorDensity((float3)0.5, heightfog);
 
     // Add density from box
-    float3 boxSize = float3(1.0, 1.0, 1.0);
+    float3 boxSize = ubo_box_size;
     float3 boxPos = ubo_box_position;
     float3 boxDist = abs(worldPos.xyz - boxPos);
     if (all(boxDist <= boxSize))
@@ -265,7 +282,51 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
                     falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
                     float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
     
+                    uint2 pixelPos = uint2(uint(froxelCoord.x * 1.0f / ubo_grid_dimensions.x * ubo_screen_resolution.x),
+                        uint(froxelCoord.y * 1.0f / ubo_grid_dimensions.y * ubo_screen_resolution.y));
+
                     float spotLightVisibility = 1.0f;
+                    if (AppSettings.FOG_EnableShadowMapSampling)
+                    {
+                        // Spotlight shadow
+                        Texture2DArray spotLightShadowMap = Tex2DArrayTable[CBuffer.SpotLightShadowIdx];
+                        float2 shadowMapSize;
+                        float numSlices;
+                        spotLightShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);
+
+                        // Calculate vertex normal for shadow sampling
+                        Texture2D tangentFrameMap = Tex2DTable[CBuffer.TangentFrameMapIndex];
+                        Texture2D<uint> materialIDMap = MaterialIDMaps[CBuffer.MaterialIDMapIdx];
+                        Quaternion tangentFrame = UnpackQuaternion(tangentFrameMap[pixelPos]);
+                        uint packedMaterialID = materialIDMap[pixelPos];
+                        float handedness = packedMaterialID & 0x80 ? -1.0f : 1.0f;
+                        float3x3 tangentFrameMatrix = QuatTo3x3(tangentFrame);
+                        tangentFrameMatrix._m10_m11_m12 *= handedness;
+                        float3 vtxNormalWS = tangentFrameMatrix._m20_m21_m22;
+
+                        // Calculate position neighbors
+                        Texture2D depthMap = Tex2DTable[CBuffer.DepthBufferIdx];
+                        float zw = depthMap[pixelPos].x;
+                        Texture2D uvMap = Tex2DTable[CBuffer.UVMapIdx];
+                        float2 zwGradients = uvMap[pixelPos].zw;
+                        zwGradients = sign(zwGradients) * pow(abs(zwGradients), 2.0f);
+                        float2 zwNeighbors = saturate(zw.xx + zwGradients);
+                        float2 invRTSize = 1.0f / ubo_screen_resolution;
+                        float2 screenUV = (pixelPos + 0.5f) * invRTSize;
+                        float3 positionDX =
+                            PosWSFromDepth(zwNeighbors.x, screenUV + (int2(1, 0) * invRTSize)) - worldPos;
+                        float3 positionDY =
+                            PosWSFromDepth(zwNeighbors.y, screenUV + (int2(0, 1) * invRTSize)) - worldPos;
+                        float3 positionNeighborX = worldPos + positionDX;
+                        float3 positionNeighborY = worldPos + positionDY;
+
+                        // Calcualte spotlight shadow visibility
+                        const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+                        spotLightVisibility = SpotLightShadowVisibility(worldPos, positionNeighborX, positionNeighborY,
+                                                                    LightsBuffer.ShadowMatrices[spotLightIdx],
+                                                                    spotLightIdx, shadowPosOffset, spotLightShadowMap, ShadowMapSampler,
+                                                                    float2(SpotShadowNearClip, spotLight.Range));
+                    } // end of shadow sampling
     
                     // Calculate phase function
                     const float3 L = surfaceToLight; // normalized
@@ -273,7 +334,7 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     
                     lighting += AppSettings.LightColor * intensity * p * spotLightVisibility;
                 }
-            }
+            } // end of light loops
         } 
         else // Use clustered lighting for light scattering
         {
@@ -315,34 +376,60 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
                         float falloff = saturate(1.0f - (d * d * d * d)) + 0.5;
                         falloff = (falloff * falloff) / (distanceToLight * distanceToLight + 1.0f);
                         float3 intensity = spotLight.Intensity * angularAttenuation * falloff;
-    
-                        float spotLightVisibility = 1.0f;
   
-#if 0 //TODO: Shadow sampling
-                    //
-                    // Spotlight shadow visibility
-                    const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+                        float spotLightVisibility = 1.0f;
+                        if (AppSettings.FOG_EnableShadowMapSampling)
+                        {
+                            // Spotlight shadow
+                            Texture2DArray spotLightShadowMap = Tex2DArrayTable[CBuffer.SpotLightShadowIdx];
+                            float2 shadowMapSize;
+                            float numSlices;
+                            spotLightShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);
+    
+                            // Calculate vertex normal for shadow sampling
+                            Texture2D tangentFrameMap = Tex2DTable[CBuffer.TangentFrameMapIndex];
+                            Texture2D<uint> materialIDMap = MaterialIDMaps[CBuffer.MaterialIDMapIdx];
+    
+                            Quaternion tangentFrame = UnpackQuaternion(tangentFrameMap[pixelPos]);
+                            uint packedMaterialID = materialIDMap[pixelPos];
+                            float handedness = packedMaterialID & 0x80 ? -1.0f : 1.0f;
+                            float3x3 tangentFrameMatrix = QuatTo3x3(tangentFrame);
+                            tangentFrameMatrix._m10_m11_m12 *= handedness;
 
-                    float spotLightVisibility = SpotLightShadowVisibility(worldPos, positionNeighborX, positionNeighborY,
+                            float3 vtxNormalWS = tangentFrameMatrix._m20_m21_m22;
+
+                            // Calculate position neighbors
+                            Texture2D depthMap = Tex2DTable[CBuffer.DepthBufferIdx];
+                            float zw = depthMap[pixelPos].x;
+                            Texture2D uvMap = Tex2DTable[CBuffer.UVMapIdx];
+                            float2 zwGradients = uvMap[pixelPos].zw;
+                            zwGradients = sign(zwGradients) * pow(abs(zwGradients), 2.0f);
+                            float2 zwNeighbors = saturate(zw.xx + zwGradients);
+
+                            float2 invRTSize = 1.0f / ubo_screen_resolution;
+                            float2 screenUV = (pixelPos + 0.5f) * invRTSize;
+
+                            float3 positionDX =
+                                PosWSFromDepth(zwNeighbors.x, screenUV + (int2(1, 0) * invRTSize)) - worldPos;
+                            float3 positionDY =
+                                PosWSFromDepth(zwNeighbors.y, screenUV + (int2(0, 1) * invRTSize)) - worldPos;
+
+                            float3 positionNeighborX = worldPos + positionDX;
+                            float3 positionNeighborY = worldPos + positionDY;
+
+                            // Calcualte spotlight shadow visibility
+                            const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, surfaceToLight)), vtxNormalWS, shadowMapSize.x);
+                            spotLightVisibility = SpotLightShadowVisibility(worldPos, positionNeighborX, positionNeighborY,
                                                                         LightsBuffer.ShadowMatrices[spotLightIdx],
-                                                                        spotLightIdx, shadowPosOffset, spotLightShadowMap, shadowSampler,
+                                                                        spotLightIdx, shadowPosOffset, spotLightShadowMap, ShadowMapSampler,
                                                                         float2(SpotShadowNearClip, spotLight.Range));
+                        } // end of shadow sampling
 
-                    output += CalcLighting(
-                        normalWS,
-                        surfaceToLight,
-                        intensity,
-                        diffuseAlbedo,
-                        specularAlbedo,
-                        roughness,
-                        worldPos,
-                        ubo_camera_pos) * AppSettings.LightColor * (spotLightVisibility);
-#endif  
-                    // Calculate phase function
-                    const float3 L = surfaceToLight; // normalized
-                    float p = phaseFunction(V, -L, ubo_phase_anisotropy);
+                        // Calculate phase function
+                        const float3 L = surfaceToLight; // normalized
+                        float p = phaseFunction(V, -L, ubo_phase_anisotropy);
 
-                    lighting += AppSettings.LightColor * intensity * p * spotLightVisibility;
+                        lighting += AppSettings.LightColor * intensity * p * spotLightVisibility;
                     }
                 } // end of while(clusterElemMask)
             } // end of for(elemIdx : SpotLightElementsPerCluster)

@@ -9,13 +9,14 @@ static const uint32_t MaxInputs = 8;
 // TODOs:
 // - Add spatial filter
 // - Add noise baking pass
-// - Add noise (several possibilities)
+// - Add noise and dittering (everywhere)
 // - Add tricubic sampler
-// - Add temporal filter
+// - Add temporal filter/reprojection
 // - Add spot light contribution
 // - Add shadows contribution
 // - Add GI (separate system) and its contribution here
 // - Add sky rendering (separate system)
+// - Add TAA
 // - Add froxel debug view
 // - 
 

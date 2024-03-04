@@ -6,6 +6,7 @@
 #include "Shadows.hlsl"
 #include "LightingHelpers.hlsl"
 #include "Quaternion.hlsl"
+#include "VolumetricFogHelpers.hlsl"
 
 //=================================================================================================
 // Uniforms
@@ -14,6 +15,7 @@ struct UniformConstants
 {
   row_major float4x4 ProjMat;
   row_major float4x4 InvViewProj;
+  row_major float4x4 PrevViewProj;
 
   float2 Resolution;
   float Near;
@@ -28,12 +30,18 @@ struct UniformConstants
   uint DataVolumeIdx;
   uint UVMapIdx;
   uint unused0;
-  
+
   uint3 Dimensions;
+  uint unused1;
+
   uint ScatterVolumeIdx;
+  uint PrevScatterVolumeIdx;
+  uint unused2;
+  uint unused3;
+
 
   float3 CameraPos;
-  uint unused1;
+  float TemporalReprojPerc;
 
   uint NumXTiles;
   uint NumXYTiles;
@@ -41,24 +49,26 @@ struct UniformConstants
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 
-#define ubo_proj_matrix             CBuffer.ProjMat
-#define ubo_inv_view_proj           CBuffer.InvViewProj
-#define ubo_screen_resolution       CBuffer.Resolution
-#define ubo_near_distance           CBuffer.Near
-#define ubo_far_distance            CBuffer.Far
-#define ubo_grid_dimensions         CBuffer.Dimensions
-#define ubo_camera_pos              CBuffer.CameraPos
-#define ubo_num_tiles_x             CBuffer.NumXTiles
-#define ubo_num_tiles_xy            CBuffer.NumXYTiles
-#define ubo_scattering_factor       AppSettings.FOG_ScatteringFactor
-#define ubo_constant_fog_modifier   AppSettings.FOG_ConstantFogDensityModifier
-#define ubo_height_fog_density      AppSettings.FOG_HeightFogDenisty
-#define ubo_height_fog_falloff      AppSettings.FOG_HeightFogFalloff
-#define ubo_box_size                AppSettings.FOG_BoxSize
-#define ubo_box_position            AppSettings.FOG_BoxPosition
-#define ubo_box_color               AppSettings.FOG_BoxColor
-#define ubo_box_fog_density         AppSettings.FOG_BoxFogDensity
-#define ubo_phase_anisotropy        AppSettings.FOG_PhaseAnisotropy
+#define ubo_proj_matrix                         CBuffer.ProjMat
+#define ubo_inv_view_proj                       CBuffer.InvViewProj
+#define ubo_prev_view_proj                      CBuffer.PrevViewProj
+#define ubo_screen_resolution                   CBuffer.Resolution
+#define ubo_near_distance                       CBuffer.Near
+#define ubo_far_distance                        CBuffer.Far
+#define ubo_grid_dimensions                     CBuffer.Dimensions
+#define ubo_camera_pos                          CBuffer.CameraPos
+#define ubo_temporal_reprojection_percentage    CBuffer.TemporalReprojPerc;
+#define ubo_num_tiles_x                         CBuffer.NumXTiles
+#define ubo_num_tiles_xy                        CBuffer.NumXYTiles
+#define ubo_scattering_factor                   AppSettings.FOG_ScatteringFactor
+#define ubo_constant_fog_modifier               AppSettings.FOG_ConstantFogDensityModifier
+#define ubo_height_fog_density                  AppSettings.FOG_HeightFogDenisty
+#define ubo_height_fog_falloff                  AppSettings.FOG_HeightFogFalloff
+#define ubo_box_size                            AppSettings.FOG_BoxSize
+#define ubo_box_position                        AppSettings.FOG_BoxPosition
+#define ubo_box_color                           AppSettings.FOG_BoxColor
+#define ubo_box_fog_density                     AppSettings.FOG_BoxFogDensity
+#define ubo_phase_anisotropy                    AppSettings.FOG_PhaseAnisotropy
 
 //=================================================================================================
 // Resources
@@ -85,23 +95,14 @@ SamplerComparisonState ShadowMapSampler : register(s4);
 #if (FINAL_INTEGRATION > 0)
   RWTexture3D<float4> FinalIntegrationVolume : register(u0);
 #endif
-
+// ==========================================================================
 // Exponential distribution as in https://advances.realtimerendering.com/s2016/Siggraph2016_idTech6.pdf Page 5.
 // Convert slice index to (near...far) value distributed with exponential function.
-float sliceToExponentialDepth( float near, float far, int slice, int numSlices ) {
+float sliceToExponentialDepth( float near, float far, int slice, int numSlices )
+{
     return near * pow( far / near, (float(slice) + 0.5f) / float(numSlices) );
 }
-
-// Convert rawDepth (0..1) to linear depth (near...far)
-float rawDepthToLinearDepth( float rawDepth, float near, float far ) {
-    return near * far / (far + rawDepth * (near - far));
-}
-
-// Convert linear depth (near...far) to rawDepth (0..1)
-float linearDepthToRawDepth( float linearDepth, float near, float far ) {
-    return ( near * far ) / ( linearDepth * ( near - far ) ) - far / ( near - far );
-}
-
+// ==========================================================================
 float4 worldFromFroxel(uint3 froxelCoord)
 {
   float2 uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
@@ -123,7 +124,7 @@ float4 worldFromFroxel(uint3 froxelCoord)
 
   return worldPos;
 }
-
+// ==========================================================================
 float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
 {
     const float3 absoluteVec = abs(direction);
@@ -136,7 +137,7 @@ float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
     const float normalizedZComponent = ( n * f * rcpNminusF ) / localZComponent - f * rcpNminusF;
     return normalizedZComponent;
 }
-
+// ==========================================================================
 float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
 {
     const float distanceSquare = dot(positionToLight, positionToLight);
@@ -144,7 +145,7 @@ float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
     const float smoothFactor = max(1.0 - factor * factor, 0.0);
     return (smoothFactor * smoothFactor) / max(distanceSquare, 1e-4);
 }
-
+// ==========================================================================
 // Equations from http://patapom.com/topics/Revision2013/Revision%202013%20-%20Real-time%20Volumetric%20Rendering%20Course%20Notes.pdf
 float henyeyGreenstein(float g, float costh)
 {
@@ -152,7 +153,7 @@ float henyeyGreenstein(float g, float costh)
     const float denominator = 4.0 * PI * pow(1.0 + g * g - 2.0 * g * costh, 3.0/2.0);
     return numerator / denominator;
 }
-
+// ==========================================================================
 float phaseFunction(float3 V, float3 L, float g)
 {
     float cosTheta = dot(V, L);
@@ -160,14 +161,13 @@ float phaseFunction(float3 V, float3 L, float g)
     // TODO: compare other phase functions
     return henyeyGreenstein(g, cosTheta);
 }
-
-
+// ==========================================================================
 float4 scatteringExtinctionFromColorDensity(float3 color, float density )
 {
     const float extinction = ubo_scattering_factor * density;
     return float4(color * extinction, extinction);
 }
-
+// ==========================================================================
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv)
 {
@@ -520,3 +520,50 @@ void FinalIntegrationCS(in uint3 DispatchID : SV_DispatchThreadID)
     }
 }
 #endif //(FINAL_INTEGRATION > 0)
+
+#if (TEMPORAL_FILTERING > 0)
+
+[numthreads(8, 8, 1)]
+void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
+{
+    uint3 froxelCoord = DispatchID;
+    float3 froxelDims = float3(ubo_grid_dimensions.x, ubo_grid_dimensions.y, ubo_grid_dimensions.z);
+    float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
+
+    Texture3D fogData = Tex3DTable[CBuffer.ScatterVolumeIdx];
+    float4 scatteringExtinction = fogData.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0);
+
+    // Temporal reprojection
+    if (false)
+    {
+        float3 worldPos = worldFromFroxel(froxelCoord).xyz;
+        float4 sceenSpaceCenterLast = ubo_prev_view_proj * float4(worldPos, 1.0);
+        float3 ndc = sceenSpaceCenterLast.xyz / sceenSpaceCenterLast.w;
+
+        float linearZ = rawDepthToLinearDepth(ndc.z, ubo_near_distance, ubo_far_distance);
+
+        // Exponential
+        float depthUV = linearDepthToUV(ubo_near_distance, ubo_far_distance, linearZ, int(froxelDims.z));
+        float3 historyUV = float3(ndc.x * .5 + .5, ndc.y * -.5 + .5, depthUV);
+
+        // If history UV is outside the frustum, skip
+        if (all(greaterThanEqual(historyUV, float3(0.0f))) && all(lessThanEqual(historyUV, float3(1.0f))))
+        {
+            // Fetch history sample
+            Texture3D previousLightScatteringTexture = Tex3DTable[CBuffer.PrevScatterVolumeIdx];
+            float4 history = previousLightScatteringTexture.SampleLevel(LinearClampSampler, historyUV, 0);
+
+            history = max(history, scatteringExtinction);
+
+            scatteringExtinction.rgb = lerp(history.rgb, scatteringExtinction.rgb, ubo_temporal_reprojection_percentage);
+            scatteringExtinction.a = lerp(history.a, scatteringExtinction.a, ubo_temporal_reprojection_percentage);
+
+            // DEBUG: test where pixels are being sampled.
+            //scattering = float3(1,0,0);
+        }
+    }
+
+    ScatterVolumeTexture[froxelCoord] = scatteringExtinction;
+}
+
+#endif //(TEMPORAL_FILTERING > 0)

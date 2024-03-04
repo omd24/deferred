@@ -29,8 +29,9 @@ void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParamet
 
 struct FogConstants
 {
-  glm::mat4x4 ProjMat;
-  glm::mat4x4 InvViewProj;
+  glm::mat4x4 ProjMat = glm::mat4();
+  glm::mat4x4 InvViewProj = glm::mat4();
+  glm::mat4x4 PrevViewProj = glm::mat4();
 
   glm::vec2 Resolution;
   float NearClip = 0.0f;
@@ -47,10 +48,15 @@ struct FogConstants
   uint32_t unused0 = uint32_t(-1);
 
   glm::uvec3 Dimensions;
+  uint32_t unused1 = uint32_t(-1);
+
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
+  uint32_t PreviousScatteringVolumeIdx = uint32_t(-1);
+  uint32_t unused2 = uint32_t(-1);
+  uint32_t unused3 = uint32_t(-1);
 
   glm::vec3 CameraPos;
-  uint32_t unused1 = uint32_t(-1);
+  float TemporalReprojPerc = 0.0f;
 
   uint32_t NumXTiles;
   uint32_t NumXYTiles;

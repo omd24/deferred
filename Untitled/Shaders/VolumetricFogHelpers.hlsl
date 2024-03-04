@@ -28,6 +28,11 @@ float rawDepthToLinearDepth( float rawDepth, float near, float far ) {
     return near * far / (far + rawDepth * (near - far));
 }
 // ==========================================================================
+// Convert linear depth (near...far) to rawDepth (0..1)
+float linearDepthToRawDepth( float linearDepth, float near, float far ) {
+    return ( near * far ) / ( linearDepth * ( near - far ) ) - far / ( near - far );
+}
+// ==========================================================================
 // Volumetric fog application
 float3 applyVolumetricFog(float2 screenUV, float rawDepth, float near, float far, int numSlices, in Texture3D fogVolume, in SamplerState fogSampler, in float3 color)
 {

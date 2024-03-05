@@ -57,7 +57,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_far_distance                        CBuffer.Far
 #define ubo_grid_dimensions                     CBuffer.Dimensions
 #define ubo_camera_pos                          CBuffer.CameraPos
-#define ubo_temporal_reprojection_percentage    CBuffer.TemporalReprojPerc;
+#define ubo_temporal_reprojection_percentage    CBuffer.TemporalReprojPerc
 #define ubo_num_tiles_x                         CBuffer.NumXTiles
 #define ubo_num_tiles_xy                        CBuffer.NumXYTiles
 #define ubo_scattering_factor                   AppSettings.FOG_ScatteringFactor
@@ -88,7 +88,7 @@ SamplerComparisonState ShadowMapSampler : register(s4);
   RWTexture3D<float4> DataVolumeTexture : register(u0);
 #endif
 
-#if (LIGHT_SCATTERING > 0)
+#if (LIGHT_SCATTERING > 0) || (TEMPORAL_FILTERING > 0)
   RWTexture3D<float4> ScatterVolumeTexture : register(u0);
 #endif
 
@@ -530,14 +530,14 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
     float3 froxelDims = float3(ubo_grid_dimensions.x, ubo_grid_dimensions.y, ubo_grid_dimensions.z);
     float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
 
-    Texture3D fogData = Tex3DTable[CBuffer.ScatterVolumeIdx];
+    Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
     float4 scatteringExtinction = fogData.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0);
 
     // Temporal reprojection
-    if (false)
+    if (AppSettings.FOG_EnableTemporalFilter)
     {
         float3 worldPos = worldFromFroxel(froxelCoord).xyz;
-        float4 sceenSpaceCenterLast = ubo_prev_view_proj * float4(worldPos, 1.0);
+        float4 sceenSpaceCenterLast = mul(float4(worldPos, 1.0), ubo_prev_view_proj);
         float3 ndc = sceenSpaceCenterLast.xyz / sceenSpaceCenterLast.w;
 
         float linearZ = rawDepthToLinearDepth(ndc.z, ubo_near_distance, ubo_far_distance);
@@ -547,7 +547,7 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
         float3 historyUV = float3(ndc.x * .5 + .5, ndc.y * -.5 + .5, depthUV);
 
         // If history UV is outside the frustum, skip
-        if (all(greaterThanEqual(historyUV, float3(0.0f))) && all(lessThanEqual(historyUV, float3(1.0f))))
+        if (all(historyUV >= float3(0.0f, 0.0f, 0.0f)) && all(historyUV <= float3(1.0f, 1.0f, 1.0f)))
         {
             // Fetch history sample
             Texture3D previousLightScatteringTexture = Tex3DTable[CBuffer.PrevScatterVolumeIdx];

@@ -24,6 +24,7 @@ struct VolumetricFog
     float ScreenHeight;
 
     FirstPersonCamera Camera;
+    glm::mat4 PrevViewProj;
     ConstantBuffer LightsBuffer;
   };
 
@@ -31,14 +32,18 @@ struct VolumetricFog
 
   ID3DBlobPtr m_DataInjectionShader = nullptr;
   ID3DBlobPtr m_LightContributionShader = nullptr;
+  ID3DBlobPtr m_TemporalFilterShader = nullptr;
   ID3DBlobPtr m_FinalIntegralShader = nullptr;
 
   std::vector<ID3D12PipelineState*> m_PSOs;
   ID3D12RootSignature* m_RootSig = nullptr;
 
   VolumeTexture m_DataVolume;
-  VolumeTexture m_ScatteringVolume;
+  VolumeTexture m_ScatteringVolumes[2];
   VolumeTexture m_FinalVolume;
 
+  static int m_CurrLightScatteringTextureIndex;
+  static int m_PrevLightScatteringTextureIndex;
+  static bool m_BuffersInitialized;
   static constexpr glm::uvec3 m_Dimensions = {128, 128, 128};
 };

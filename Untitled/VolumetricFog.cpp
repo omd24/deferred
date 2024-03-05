@@ -77,10 +77,15 @@ enum RenderPass : uint32_t
 {
   RenderPass_DataInjection,
   RenderPass_LightContribution,
+  RenderPass_TemporalFilter,
   RenderPass_FinalIntegration,
 
   NumRenderPasses,
 };
+
+int VolumetricFog::m_CurrLightScatteringTextureIndex = 1;
+int VolumetricFog::m_PrevLightScatteringTextureIndex = 0;
+bool VolumetricFog::m_BuffersInitialized = false;
 
 void VolumetricFog::init(ID3D12Device * p_Device)
 {
@@ -90,6 +95,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     ID3DBlobPtr errorBlob;
     ID3DBlobPtr tempDataInjShader = nullptr;
     ID3DBlobPtr tempLightContributionShader = nullptr;
+    ID3DBlobPtr tempTemporalShader = nullptr;
     ID3DBlobPtr tempFinalIntegralShader = nullptr;
 
 #if defined(_DEBUG)
@@ -106,10 +112,10 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Data injection shader
     {
-      const D3D_SHADER_MACRO definesVS[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
+      const D3D_SHADER_MACRO definesCS[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          definesVS,
+          definesCS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "DataInjectionCS",
           "cs_5_1",
@@ -129,10 +135,10 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Light contribution shader
     {
-      const D3D_SHADER_MACRO definesVS[] = {{"LIGHT_SCATTERING", "1"}, {NULL, NULL}};
+      const D3D_SHADER_MACRO definesCS[] = {{"LIGHT_SCATTERING", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          definesVS,
+          definesCS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "LightContributionCS",
           "cs_5_1",
@@ -150,12 +156,36 @@ void VolumetricFog::init(ID3D12Device * p_Device)
       errorBlob = nullptr;
     }
 
-    // Final integration shader
+    // Temporal filter shader
     {
-      const D3D_SHADER_MACRO definesVS[] = {{"FINAL_INTEGRATION", "1"}, {NULL, NULL}};
+      const D3D_SHADER_MACRO definesCS[] = {{"TEMPORAL_FILTERING", "1"}, {NULL, NULL}};
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
-          definesVS,
+          definesCS,
+          D3D_COMPILE_STANDARD_FILE_INCLUDE,
+          "TemporalFilterCS",
+          "cs_5_1",
+          compileFlags,
+          0,
+          &tempTemporalShader,
+          &errorBlob);
+      if (nullptr == tempTemporalShader || FAILED(hr))
+      {
+        OutputDebugStringA("Failed to load temporal filter shader.\n");
+        if (errorBlob != nullptr)
+          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        res = false;
+      }
+      errorBlob = nullptr;
+    }
+
+
+    // Final integration shader
+    {
+      const D3D_SHADER_MACRO definesCS[] = {{"FINAL_INTEGRATION", "1"}, {NULL, NULL}};
+      HRESULT hr = D3DCompileFromFile(
+          shaderPath.c_str(),
+          definesCS,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
           "FinalIntegrationCS",
           "cs_5_1",
@@ -178,9 +208,12 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     {
       m_DataInjectionShader = tempDataInjShader;
       m_LightContributionShader = tempLightContributionShader;
+      m_TemporalFilterShader = tempTemporalShader;
       m_FinalIntegralShader = tempFinalIntegralShader;
     }
-    assert(m_DataInjectionShader && m_LightContributionShader && m_FinalIntegralShader);
+    assert(
+        m_DataInjectionShader && m_LightContributionShader && m_FinalIntegralShader &&
+        m_TemporalFilterShader);
   }
 
 
@@ -271,6 +304,11 @@ void VolumetricFog::init(ID3D12Device * p_Device)
         &psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_LightContribution]));
     m_PSOs[RenderPass_LightContribution]->SetName(L"Light contribution PSO");
 
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_TemporalFilterShader.GetInterfacePtr());
+    p_Device->CreateComputePipelineState(
+        &psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_TemporalFilter]));
+    m_PSOs[RenderPass_TemporalFilter]->SetName(L"Temporal filter PSO");
+
     psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_FinalIntegralShader.GetInterfacePtr());
     p_Device->CreateComputePipelineState(
         &psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_FinalIntegration]));
@@ -291,6 +329,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
   }
 
   {
+    assert(0 == m_PrevLightScatteringTextureIndex);
     VolumeTextureInit vtInit;
     vtInit.Width = m_Dimensions.x;
     vtInit.Height = m_Dimensions.y;
@@ -298,8 +337,21 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     vtInit.InitialState =
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    vtInit.Name = L"Scattering Volume Texture";
-    m_ScatteringVolume.init(vtInit);
+    vtInit.Name = L"Scattering Volume Texture 0";
+    m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].init(vtInit);
+  }
+
+  {
+    assert(1 == m_CurrLightScatteringTextureIndex);
+    VolumeTextureInit vtInit;
+    vtInit.Width = m_Dimensions.x;
+    vtInit.Height = m_Dimensions.y;
+    vtInit.Depth = m_Dimensions.z;
+    vtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    vtInit.InitialState =
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    vtInit.Name = L"Scattering Volume Texture 1";
+    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].init(vtInit);
   }
 
   {
@@ -329,13 +381,17 @@ void VolumetricFog::deinit()
   m_FinalIntegralShader = nullptr;
 
   m_FinalVolume.deinit();
-  m_ScatteringVolume.deinit();
+  m_ScatteringVolumes[1].deinit();
+  m_ScatteringVolumes[0].deinit();
   m_DataVolume.deinit();
 }
 //---------------------------------------------------------------------------//
 void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc)
 {
   assert(p_CmdList != nullptr);
+
+  m_PrevLightScatteringTextureIndex = m_CurrLightScatteringTextureIndex;
+  m_CurrLightScatteringTextureIndex = (m_CurrLightScatteringTextureIndex + 1) % 2;
 
   PIXBeginEvent(p_CmdList, 0, "Volumetric Fog");
 
@@ -403,7 +459,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
   {
     PIXBeginEvent(p_CmdList, 0, "Light Scattering");
 
-    m_ScatteringVolume.makeWritable(p_CmdList);
+    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeWritable(p_CmdList);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
     p_CmdList->SetPipelineState(m_PSOs[RenderPass_LightContribution]);
@@ -440,7 +496,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_ScatteringVolume.UAV};
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].UAV};
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
@@ -448,11 +504,75 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
-    // Sync back scatter volume to be read
-    m_ScatteringVolume.makeReadable(p_CmdList);
+    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
 
     PIXEndEvent(p_CmdList);
   }
+
+  // 2.1. Temporal Filter
+  if (m_BuffersInitialized && AppSettings::FOG_EnableTemporalFilter)
+  {
+    PIXBeginEvent(p_CmdList, 0, "Temporal Filter");
+
+    // TODO: avoid unnecessary barriers
+    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeWritable(p_CmdList);
+    //m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].makeReadable(p_CmdList);
+
+    p_CmdList->SetComputeRootSignature(m_RootSig);
+    p_CmdList->SetPipelineState(m_PSOs[RenderPass_TemporalFilter]);
+
+    BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
+
+    // Set constant buffers
+    {
+      FogConstants uniforms;
+      uniforms.PrevViewProj = p_RenderDesc.PrevViewProj;
+      uniforms.InvViewProj = glm::transpose(
+          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
+      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
+      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
+      uniforms.NearClip = p_RenderDesc.Near;
+      uniforms.FarClip = p_RenderDesc.Far;
+
+      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
+      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
+      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
+      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
+      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
+      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
+
+      uniforms.DataVolumeIdx = m_DataVolume.getSRV();
+      uniforms.PreviousScatteringVolumeIdx =
+        m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].getSRV();
+
+      uniforms.Dimensions = m_Dimensions;
+      uniforms.CameraPos = p_RenderDesc.Camera.Position();
+
+      uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
+      uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
+
+      BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
+    }
+
+    AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+        m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].UAV};
+    BindTempDescriptorTable(
+        p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
+
+    p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
+
+    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
+
+    PIXEndEvent(p_CmdList);
+  }
+
+  // Regardless of filter pass,
+  // Sync back scatter volume to be read
+  //m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
 
   // 3. Final integration
   {
@@ -482,7 +602,8 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
       uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
       uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
 
-      uniforms.ScatteringVolumeIdx = m_ScatteringVolume.getSRV();
+      uniforms.ScatteringVolumeIdx =
+          m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].getSRV();
 
       uniforms.Dimensions = m_Dimensions;
       uniforms.CameraPos = p_RenderDesc.Camera.Position();
@@ -509,6 +630,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     PIXEndEvent(p_CmdList);
   }
+  m_BuffersInitialized = true;
 
   PIXEndEvent(p_CmdList);
 }

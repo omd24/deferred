@@ -111,6 +111,11 @@ static void renderInternal()
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
+
+      ImGui::Separator();
+      ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);
+      ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.2f");
+      
       ImGui::Separator();
       ImGui::SliderFloat("Box Size", &AppSettings::FOG_BoxSize, 0.0f, 10.0f, "%.2f");
       ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);

@@ -37,7 +37,9 @@ extern bool32 FOG_UseLinearClamp;
 extern bool32 FOG_DisableLightScattering;
 extern bool32 FOG_UseClusteredLighting;
 extern bool32 FOG_EnableShadowMapSampling;
+extern bool32 FOG_EnableTemporalFilter;
 extern float FOG_ScatteringFactor;
+extern float FOG_TemporalPercentage;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
@@ -74,7 +76,12 @@ struct AppSettingsCBuffer
   bool32 FOG_DisableLightScattering;
   bool32 FOG_UseClusteredLighting;
   bool32 FOG_EnableShadowMapSampling;
+  bool32 FOG_EnableTemporalFilter;
+
   float FOG_ScatteringFactor;
+  float FOG_TemporalPercentage;
+  float unused1;
+  float unused2;
 
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

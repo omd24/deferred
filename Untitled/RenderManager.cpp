@@ -15,6 +15,7 @@ static POINT prevMousePos = {};
 static const float SpotLightIntensityFactor = 25.0f;
 static const uint64_t SpotLightShadowMapSize = 1024;
 static const uint64_t NumConeSides = 16;
+static glm::mat4 prevViewProj = glm::mat4();
 
 //---------------------------------------------------------------------------//
 // Local helpers
@@ -1714,6 +1715,7 @@ void RenderManager::populateCommandList()
       .ScreenHeight = static_cast<float>(m_Info.m_Height),
 
       .Camera = camera,
+      .PrevViewProj = prevViewProj,
       .LightsBuffer = spotLightBuffer
     };
 
@@ -1970,6 +1972,9 @@ void RenderManager::onUpdate()
 
   // Wait for the previous Present to complete.
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
+
+  // Cache previous view projection before updating camera
+  prevViewProj = glm::transpose(camera.ViewMatrix() * camera.ProjectionMatrix());
 
   // Rotate the camera with the mouse
   {

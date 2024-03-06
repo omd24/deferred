@@ -12,13 +12,12 @@ static const uint32_t MaxInputs = 8;
 // - Add noise and dittering (everywhere)
 // - Add tricubic sampler
 // - Add jitter to temporal pass
-// - Add spot light contribution
 // - Add volumetric shadows
 // - Add GI (separate system) and its contribution here
 // - Add sky rendering (separate system)
 // - Add TAA
 // - Add froxel debug view
-// - 
+// - Add postfx shaft (separate system)
 
 
 namespace AppSettings

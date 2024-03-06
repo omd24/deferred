@@ -36,7 +36,7 @@ struct UniformConstants
 
   uint ScatterVolumeIdx;
   uint PrevScatterVolumeIdx;
-  uint unused2;
+  uint FinalIntegrationVolumeIdx;
   uint unused3;
 
 
@@ -530,8 +530,9 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
     float3 froxelDims = float3(ubo_grid_dimensions.x, ubo_grid_dimensions.y, ubo_grid_dimensions.z);
     float3 rcpFroxelDim = 1.0f / froxelDims.xyz;
 
-    Texture3D fogData = Tex3DTable[CBuffer.DataVolumeIdx];
-    float4 scatteringExtinction = fogData.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0);
+    // Note: We write to final integration volume in the scattering pass.
+    Texture3D currScatterVolume = Tex3DTable[CBuffer.FinalIntegrationVolumeIdx];
+    float4 scatteringExtinction = currScatterVolume.SampleLevel(LinearClampSampler, froxelCoord * rcpFroxelDim, 0);
 
     // Temporal reprojection
     if (AppSettings.FOG_EnableTemporalFilter)

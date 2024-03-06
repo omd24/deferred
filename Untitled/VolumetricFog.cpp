@@ -52,7 +52,7 @@ struct FogConstants
 
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
   uint32_t PreviousScatteringVolumeIdx = uint32_t(-1);
-  uint32_t unused2 = uint32_t(-1);
+  uint32_t FinalIntegrationVolumeIdx = uint32_t(-1);
   uint32_t unused3 = uint32_t(-1);
 
   glm::vec3 CameraPos;
@@ -452,14 +452,14 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
     // Sync back volume buffer to be read
     m_DataVolume.makeReadable(p_CmdList);
 
-    PIXEndEvent(p_CmdList);
+    PIXEndEvent(p_CmdList); // End of froxelization
   }
+
+  const bool temporalPassEnabled = m_BuffersInitialized && AppSettings::FOG_EnableTemporalFilter;
 
   // 2. Light contribution
   {
     PIXBeginEvent(p_CmdList, 0, "Light Scattering");
-
-    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeWritable(p_CmdList);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
     p_CmdList->SetPipelineState(m_PSOs[RenderPass_LightContribution]);
@@ -496,17 +496,41 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].UAV};
+    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
+
+    // NOTE: If temporal filter is active we must use another volume instead of
+    // the default scattering volume as the rendertarget/UAV for this pass.
+    // Reason being, the temporal pass samples current scattering volume but also
+    // writes to it which causes invalid resource state in gpu-validation layer.
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[1] = {};
+    if (temporalPassEnabled)
+    {
+      m_FinalVolume.makeWritable(p_CmdList);
+      uavs[0] = m_FinalVolume.UAV;
+
+    }
+    else
+    {
+      m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeWritable(p_CmdList);
+      uavs[0] = m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].UAV;
+    }
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    p_RenderDesc.LightsBuffer.setAsComputeRootParameter(p_CmdList, RootParam_LightsCbuffer);
-
+    // Dispatch call with one thread per froxel:
     p_CmdList->Dispatch(dispatchGroupX, dispatchGroupY, m_Dimensions.z);
 
-    m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
+    // Sync back corresponding UAV
+    if (temporalPassEnabled)
+    {
+      m_FinalVolume.makeReadable(p_CmdList);
+    }
+    else
+    {
+      m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
+    }
 
-    PIXEndEvent(p_CmdList);
+    PIXEndEvent(p_CmdList); // End of light scattering pass
   }
 
   // 2.1. Temporal Filter
@@ -514,9 +538,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
   {
     PIXBeginEvent(p_CmdList, 0, "Temporal Filter");
 
-    // TODO: avoid unnecessary barriers
     m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeWritable(p_CmdList);
-    //m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].makeReadable(p_CmdList);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
     p_CmdList->SetPipelineState(m_PSOs[RenderPass_TemporalFilter]);
@@ -542,6 +564,9 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
       uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
 
       uniforms.DataVolumeIdx = m_DataVolume.getSRV();
+      uniforms.FinalIntegrationVolumeIdx = m_FinalVolume.getSRV();
+      uniforms.ScatteringVolumeIdx =
+          m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].getSRV();
       uniforms.PreviousScatteringVolumeIdx =
         m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].getSRV();
 
@@ -567,7 +592,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].makeReadable(p_CmdList);
 
-    PIXEndEvent(p_CmdList);
+    PIXEndEvent(p_CmdList); // End of temporal pass
   }
 
   // Regardless of filter pass,
@@ -628,10 +653,10 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
     // Sync back final volume to be read
     m_FinalVolume.makeReadable(p_CmdList);
 
-    PIXEndEvent(p_CmdList);
+    PIXEndEvent(p_CmdList); // End of integration pass
   }
   m_BuffersInitialized = true;
 
-  PIXEndEvent(p_CmdList);
+  PIXEndEvent(p_CmdList); // End of volumetric rendering
 }
 //---------------------------------------------------------------------------//

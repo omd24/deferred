@@ -1331,7 +1331,7 @@ void RenderManager::renderDeferred()
 
   {
     // Transition our G-Buffer targets to a writable state and sync on shadowmap
-    D3D12_RESOURCE_BARRIER barriers[5] = {};
+    D3D12_RESOURCE_BARRIER barriers[4] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1361,13 +1361,6 @@ void RenderManager::renderDeferred()
     barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[3].Transition.Subresource = 0;
-
-    barriers[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[4].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[4].Transition.pResource = spotLightShadowMap.getResource();
-    barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barriers[4].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -1699,6 +1692,20 @@ void RenderManager::populateCommandList()
 
   // Volumetric fog
   {
+    // Volumetrics sample shadow map
+    {
+      D3D12_RESOURCE_BARRIER barriers[1] = {};
+
+      barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+      barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+      barriers[0].Transition.pResource = spotLightShadowMap.getResource();
+      barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+      barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+      barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+      m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
+    }
+
 
     VolumetricFog::RenderDesc desc = {
       .ClusterBufferSrv = spotLightClusterBuffer.SRV,

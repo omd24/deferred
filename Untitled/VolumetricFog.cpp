@@ -11,9 +11,9 @@ static const uint32_t MaxInputs = 8;
 // - Add noise baking pass
 // - Add noise and dittering (everywhere)
 // - Add tricubic sampler
-// - Add temporal filter/reprojection
+// - Add jitter to temporal pass
 // - Add spot light contribution
-// - Add shadows contribution
+// - Add volumetric shadows
 // - Add GI (separate system) and its contribution here
 // - Add sky rendering (separate system)
 // - Add TAA

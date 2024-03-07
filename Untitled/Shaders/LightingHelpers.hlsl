@@ -38,7 +38,7 @@ float toSrgb1 (float c)
 //=================================================================================================
 float3 toSrgb(float3 c)
 {
-    return float3( ToSrgb1(c.r), ToSrgb1(c.g), ToSrgb1(c.b) );
+    return float3(toSrgb1(c.r), toSrgb1(c.g), toSrgb1(c.b));
 }
 //=================================================================================================
 float3 decodeSrgb( float3 c )
@@ -113,7 +113,7 @@ float3 YcocgToRgb (float3 c)
     // B = Y - Co - Cg
     return clamp(float3(c.x + c.y - c.z,
                       c.x + c.z,
-                      c.x - c.y - c.z), float3(0), float3(1));
+                      c.x - c.y - c.z), float3(0, 0, 0), float3(1, 1, 1));
 }
 //=================================================================================================
 // Noise helper functions:
@@ -129,7 +129,7 @@ float triangularNoise (float noise0, float noise1)
     return noise0 + noise1 - 1.0f;
 }
 //=================================================================================================
-float interleavedGradientNoise (vec2 pixel, int frame)
+float interleavedGradientNoise (float2 pixel, int frame)
 {
     pixel += (float(frame) * 5.588238f);
     return frac(52.9829189f * frac(0.06711056f*float(pixel.x) + 0.00583715f*float(pixel.y)));
@@ -137,7 +137,7 @@ float interleavedGradientNoise (vec2 pixel, int frame)
 //=================================================================================================
 // Custom filtering
 // https://gist.github.com/Fewes/59d2c831672040452aa77da6eaab2234
-float4 tricubicFiltering (uint textureIndex, float3 uvw, float3 textureSize)
+float4 tricubicFiltering (uint textureIndex, float3 uvw, float3 textureSize, SamplerState linearSampler)
 {
     // Shift the coordinate from [0,1] to [-0.5, textureSize-0.5]
     float3 coordGrid = uvw * textureSize - 0.5;
@@ -160,31 +160,31 @@ float4 tricubicFiltering (uint textureIndex, float3 uvw, float3 textureSize)
     // Weighting and fetching is interleaved for performance and stability reasons
     Texture3D noiseTexture = Tex3DTable[NonUniformResourceIndex(textureIndex)];
 
-    float4 tex000 = noiseTexture.SampleLevel(LinearClampSampler, h0, 0);
-    float4 tex100 = noiseTexture.SampleLevel(LinearClampSampler, float3(h1.x, h0.y, h0.z), 0);
+    float4 tex000 = noiseTexture.SampleLevel(linearSampler, h0, 0);
+    float4 tex100 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h0.z), 0);
     tex000 = lerp(tex100, tex000, g0.x); // Weigh along the x-direction
 
-    float4 tex010 = noiseTexture.SampleLevel(LinearClampSampler, float3(h0.x, h1.y, h0.z), 0);
-    float4 tex110 = noiseTexture.SampleLevel(LinearClampSampler, float3(h1.x, h1.y, h0.z), 0);
+    float4 tex010 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h0.z), 0);
+    float4 tex110 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h0.z), 0);
     // float4 tex010 = noiseTexture[float4(h0.x, h1.y, h0.z, 0)];
     // float4 tex110 = noiseTexture[float4(h1.x, h1.y, h0.z, 0)];
     tex010 = lerp(tex110, tex010, g0.x); // Weigh along the x-direction
     tex000 = lerp(tex010, tex000, g0.y); // Weigh along the y-direction
 
-    float4 tex001 = noiseTexture.SampleLevel(LinearClampSampler, float3(h0.x, h0.y, h1.z), 0);
-    float4 tex101 = noiseTexture.SampleLevel(LinearClampSampler, float3(h1.x, h0.y, h1.z), 0);
+    float4 tex001 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h0.y, h1.z), 0);
+    float4 tex101 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h1.z), 0);
     // float4 tex001 = noiseTexture[float4(h0.x, h0.y, h1.z, 0)];
     // float4 tex101 = noiseTexture[float4(h1.x, h0.y, h1.z, 0)];
     tex001 = lerp(tex101, tex001, g0.x); // Weigh along the x-direction
 
-    float4 tex011 = noiseTexture.SampleLevel(LinearClampSampler, float3(h0.x, h1.y, h1.z), 0);
-    float4 tex111 = noiseTexture.SampleLevel(LinearClampSampler, float3(h1.x, h1.y, h1.z), 0);
+    float4 tex011 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h1.z), 0);
+    float4 tex111 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h1.z), 0);
     // float4 tex011 = noiseTexture[float4(h0.x, h1.y, h1.z, 0)];
     // float4 tex111 = noiseTexture[float4(h1, 0)];
     tex011 = lerp(tex111, tex011, g0.x); // Weigh along the x-direction
     tex001 = lerp(tex011, tex001, g0.y); // Weigh along the y-direction
 
-    return mix(tex001, tex000, g0.z); // Weigh along the z-direction
+    return lerp(tex001, tex000, g0.z); // Weigh along the z-direction
 }
 //=================================================================================================
 

@@ -29,7 +29,7 @@ struct UniformConstants
   uint SpotLightShadowIdx;
   uint DataVolumeIdx;
   uint UVMapIdx;
-  uint unused0;
+  uint NoiseTextureIdx;
 
   uint3 Dimensions;
   uint unused1;
@@ -69,6 +69,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_box_fog_density                     AppSettings.FOG_BoxFogDensity
 #define ubo_phase_anisotropy                    AppSettings.FOG_PhaseAnisotropy
 #define ubo_temporal_reprojection_percentage    AppSettings.FOG_TemporalPercentage
+#define ubo_noise_type                          AppSettings.FOG_NoiseType
 
 //=================================================================================================
 // Resources
@@ -95,6 +96,36 @@ SamplerComparisonState ShadowMapSampler : register(s4);
 #if (FINAL_INTEGRATION > 0)
   RWTexture3D<float4> FinalIntegrationVolume : register(u0);
 #endif
+// ==========================================================================
+// Noise helpers
+float generateNoise(float2 pixel, int frame, float scale)
+{
+    // Animated blue noise using golden ratio.
+    if (0 == ubo_noise_type)
+    {
+        float2 uv = float2(pixel.xy / ubo_grid_dimensions.xy);
+        // Read blue noise from texture
+        Texture3D blueNoiseTexture = Tex3DTable[CBuffer.NoiseTextureIdx];
+        Texture3D blueNoiseTexture = Tex2DTable[CBuffer.NoiseTextureIdx];
+        float2 blueNoise = blueNoiseTexture.SampleLevel(LinearClampSamplers, uv, 0).rg;
+        const float kGoldenRatioConjugate = 0.61803398875;
+        float blueNoise0 = frac(toLinear1(blueNoise.r) + float(frame % 256) * kGoldenRatioConjugate);
+        float blueNoise1 = frac(toLinear1(blueNoise.g) + float(frame % 256) * kGoldenRatioConjugate);
+
+        return triangularNoise(blueNoise0, blueNoise1) * scale;
+    }
+    // Interleaved gradient noise
+    if (1 = ubo_noise_type)
+    {
+        float noise0 = interleavedGradientNoise(pixel, frame);
+        float noise1 = interleavedGradientNoise(pixel, frame + 1);
+
+        return triangularNoise(noise0, noise1) * scale;
+    }
+
+    // Initial noise attempt, left for reference.
+    return (interleavedGradientNoise(pixel, frame) * scale) - (scale * 0.5f);
+}
 // ==========================================================================
 // Exponential distribution as in https://advances.realtimerendering.com/s2016/Siggraph2016_idTech6.pdf Page 5.
 // Convert slice index to (near...far) value distributed with exponential function.

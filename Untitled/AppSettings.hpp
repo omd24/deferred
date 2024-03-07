@@ -40,6 +40,7 @@ extern bool32 FOG_EnableShadowMapSampling;
 extern bool32 FOG_EnableTemporalFilter;
 extern float FOG_ScatteringFactor;
 extern float FOG_TemporalPercentage;
+extern uint32_t FOG_NoiseType;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
@@ -80,7 +81,7 @@ struct AppSettingsCBuffer
 
   float FOG_ScatteringFactor;
   float FOG_TemporalPercentage;
-  float unused1;
+  uint32_t FOG_NoiseType;
   float unused2;
 
   float FOG_ConstantFogDensityModifier;

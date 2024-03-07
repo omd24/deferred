@@ -27,7 +27,7 @@ struct AppSettingsCbuffer
 
   float FOG_ScatteringFactor;
   float FOG_TemporalPercentage;
-  float unused1;
+  uint FOG_NoiseType;
   float unused2;
 
   float FOG_ConstantFogDensityModifier;

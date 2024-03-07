@@ -44,7 +44,7 @@ struct FogConstants
   uint32_t SpotLightShadowIdx = uint32_t(-1);
   uint32_t DataVolumeIdx = uint32_t(-1);
   uint32_t UVMapIdx = uint32_t(-1);
-  uint32_t unused0 = uint32_t(-1);
+  uint32_t NoiseTextureIdx = uint32_t(-1);
 
   glm::uvec3 Dimensions;
   uint32_t unused1 = uint32_t(-1);

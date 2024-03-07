@@ -28,6 +28,7 @@ bool32 FOG_EnableShadowMapSampling = true;
 bool32 FOG_EnableTemporalFilter = true;
 float FOG_ScatteringFactor = 0.5f;
 float FOG_TemporalPercentage = 1.0f;
+uint32_t FOG_NoiseType = 0u;
 float FOG_ConstantFogDensityModifier = 0.0f;
 float FOG_HeightFogDenisty = 0.5f;
 float FOG_HeightFogFalloff = 0.3f;
@@ -73,6 +74,7 @@ void updateCBuffer()
   cbData.FOG_EnableTemporalFilter = FOG_EnableTemporalFilter;
   cbData.FOG_ScatteringFactor = FOG_ScatteringFactor;
   cbData.FOG_TemporalPercentage = FOG_TemporalPercentage;
+  cbData.FOG_NoiseType = FOG_NoiseType;
   cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;

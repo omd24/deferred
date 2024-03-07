@@ -26,7 +26,7 @@ struct AppSettingsCbuffer
   bool FOG_EnableTemporalFilter;
 
   float FOG_ScatteringFactor;
-  float unused0;
+  float FOG_TemporalPercentage;
   float unused1;
   float unused2;
 

@@ -37,11 +37,11 @@ struct UniformConstants
   uint ScatterVolumeIdx;
   uint PrevScatterVolumeIdx;
   uint FinalIntegrationVolumeIdx;
-  uint unused3;
+  uint unused2;
 
 
   float3 CameraPos;
-  float TemporalReprojPerc;
+  uint unused3;
 
   uint NumXTiles;
   uint NumXYTiles;
@@ -57,7 +57,6 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_far_distance                        CBuffer.Far
 #define ubo_grid_dimensions                     CBuffer.Dimensions
 #define ubo_camera_pos                          CBuffer.CameraPos
-#define ubo_temporal_reprojection_percentage    CBuffer.TemporalReprojPerc
 #define ubo_num_tiles_x                         CBuffer.NumXTiles
 #define ubo_num_tiles_xy                        CBuffer.NumXYTiles
 #define ubo_scattering_factor                   AppSettings.FOG_ScatteringFactor
@@ -69,6 +68,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_box_color                           AppSettings.FOG_BoxColor
 #define ubo_box_fog_density                     AppSettings.FOG_BoxFogDensity
 #define ubo_phase_anisotropy                    AppSettings.FOG_PhaseAnisotropy
+#define ubo_temporal_reprojection_percentage    AppSettings.FOG_TemporalPercentage
 
 //=================================================================================================
 // Resources
@@ -556,8 +556,8 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
 
             history = max(history, scatteringExtinction);
 
-            scatteringExtinction.rgb = lerp(history.rgb, scatteringExtinction.rgb, ubo_temporal_reprojection_percentage);
-            scatteringExtinction.a = lerp(history.a, scatteringExtinction.a, ubo_temporal_reprojection_percentage);
+            scatteringExtinction.rgb = lerp(scatteringExtinction.rgb, history.rgb, ubo_temporal_reprojection_percentage);
+            scatteringExtinction.a = lerp(scatteringExtinction.a, history.a, ubo_temporal_reprojection_percentage);
 
             // DEBUG: test where pixels are being sampled.
             //scattering = float3(1,0,0);

@@ -52,10 +52,10 @@ struct FogConstants
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
   uint32_t PreviousScatteringVolumeIdx = uint32_t(-1);
   uint32_t FinalIntegrationVolumeIdx = uint32_t(-1);
-  uint32_t unused3 = uint32_t(-1);
+  uint32_t unused2 = uint32_t(-1);
 
   glm::vec3 CameraPos;
-  float TemporalReprojPerc = 0.0f;
+  uint32_t unused3 = uint32_t(-1);
 
   uint32_t NumXTiles;
   uint32_t NumXYTiles;
@@ -328,7 +328,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
   }
 
   {
-    assert(0 == m_PrevLightScatteringTextureIndex);
+    m_PrevLightScatteringTextureIndex = 0;
     VolumeTextureInit vtInit;
     vtInit.Width = m_Dimensions.x;
     vtInit.Height = m_Dimensions.y;
@@ -341,7 +341,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
   }
 
   {
-    assert(1 == m_CurrLightScatteringTextureIndex);
+    m_CurrLightScatteringTextureIndex = 1;
     VolumeTextureInit vtInit;
     vtInit.Width = m_Dimensions.x;
     vtInit.Height = m_Dimensions.y;

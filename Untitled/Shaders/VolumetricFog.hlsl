@@ -32,7 +32,7 @@ struct UniformConstants
   uint NoiseTextureIdx;
 
   uint3 Dimensions;
-  uint unused1;
+  uint CurrFrame;
 
   uint ScatterVolumeIdx;
   uint PrevScatterVolumeIdx;
@@ -56,6 +56,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_near_distance                       CBuffer.Near
 #define ubo_far_distance                        CBuffer.Far
 #define ubo_grid_dimensions                     CBuffer.Dimensions
+#define ubo_current_frame                       CBuffer.CurrFrame
 #define ubo_camera_pos                          CBuffer.CameraPos
 #define ubo_num_tiles_x                         CBuffer.NumXTiles
 #define ubo_num_tiles_xy                        CBuffer.NumXYTiles
@@ -70,6 +71,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_phase_anisotropy                    AppSettings.FOG_PhaseAnisotropy
 #define ubo_temporal_reprojection_percentage    AppSettings.FOG_TemporalPercentage
 #define ubo_noise_type                          AppSettings.FOG_NoiseType
+#define ubo_noise_scale                         AppSettings.FOG_NoiseScale
 
 //=================================================================================================
 // Resources
@@ -105,9 +107,8 @@ float generateNoise(float2 pixel, int frame, float scale)
     {
         float2 uv = float2(pixel.xy / ubo_grid_dimensions.xy);
         // Read blue noise from texture
-        Texture3D blueNoiseTexture = Tex3DTable[CBuffer.NoiseTextureIdx];
-        Texture3D blueNoiseTexture = Tex2DTable[CBuffer.NoiseTextureIdx];
-        float2 blueNoise = blueNoiseTexture.SampleLevel(LinearClampSamplers, uv, 0).rg;
+        Texture2D blueNoiseTexture = Tex2DTable[CBuffer.NoiseTextureIdx];
+        float2 blueNoise = blueNoiseTexture.SampleLevel(LinearWrapSampler, uv, 0).rg;
         const float kGoldenRatioConjugate = 0.61803398875;
         float blueNoise0 = frac(toLinear1(blueNoise.r) + float(frame % 256) * kGoldenRatioConjugate);
         float blueNoise1 = frac(toLinear1(blueNoise.g) + float(frame % 256) * kGoldenRatioConjugate);
@@ -115,7 +116,7 @@ float generateNoise(float2 pixel, int frame, float scale)
         return triangularNoise(blueNoise0, blueNoise1) * scale;
     }
     // Interleaved gradient noise
-    if (1 = ubo_noise_type)
+    if (1 == ubo_noise_type)
     {
         float noise0 = interleavedGradientNoise(pixel, frame);
         float noise1 = interleavedGradientNoise(pixel, frame + 1);
@@ -134,26 +135,46 @@ float sliceToExponentialDepth( float near, float far, int slice, int numSlices )
     return near * pow( far / near, (float(slice) + 0.5f) / float(numSlices) );
 }
 // ==========================================================================
+float sliceToExponentialDepthJittered(float near, float far, float jitter, int slice, int numSlices)
+{
+    return near * pow(far / near, (float(slice) + 0.5f + jitter) / float(numSlices));
+}
+// ==========================================================================
 float4 worldFromFroxel(uint3 froxelCoord)
 {
-  float2 uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
+    float2 uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
 
-#if 0 // THIS CAUSES A CAMERA-DEPENDENT ISSUE (also depends on fog USAGE code)
-  float linearZ = (froxelCoord.z + 0.5f) / float(ubo_grid_dimensions.z);
-#else
-  float linearZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, froxelCoord.z, ubo_grid_dimensions.z);
-#endif
+    float linearZ = 0.0f;
+    if (AppSettings.FOG_ApplyZJitter)
+    {
+        float jittering = generateNoise(froxelCoord.xy * 1.0f, ubo_current_frame, ubo_noise_scale);
+        linearZ = sliceToExponentialDepthJittered(ubo_near_distance, ubo_far_distance, jittering, froxelCoord.z, int(ubo_grid_dimensions.z));
+    }
+    else
+    {
+        linearZ = sliceToExponentialDepth(ubo_near_distance, ubo_far_distance, froxelCoord.z, ubo_grid_dimensions.z);
+    }
 
-  //float rawDepth = linearZ * ubo_proj_matrix._33 + ubo_proj_matrix._43 / linearZ;
-  float rawDepth = linearDepthToRawDepth(linearZ, ubo_near_distance, ubo_far_distance);
+    //
+    // THIS CAUSES A CAMERA-DEPENDENT ISSUE (also depends on fog USAGE code)
+    // Kept for legacy reasons:
+    // float linearZ = (froxelCoord.z + 0.5f) / float(ubo_grid_dimensions.z);
+    //
 
-  uv = 2.0f * uv - 1.0f;
-  uv.y *= -1.0f;
+    //
+    // NOTE: we can aso obtain rawDepth from proj matrix
+    // float rawDepth = linearZ * ubo_proj_matrix._33 + ubo_proj_matrix._43 / linearZ;
+    //
+    
+    float rawDepth = linearDepthToRawDepth(linearZ, ubo_near_distance, ubo_far_distance);
 
-  float4 worldPos = mul(float4(uv, rawDepth, 1.0f), ubo_inv_view_proj);
-  worldPos.xyz /= worldPos.w;
+    uv = 2.0f * uv - 1.0f;
+    uv.y *= -1.0f;
 
-  return worldPos;
+    float4 worldPos = mul(float4(uv, rawDepth, 1.0f), ubo_inv_view_proj);
+    worldPos.xyz /= worldPos.w;
+
+    return worldPos;
 }
 // ==========================================================================
 float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )

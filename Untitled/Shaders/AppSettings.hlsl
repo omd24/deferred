@@ -25,9 +25,14 @@ struct AppSettingsCbuffer
   bool FOG_EnableShadowMapSampling;
   bool FOG_EnableTemporalFilter;
 
+  bool FOG_ApplyZJitter;
   float FOG_ScatteringFactor;
   float FOG_TemporalPercentage;
-  uint FOG_NoiseType;
+  int FOG_NoiseType;
+
+  float FOG_NoiseScale;
+  float unused0;
+  float unused1;
   float unused2;
 
   float FOG_ConstantFogDensityModifier;

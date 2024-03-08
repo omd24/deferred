@@ -47,7 +47,7 @@ struct FogConstants
   uint32_t NoiseTextureIdx = uint32_t(-1);
 
   glm::uvec3 Dimensions;
-  uint32_t unused1 = uint32_t(-1);
+  uint32_t CurrFrame = uint32_t(-1);
 
   uint32_t ScatteringVolumeIdx = uint32_t(-1);
   uint32_t PreviousScatteringVolumeIdx = uint32_t(-1);
@@ -428,8 +428,11 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
       uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
       uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
       uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
+      uniforms.NoiseTextureIdx = p_RenderDesc.NoiseTexSrv;
 
       uniforms.Dimensions = m_Dimensions;
+      uniforms.CurrFrame = static_cast<uint32_t>(p_RenderDesc.CurrentFrame);
+
       uniforms.CameraPos = p_RenderDesc.Camera.Position();
 
       uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);

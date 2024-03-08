@@ -132,7 +132,7 @@ float triangularNoise (float noise0, float noise1)
 float interleavedGradientNoise (float2 pixel, int frame)
 {
     pixel += (float(frame) * 5.588238f);
-    return frac(52.9829189f * frac(0.06711056f*float(pixel.x) + 0.00583715f*float(pixel.y)));
+    return frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y)));
 }
 //=================================================================================================
 // Custom filtering

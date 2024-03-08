@@ -179,6 +179,7 @@ private:
   // Asset objects.
   ID3D12GraphicsCommandListPtr m_CmdList;
 
+  Texture m_BlueNoiseTexture;
   VolumetricFog m_Fog;
   TestCompute m_TestCompute;
 

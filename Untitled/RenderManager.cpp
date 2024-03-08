@@ -986,6 +986,10 @@ void RenderManager::loadAssets()
     AppSettings::MaxLightClamp = static_cast<uint32_t>(numSpotLights);
   }
 
+  // Load blue noise texture
+  static const wchar_t* noiseTexPath = L"..\\Content\\Textures\\blueNoiseTex128.png"; 
+  loadTexture(m_Dev, m_BlueNoiseTexture, noiseTexPath, false);
+
   // Init post fx
   {
     m_PostFx.init();
@@ -1715,11 +1719,13 @@ void RenderManager::populateCommandList()
       .UVMapSrv = uvTarget.srv(),
       .TangentFrameSrv = tangentFrameTarget.srv(),
       .MaterialIdMapSrv = materialIDTarget.srv(),
+      .NoiseTexSrv = m_BlueNoiseTexture.SRV,
 
       .Near = camera.NearClip(),
       .Far = camera.FarClip(),
       .ScreenWidth = static_cast<float>(m_Info.m_Width),
       .ScreenHeight = static_cast<float>(m_Info.m_Height),
+      .CurrentFrame = g_CurrentCPUFrame,
 
       .Camera = camera,
       .PrevViewProj = prevViewProj,

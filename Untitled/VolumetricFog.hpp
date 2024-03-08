@@ -14,14 +14,17 @@ struct VolumetricFog
     uint32_t ClusterBufferSrv;
     uint32_t DepthBufferSrv;
     uint32_t SpotLightShadowSrv;
+
     uint32_t UVMapSrv;
     uint32_t TangentFrameSrv;
     uint32_t MaterialIdMapSrv;
+    uint32_t NoiseTexSrv;
 
     float Near;
     float Far;
     float ScreenWidth;
     float ScreenHeight;
+    uint64_t CurrentFrame;
 
     FirstPersonCamera Camera;
     glm::mat4 PrevViewProj;

@@ -112,11 +112,18 @@ static void renderInternal()
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
 
-      ImGui::Separator();
+      ImGui::SeparatorText("Noise Options");
+      ImGui::Checkbox("Apply Z-Jitter in Froxelization", (bool*)&AppSettings::FOG_ApplyZJitter);
+      ImGui::RadioButton("Blue Noise", &AppSettings::FOG_NoiseType, 0);
+      ImGui::SameLine();
+      ImGui::RadioButton("Interleaved Gradient Noise", &AppSettings::FOG_NoiseType, 1);
+      ImGui::SliderFloat("Noise Scale", &AppSettings::FOG_NoiseScale, 0.0f, 1.0f, "%.3f");
+
+      ImGui::SeparatorText("Temporal Pass Options");
       ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);
       ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.2f");
       
-      ImGui::Separator();
+      ImGui::SeparatorText("Box Volume Options");
       ImGui::SliderFloat("Box Size", &AppSettings::FOG_BoxSize, 0.0f, 10.0f, "%.2f");
       ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);
       ImGui::SliderFloat("Box Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
@@ -165,7 +172,10 @@ void init(HWND& window, ID3D12Device* dev)
   io.KeyMap[ImGuiKey_Y] = 'Y';
   io.KeyMap[ImGuiKey_Z] = 'Z';
 
-  io.ImeWindowHandle = window;
+  // The following has been deprecated in new ImGui
+  // io.ImeWindowHandle = window;
+
+  ImGui::GetMainViewport()->PlatformHandleRaw = (void*)window;
 
   // Styling imgui:
   {

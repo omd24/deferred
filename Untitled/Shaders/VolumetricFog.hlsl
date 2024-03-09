@@ -45,6 +45,7 @@ struct UniformConstants
 
   uint NumXTiles;
   uint NumXYTiles;
+  float2 HaltonXY;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 ConstantBuffer<LightConstants> LightsBuffer : register(b1);
@@ -60,6 +61,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_camera_pos                          CBuffer.CameraPos
 #define ubo_num_tiles_x                         CBuffer.NumXTiles
 #define ubo_num_tiles_xy                        CBuffer.NumXYTiles
+#define ubo_halton_xy                           CBuffer.HaltonXY
 #define ubo_scattering_factor                   AppSettings.FOG_ScatteringFactor
 #define ubo_constant_fog_modifier               AppSettings.FOG_ConstantFogDensityModifier
 #define ubo_height_fog_density                  AppSettings.FOG_HeightFogDenisty
@@ -72,6 +74,7 @@ ConstantBuffer<LightConstants> LightsBuffer : register(b1);
 #define ubo_temporal_reprojection_percentage    AppSettings.FOG_TemporalPercentage
 #define ubo_noise_type                          AppSettings.FOG_NoiseType
 #define ubo_noise_scale                         AppSettings.FOG_NoiseScale
+#define ubo_jitter_scale_xy                     AppSettings.FOG_JitterScaleXY
 
 //=================================================================================================
 // Resources
@@ -100,7 +103,7 @@ SamplerComparisonState ShadowMapSampler : register(s4);
 #endif
 // ==========================================================================
 // Noise helpers
-float generateNoise(float2 pixel, int frame, float scale)
+float generateNoise (float2 pixel, int frame, float scale)
 {
     // Animated blue noise using golden ratio.
     if (0 == ubo_noise_type)
@@ -130,19 +133,34 @@ float generateNoise(float2 pixel, int frame, float scale)
 // ==========================================================================
 // Exponential distribution as in https://advances.realtimerendering.com/s2016/Siggraph2016_idTech6.pdf Page 5.
 // Convert slice index to (near...far) value distributed with exponential function.
-float sliceToExponentialDepth( float near, float far, int slice, int numSlices )
+float sliceToExponentialDepth (float near, float far, int slice, int numSlices)
 {
     return near * pow( far / near, (float(slice) + 0.5f) / float(numSlices) );
 }
 // ==========================================================================
-float sliceToExponentialDepthJittered(float near, float far, float jitter, int slice, int numSlices)
+float sliceToExponentialDepthJittered (float near, float far, float jitter, int slice, int numSlices)
 {
     return near * pow(far / near, (float(slice) + 0.5f + jitter) / float(numSlices));
 }
 // ==========================================================================
-float4 worldFromFroxel(uint3 froxelCoord)
+// Coordinate transformations 
+float2 uvFromFroxels (float2 froxelPosition, uint width, uint height)
 {
-    float2 uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
+    float2 uv = floor(froxelPosition) + 0.5;
+    return uv / float2(width * 1.0f, height * 1.0f);
+}
+// ==========================================================================
+float4 worldFromFroxel(uint3 froxelCoord, bool jitter)
+{
+    float2 uv = 0;
+    if (jitter)
+    {
+        uv = uvFromFroxels(froxelCoord.xy + float2(0.5, 0.5) + ubo_halton_xy * ubo_jitter_scale_xy, ubo_grid_dimensions.x, ubo_grid_dimensions.y);
+    }
+    else
+    {
+        uv = (froxelCoord.xy + 0.5f) / float2(ubo_grid_dimensions.x, ubo_grid_dimensions.y);
+    }
 
     float linearZ = 0.0f;
     if (AppSettings.FOG_ApplyZJitter)
@@ -241,7 +259,8 @@ void DataInjectionCS(in uint3 DispatchID : SV_DispatchThreadID,
     const uint3 froxelCoord = DispatchID;
 
     // transform froxel to world space
-    float4 worldPos = worldFromFroxel(froxelCoord);
+    const bool applyJitter = AppSettings.FOG_ApplyXYJitter;
+    float4 worldPos = worldFromFroxel(froxelCoord, applyJitter);
   
     float fogNoise = 1.0f; // TODO.
 
@@ -278,7 +297,8 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     const uint3 froxelCoord = DispatchID;
 
     // Check coordinates boundaries
-    float3 worldPos = worldFromFroxel(froxelCoord).xyz;
+    const bool applyJitter = false;
+    float3 worldPos = worldFromFroxel(froxelCoord, applyJitter).xyz;
 
     float3 rcpFroxelDim = 1.0f / ubo_grid_dimensions.xyz;
     float3 fogDataUVW = froxelCoord * rcpFroxelDim;
@@ -589,7 +609,8 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
     // Temporal reprojection
     if (AppSettings.FOG_EnableTemporalFilter)
     {
-        float3 worldPos = worldFromFroxel(froxelCoord).xyz;
+        // Don't apply jitter for the temporal pass.
+        float3 worldPos = worldFromFroxel(froxelCoord, false).xyz;
         float4 sceenSpaceCenterLast = mul(float4(worldPos, 1.0), ubo_prev_view_proj);
         float3 ndc = sceenSpaceCenterLast.xyz / sceenSpaceCenterLast.w;
 

@@ -113,11 +113,13 @@ static void renderInternal()
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
 
       ImGui::SeparatorText("Noise Options");
-      ImGui::Checkbox("Apply Z-Jitter in Froxelization", (bool*)&AppSettings::FOG_ApplyZJitter);
+      ImGui::Checkbox("Enable Z-Jitter", (bool*)&AppSettings::FOG_ApplyZJitter);
       ImGui::RadioButton("Blue Noise", &AppSettings::FOG_NoiseType, 0);
       ImGui::SameLine();
       ImGui::RadioButton("Interleaved Gradient Noise", &AppSettings::FOG_NoiseType, 1);
       ImGui::SliderFloat("Noise Scale", &AppSettings::FOG_NoiseScale, 0.0f, 1.0f, "%.3f");
+      ImGui::Checkbox("Enable XY-Jitter", (bool*)&AppSettings::FOG_ApplyXYJitter);
+      ImGui::SliderFloat("Jitter Scale (XY)", &AppSettings::FOG_JitterScaleXY, 0.0f, 5.0f, "%.3f");
 
       ImGui::SeparatorText("Temporal Pass Options");
       ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);

@@ -16,6 +16,7 @@ static const float SpotLightIntensityFactor = 25.0f;
 static const uint64_t SpotLightShadowMapSize = 1024;
 static const uint64_t NumConeSides = 16;
 static glm::mat4 prevViewProj = glm::mat4();
+static glm::vec2 jitterOffsetXY = glm::vec2(0.0f, 0.0f);
 
 //---------------------------------------------------------------------------//
 // Local helpers
@@ -44,6 +45,7 @@ static bool _sphereConeIntersection(
 
   return e < sphereRadius;
 }
+//---------------------------------------------------------------------------//
 // Cone-sphere intersection test using Bart Wronski modified version:
 // https://bartwronski.com/2017/04/13/cull-that-cone/
 static bool _sphereConeIntersectionBartWronski(
@@ -66,7 +68,7 @@ static bool _sphereConeIntersectionBartWronski(
   const bool backCull = V1len < -sphereRadius;
   return !(angleCull || frontCull || backCull);
 }
-
+//---------------------------------------------------------------------------//
 // mimicking XMVector3TransofrmCoord
 // i.e., setting w = 1 for the input and forcing the result to have w = 1
 // https://learn.microsoft.com/en-us/windows/win32/api/directxmath/nf-directxmath-xmvector3transformcoord
@@ -78,10 +80,87 @@ glm::vec3 _transformVec3Mat4(const glm::vec3& v, const glm::mat4& m)
   glm::vec3 ret = glm::vec3(v4.x, v4.y, v4.z);
   return ret;
 }
+//---------------------------------------------------------------------------//
+// Numerical sequences
+//---------------------------------------------------------------------------//
+float _halton (int i, int b)
+{
+  // Creates a halton sequence of values between 0 and 1.
+  // https://en.wikipedia.org/wiki/Halton_sequence
+  // Used for jittering based on a constant set of 2D points.
+  float f = 1.0f;
+  float r = 0.0f;
+  while (i > 0)
+  {
+    f = f / float(b);
+    r = r + f * float(i % b);
+    i = i / b;
+  }
+  return r;
+}
+//---------------------------------------------------------------------------//
+// https://blog.demofox.org/2017/10/31/animating-noise-for-integration-over-time/
+float _interleavedGradientNoise (glm::vec2 pixel, int index)
+{
+  pixel.x += float(index) * 5.588238f;
+  pixel.y += float(index) * 5.588238f;
+  const float noise =
+      fmodf(52.9829189f * fmodf(0.06711056f * pixel.x + 0.00583715f * pixel.y, 1.0f), 1.0f);
+  return noise;
+}
+//---------------------------------------------------------------------------//
+glm::vec2 _halton23Sequence (int index) { return glm::vec2{_halton(index, 2), _halton(index, 3)}; }
+//---------------------------------------------------------------------------//
+// http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+glm::vec2 _martinRobertsR2Sequence (int index)
+{
+  const float g = 1.32471795724474602596f;
+  const float a1 = 1.0f / g;
+  const float a2 = 1.0f / (g * g);
+
+  const float x = fmod(0.5f + a1 * index, 1.0f);
+  const float y = fmod(0.5f + a2 * index, 1.0f);
+  return glm::vec2{x, y};
+}
+//---------------------------------------------------------------------------//
+glm::vec2 _interleavedGradientSequence (int index)
+{
+  return glm::vec2{
+      _interleavedGradientNoise({1.f, 1.f}, index), _interleavedGradientNoise({1.f, 2.f}, index)};
+}
+//---------------------------------------------------------------------------//
+// Computes a radical inverse with base 2 using crazy bit-twiddling from "Hacker's Delight"
+inline float _radicalInverseBase2 (uint32_t bits)
+{
+  bits = (bits << 16u) | (bits >> 16u);
+  bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+  bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+  bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+  bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+  return float(bits) * 2.3283064365386963e-10f; // / 0x100000000
+}
+//---------------------------------------------------------------------------//
+// Returns a single 2D point in a Hammersley sequence of length "numSamples", using base 1 and base 2
+glm::vec2 _hammersleySequence (int index, int numSamples)
+{
+  return glm::vec2{index * 1.f / numSamples, _radicalInverseBase2(uint32_t(index))};
+}
 
 //---------------------------------------------------------------------------//
 // Internal structs
 //---------------------------------------------------------------------------//
+
+namespace JitterType
+{
+enum Enum
+{
+  Halton = 0,
+  R2,
+  Hammersley,
+  InterleavedGradients
+};
+const char* names[] = {"Halton", "Martin Roberts R2", "Hammersley", "Interleaved Gradients"};
+} // namespace JitterType
 
 enum ClusterRootParams : uint32_t
 {
@@ -1729,7 +1808,9 @@ void RenderManager::populateCommandList()
 
       .Camera = camera,
       .PrevViewProj = prevViewProj,
-      .LightsBuffer = spotLightBuffer
+      .LightsBuffer = spotLightBuffer,
+
+      .HaltonXY = jitterOffsetXY
     };
 
     m_Fog.render(m_CmdList, desc);
@@ -1987,6 +2068,40 @@ void RenderManager::onUpdate()
 
   // Wait for the previous Present to complete.
   WaitForSingleObjectEx(m_SwapChainEvent, 100, FALSE);
+
+  // Jittering update
+  {
+    static uint32_t jitterIndex = 0;
+    static JitterType::Enum jitterType = JitterType::Halton; // TODO: imgui control
+    static uint32_t jitterPeriod = 2; // TODO:
+    glm::vec2 jitterValues = glm::vec2{0.0f, 0.0f};
+
+    switch (jitterType)
+    {
+    case JitterType::Halton:
+      jitterValues = _halton23Sequence(jitterIndex);
+      break;
+
+    case JitterType::R2:
+      jitterValues = _martinRobertsR2Sequence(jitterIndex);
+      break;
+
+    case JitterType::InterleavedGradients:
+      jitterValues = _interleavedGradientSequence(jitterIndex);
+      break;
+
+    case JitterType::Hammersley:
+      jitterValues = _hammersleySequence(jitterIndex, jitterPeriod);
+      break;
+    }
+    jitterIndex = (jitterIndex + 1) % jitterPeriod;
+
+    jitterOffsetXY = glm::vec2{jitterValues.x * 2 - 1.0f, jitterValues.y * 2 - 1.0f};
+    static float jitterScale = 1.f; // TODO: imgui control
+
+    jitterOffsetXY.x *= jitterScale;
+    jitterOffsetXY.y *= jitterScale;
+  }
 
   // Cache previous view projection before updating camera
   prevViewProj = glm::transpose(camera.ViewMatrix() * camera.ProjectionMatrix());

@@ -29,6 +29,8 @@ struct VolumetricFog
     FirstPersonCamera Camera;
     glm::mat4 PrevViewProj;
     ConstantBuffer LightsBuffer;
+
+    glm::vec2 HaltonXY;
   };
 
   void render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc);

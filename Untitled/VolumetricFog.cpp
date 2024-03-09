@@ -59,6 +59,7 @@ struct FogConstants
 
   uint32_t NumXTiles;
   uint32_t NumXYTiles;
+  glm::vec2 HaltonXY;
 };
 
 enum RootParams : uint32_t
@@ -437,6 +438,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
       uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
       uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
+      uniforms.HaltonXY = p_RenderDesc.HaltonXY;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

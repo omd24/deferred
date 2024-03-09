@@ -1974,6 +1974,8 @@ void RenderManager::onDestroy()
   m_Fog.deinit();
   m_TestCompute.deinit(true);
 
+  m_BlueNoiseTexture.Shutdown();
+
   // Shutdown uploads and other helpers
   shutdownHelpers();
   shutdownUpload();

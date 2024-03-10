@@ -77,28 +77,9 @@ static void renderInternal()
 
     // App settings controls:
     ImGui::Checkbox("Render Lights", (bool*)&AppSettings::RenderLights);
-    // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
 
-    ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 1.0f, 5.0f, "%.2f");
-    ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
-    ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
-    ImGui::Checkbox("Show Specular", (bool*)&AppSettings::ShowSpecular);
-    // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
-    ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
-    ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
-    // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
     ImGui::ColorEdit3("Lights Color", AppSettings::LightColor, ImGuiColorEditFlags_DisplayRGB);
-
-    ImGui::Separator();
-    if (ImGui::CollapsingHeader("Post Processing", ImGuiTreeNodeFlags_None))
-    {
-      ImGui::SliderFloat(
-          "Exposure", &AppSettings::Exposure, -24.0f, 24.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp);
-      ImGui::SliderFloat("Bloom-Exposure", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
-      ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f, "%.2f");
-      ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f, "%.2f");
-    }
-
+    // Fog options:
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))
     {
@@ -130,6 +111,32 @@ static void renderInternal()
       ImGui::SliderFloat3("Box Position", AppSettings::FOG_BoxPosition, -5.f, 10.f, "%2.2f", ImGuiSliderFlags_None);
       ImGui::SliderFloat("Box Density", &AppSettings::FOG_BoxFogDensity, 0.0f, 20.0f, "%.2f");
       ImGui::ColorEdit3("Box Color", AppSettings::FOG_BoxColor, ImGuiColorEditFlags_DisplayRGB);
+    }
+
+    // Post processing options:
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Post Processing", ImGuiTreeNodeFlags_None))
+    {
+      ImGui::SliderFloat(
+          "Exposure", &AppSettings::Exposure, -24.0f, 24.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+      ImGui::SliderFloat("Bloom-Exposure", &AppSettings::BloomExposure, -10.0f, 0.0f, "%.1f");
+      ImGui::SliderFloat("Bloom-Mag", &AppSettings::BloomMagnitude, 0.0f, 2.0f, "%.2f");
+      ImGui::SliderFloat("Bloom-Sigma", &AppSettings::BloomBlurSigma, 0.5f, 2.5f, "%.2f");
+    }
+
+    // Other options:
+    ImGui::Separator();
+    if (ImGui::CollapsingHeader("Miscellaneous", ImGuiTreeNodeFlags_None))
+    {
+      ImGui::SliderFloat("Camera Speed", &AppSettings::CameraSpeed, 1.0f, 5.0f, "%.2f");
+      ImGui::Checkbox("Show Albedo", (bool*)&AppSettings::ShowAlbedoMaps);
+      ImGui::Checkbox("Show Normals", (bool*)&AppSettings::ShowNormalMaps);
+      ImGui::Checkbox("Show Specular", (bool*)&AppSettings::ShowSpecular);
+      // ImGui::Checkbox("Show Light Counts", &AppSettings::ShowLightCounts);
+      ImGui::Checkbox("Show Cluster  Visualizer", (bool*)&AppSettings::ShowClusterVisualizer);
+      ImGui::Checkbox("Show UV Gradients", (bool*)&AppSettings::ShowUVGradients);
+      // ImGui::Checkbox("Animate Light Intensity", &AppSettings::AnimateLightIntensity);
+      // ImGui::Checkbox("Compute UV Gradients", &AppSettings::ComputeUVGradients);
     }
 
     ImGui::Separator();

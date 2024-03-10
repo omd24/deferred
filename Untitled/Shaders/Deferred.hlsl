@@ -23,6 +23,7 @@ struct SRVIndexConstants
   uint DepthMapIdx;
   uint TangentFrameMapIndex;
   uint FogVolumeIdx;
+  uint BlueNoiseTexIdx;
 };
 
 ConstantBuffer<ShadingConstants> PSCBuffer : register(b0);
@@ -53,7 +54,8 @@ Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
 
 SamplerState AnisoSampler : register(s0);
 SamplerComparisonState ShadowMapSampler : register(s1);
-SamplerState LinearSampler : register(s2);
+SamplerState LinearClampSampler : register(s2);
+SamplerState LinearWrapSampler : register(s3);
 
 // Computes world-space position from post-projection depth
 float3 PosWSFromDepth(in float zw, in float2 uv)
@@ -81,7 +83,9 @@ void ShadeSample(in uint2 pixelPos)
   Texture2D uvMap = Tex2DTable[SRVIndices.UVMapIdx];
   Texture2D<uint> materialIDMap = MaterialIDMaps[SRVIndices.MaterialIDMapIdx];
   Texture2D depthMap = Tex2DTable[SRVIndices.DepthMapIdx];
+
   Texture3D fogVolume = Tex3DTable[SRVIndices.FogVolumeIdx];
+  Texture2D blueNoiseTexture = Tex2DTable[SRVIndices.BlueNoiseTexIdx];
 
   Quaternion tangentFrame = UnpackQuaternion(tangentFrameMap[pixelPos]);
   float2 uv = uvMap[pixelPos].xy * DeferredUVScale;
@@ -186,14 +190,18 @@ void ShadeSample(in uint2 pixelPos)
 
   shadingInput.SpotLightClusterBuffer = spotLightClusterBuffer;
   shadingInput.FogVolume = fogVolume;
+  shadingInput.BlueNoiseTexture = blueNoiseTexture;
 
   shadingInput.AnisoSampler = AnisoSampler;
-  shadingInput.LinearSampler = LinearSampler;
+  shadingInput.LinearClampSampler = LinearClampSampler;
+  shadingInput.LinearWrapSampler = LinearWrapSampler;
 
   shadingInput.ShadingCBuffer = PSCBuffer;
   shadingInput.LightCBuffer = LightCBuffer;
 
   shadingInput.InvRTSize = invRTSize;
+  shadingInput.CurrFrame = AppSettings.CurrentFrame;
+  shadingInput.DitheringScale = AppSettings.FOG_DitheringScale;
 
   float3 shadingResult = ShadePixel(shadingInput, spotLightShadowMap, ShadowMapSampler);
 

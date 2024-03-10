@@ -37,14 +37,18 @@ struct ShadingInput
 
   ByteAddressBuffer SpotLightClusterBuffer;
   Texture3D         FogVolume;
+  Texture2D         BlueNoiseTexture;
 
   SamplerState AnisoSampler;
-  SamplerState LinearSampler;
+  SamplerState LinearClampSampler;
+  SamplerState LinearWrapSampler;
 
   ShadingConstants ShadingCBuffer;
   LightConstants LightCBuffer;
 
   float2 InvRTSize;
+  uint CurrFrame;
+  float DitheringScale;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -224,7 +228,7 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
 
     const float near = CBuffer.NearClip;
     const float far = CBuffer.FarClip;
-    output = applyVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearSampler, output);
+    output = applyVolumetricFog(screenUV, z, near, far, CBuffer.NumFroxelGridSlices, input.FogVolume, input.LinearClampSampler, input.BlueNoiseTexture, input.LinearWrapSampler, output, input.CurrFrame, input.DitheringScale);
 
     // Clamp output value
     output = clamp(output, 0.0f, FP16Max);

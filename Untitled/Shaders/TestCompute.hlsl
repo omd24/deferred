@@ -3,6 +3,7 @@
 //=================================================================================================
 #include "GlobalResources.hlsl"
 #include "AppSettings.hlsl"
+#include "LightingHelpers.hlsl"
 #include "VolumetricFogHelpers.hlsl"
 
 //=================================================================================================
@@ -66,10 +67,9 @@ void TestCS(in uint3 DispatchID : SV_DispatchThreadID)
     const float near = CBuffer.near;
     const float far = CBuffer.far;
     Texture3D fogVolume = Tex3DTable[CBuffer.fogTexIdx];
-    float3 output = applyVolumetricFog(
-        screenUV, z, near, far, CBuffer.FogGridDimensions.z, fogVolume, LinearClampSampler, sceneColor.rgb);
 
-    // float t = 1;
-    // float4 blend2 = lerp(sceneColor, float4(fogSample3, 1), t);
-    OutputTexture[pixelPos] = float4(output, 1.0f);
+    // float3 output = applyVolumetricFog(
+    //     screenUV, z, near, far, CBuffer.FogGridDimensions.z, fogVolume, LinearClampSampler, sceneColor.rgb, ... TODO ...);
+
+    OutputTexture[pixelPos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
 }

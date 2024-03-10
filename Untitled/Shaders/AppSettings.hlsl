@@ -16,9 +16,13 @@ struct AppSettingsCbuffer
   bool AnimateLightIntensity;
 
   float3 LightColor;
+  uint CurrentFrame;
 
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
+  float unused;
+  float unused1;
+  float unused2;
 
   bool FOG_DisableLightScattering;
   bool FOG_UseClusteredLighting;
@@ -26,9 +30,9 @@ struct AppSettingsCbuffer
   bool FOG_EnableTemporalFilter;
 
   bool FOG_ApplyXYJitter;
-  float unused;
-  float unused1;
-  float unused2;
+  float unused3;
+  float unused4;
+  float unused5;
 
   bool FOG_ApplyZJitter;
   float FOG_ScatteringFactor;
@@ -37,8 +41,8 @@ struct AppSettingsCbuffer
 
   float FOG_NoiseScale;
   float FOG_JitterScaleXY;
-  float unused3;
-  float unused4;
+  float FOG_DitheringScale;
+  float unused6;
 
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

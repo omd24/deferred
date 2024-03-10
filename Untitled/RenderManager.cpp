@@ -1280,13 +1280,15 @@ void RenderManager::loadAssets()
 
     // AppSettings
 
-    D3D12_STATIC_SAMPLER_DESC staticSamplers[3] = {};
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
     staticSamplers[0] =
         GetStaticSamplerState(SamplerState::Anisotropic, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[1] =
         GetStaticSamplerState(SamplerState::ShadowMapPCF, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
     staticSamplers[2] =
         GetStaticSamplerState(SamplerState::LinearClamp, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[3] =
+        GetStaticSamplerState(SamplerState::Linear, 3, 0, D3D12_SHADER_VISIBILITY_ALL);
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
     rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
@@ -1594,7 +1596,8 @@ void RenderManager::renderDeferred()
         uvTarget.srv(),
         depthBuffer.getSrv(),
         tangentFrameTarget.srv(),
-        m_Fog.m_FinalVolume.getSRV()
+        m_Fog.m_FinalVolume.getSRV(),
+        m_BlueNoiseTexture.SRV
     };
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
@@ -2170,6 +2173,7 @@ void RenderManager::onUpdate()
   }
 
   // Update application settings
+  AppSettings::CurrentFrame = static_cast<uint32_t>(g_CurrentCPUFrame);
   AppSettings::updateCBuffer();
 
   // Imgui begin frame:

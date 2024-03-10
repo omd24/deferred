@@ -101,6 +101,7 @@ static void renderInternal()
       ImGui::SliderFloat("Noise Scale", &AppSettings::FOG_NoiseScale, 0.0f, 1.0f, "%.3f");
       ImGui::Checkbox("Enable XY-Jitter", (bool*)&AppSettings::FOG_ApplyXYJitter);
       ImGui::SliderFloat("Jitter Scale (XY)", &AppSettings::FOG_JitterScaleXY, 0.0f, 5.0f, "%.3f");
+      ImGui::SliderFloat("Dithering Scale", &AppSettings::FOG_DitheringScale, 0.0f, 0.1f, "%.3f");
 
       ImGui::SeparatorText("Temporal Pass Options");
       ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);

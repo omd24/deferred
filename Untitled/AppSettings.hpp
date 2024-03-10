@@ -31,6 +31,7 @@ extern bool32 ShowClusterVisualizer;
 extern bool32 ShowUVGradients;
 extern bool32 AnimateLightIntensity;
 extern float LightColor[3];
+extern uint32_t CurrentFrame;
 
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
@@ -45,6 +46,7 @@ extern float FOG_TemporalPercentage;
 extern int32_t FOG_NoiseType;
 extern float FOG_NoiseScale;
 extern float FOG_JitterScaleXY;
+extern float FOG_DitheringScale;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
@@ -74,9 +76,13 @@ struct AppSettingsCBuffer
   bool32 AnimateLightIntensity;
 
   float LightColor[3];
+  uint32_t CurrentFrame;
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
+  float unused;
+  float unused1;
+  float unused2;
 
   bool32 FOG_DisableLightScattering;
   bool32 FOG_UseClusteredLighting;
@@ -84,9 +90,9 @@ struct AppSettingsCBuffer
   bool32 FOG_EnableTemporalFilter;
 
   bool32 FOG_ApplyXYJitter;
-  float unused;
-  float unused1;
-  float unused2;
+  float unused3;
+  float unused4;
+  float unused5;
 
   bool32 FOG_ApplyZJitter;
   float FOG_ScatteringFactor;
@@ -95,8 +101,8 @@ struct AppSettingsCBuffer
 
   float FOG_NoiseScale;
   float FOG_JitterScaleXY;
-  float unused3;
-  float unused4;
+  float FOG_DitheringScale;
+  float unused6;
 
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

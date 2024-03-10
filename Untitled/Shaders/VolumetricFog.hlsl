@@ -614,8 +614,9 @@ void TemporalFilterCS(in uint3 DispatchID : SV_DispatchThreadID)
     // Temporal reprojection
     if (AppSettings.FOG_EnableTemporalFilter)
     {
-        // Don't apply jitter for the temporal pass.
-        float3 worldPos = worldFromFroxel(froxelCoord, false).xyz;
+        // const bool applyJitter = AppSettings.FOG_ApplyXYJitter;
+        const bool applyJitter = false;
+        float3 worldPos = worldFromFroxel(froxelCoord, applyJitter).xyz;
         float4 sceenSpaceCenterLast = mul(float4(worldPos, 1.0), ubo_prev_view_proj);
         float3 ndc = sceenSpaceCenterLast.xyz / sceenSpaceCenterLast.w;
 

@@ -8,16 +8,16 @@ static const uint32_t MaxInputs = 8;
 
 // TODOs:
 // - Add spatial filter
-// - Add noise baking pass
-// - Add noise and dittering (everywhere)
+// - Add 3D noise baking pass
+// - Add 3D noise for froxelization
 // - Add tricubic sampler
-// - Add jitter to temporal pass
 // - Add volumetric shadows
 // - Add GI (separate system) and its contribution here
 // - Add sky rendering (separate system)
 // - Add TAA
 // - Add froxel debug view
 // - Add postfx shaft (separate system)
+// - Cleanup uniforms 
 
 
 namespace AppSettings

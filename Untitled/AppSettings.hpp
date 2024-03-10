@@ -47,6 +47,7 @@ extern int32_t FOG_NoiseType;
 extern float FOG_NoiseScale;
 extern float FOG_JitterScaleXY;
 extern float FOG_DitheringScale;
+extern float FOG_LightingNoiseScale;
 extern float FOG_ConstantFogDensityModifier;
 extern float FOG_HeightFogDenisty;
 extern float FOG_HeightFogFalloff;
@@ -102,7 +103,7 @@ struct AppSettingsCBuffer
   float FOG_NoiseScale;
   float FOG_JitterScaleXY;
   float FOG_DitheringScale;
-  float unused6;
+  float FOG_LightingNoiseScale;
 
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

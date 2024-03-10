@@ -35,6 +35,7 @@ int32_t FOG_NoiseType = 0u;
 float FOG_NoiseScale = 0.0f;
 float FOG_JitterScaleXY = 0.0f;
 float FOG_DitheringScale = 0.0f;
+float FOG_LightingNoiseScale = 0.0f;
 float FOG_ConstantFogDensityModifier = 0.0f;
 float FOG_HeightFogDenisty = 0.5f;
 float FOG_HeightFogFalloff = 0.3f;
@@ -87,6 +88,7 @@ void updateCBuffer()
   cbData.FOG_NoiseScale = FOG_NoiseScale;
   cbData.FOG_JitterScaleXY = FOG_JitterScaleXY;
   cbData.FOG_DitheringScale = FOG_DitheringScale;
+  cbData.FOG_LightingNoiseScale = FOG_LightingNoiseScale;
   cbData.FOG_ConstantFogDensityModifier = FOG_ConstantFogDensityModifier;
   cbData.FOG_HeightFogDenisty = FOG_HeightFogDenisty;
   cbData.FOG_HeightFogFalloff = FOG_HeightFogFalloff;

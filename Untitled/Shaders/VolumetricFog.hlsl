@@ -297,6 +297,7 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     const uint3 froxelCoord = DispatchID;
 
     // Check coordinates boundaries
+    // const bool applyJitter = AppSettings.FOG_ApplyXYJitter;
     const bool applyJitter = false;
     float3 worldPos = worldFromFroxel(froxelCoord, applyJitter).xyz;
 
@@ -507,6 +508,10 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
             } // end of for(elemIdx : SpotLightElementsPerCluster)
         } // end of use clustered lighting
     } // end of if(extinction >= 0.01f)
+
+    // Add lighting dithering
+    float lightingNoise = generateNoise(froxelCoord.xy * 1.0f, AppSettings.CurrentFrame, AppSettings.FOG_LightingNoiseScale);
+    lighting += lightingNoise;
     
     float3 scattering = scatteringExtinction.rgb * lighting;
     ScatterVolumeTexture[froxelCoord] = float4(scattering, extinction);

@@ -42,7 +42,7 @@ struct AppSettingsCbuffer
   float FOG_NoiseScale;
   float FOG_JitterScaleXY;
   float FOG_DitheringScale;
-  float unused6;
+  float FOG_LightingNoiseScale;
 
   float FOG_ConstantFogDensityModifier;
   float FOG_HeightFogDenisty;

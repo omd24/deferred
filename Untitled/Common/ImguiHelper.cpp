@@ -106,7 +106,7 @@ static void renderInternal()
 
       ImGui::SeparatorText("Temporal Pass Options");
       ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);
-      ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.3f");
       
       ImGui::SeparatorText("Box Volume Options");
       ImGui::SliderFloat("Box Size", &AppSettings::FOG_BoxSize, 0.0f, 10.0f, "%.2f");

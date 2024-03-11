@@ -321,6 +321,8 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
     }
 
     float extinction = scatteringExtinction.a;
+
+    // TODO: This should be initialized to zero
     float3 lighting = 1;
 
     ByteAddressBuffer spotLightClusterBuffer = RawBufferTable[CBuffer.ClusterBufferIdx];
@@ -338,11 +340,12 @@ void LightContributionCS(in uint3 DispatchID : SV_DispatchThreadID)
         // Either loop  through all lights or use clustering
         if (false == AppSettings.FOG_UseClusteredLighting) 
         {
+            // const uint numLights = 10;
             [unroll] for (uint spotLightIdx = 0; spotLightIdx < MaxSpotLights; ++spotLightIdx)
             {
                 SpotLight spotLight = LightsBuffer.Lights[spotLightIdx];
                 float3 surfaceToLight = spotLight.Position - worldPos;
-                float distanceToLight = length(surfaceToLight);
+                float distanceToLight = max(length(surfaceToLight), 0.01f);
                 surfaceToLight /= distanceToLight;
                 float angleFactor = saturate(dot(surfaceToLight, spotLight.Direction));
                 float angularAttenuation =

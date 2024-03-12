@@ -12,11 +12,16 @@ static const uint32_t MaxInputs = 8;
 // - Add 3D noise for froxelization
 // - Add tricubic sampler
 // - Add volumetric shadows
-// - Add GI (separate system) and its contribution here
-// - Add sky rendering (separate system)
-// - Add TAA
 // - Add froxel debug view
-// - Add postfx shaft (separate system)
+// 
+// Others:
+// - Add GI
+// - Add sky rendering
+// - Add sun shadow
+// - Add postfx shaft
+// - Add TAA
+// - Add dxc (and unify shader compilations)
+// - Add dialog box for hotreload
 
 
 namespace AppSettings

@@ -17,7 +17,6 @@ static const uint32_t MaxInputs = 8;
 // - Add TAA
 // - Add froxel debug view
 // - Add postfx shaft (separate system)
-// - Cleanup uniforms 
 
 
 namespace AppSettings
@@ -398,6 +397,35 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
   const uint32_t dispatchGroupX = alignUp<uint32_t>(m_Dimensions.x, 8) / 8;
   const uint32_t dispatchGroupY = alignUp<uint32_t>(m_Dimensions.y, 8) / 8;
 
+  FogConstants uniforms;
+  // Assign the uniforms used in different passes:
+  {
+    uniforms.PrevViewProj = p_RenderDesc.PrevViewProj;
+    uniforms.InvViewProj = glm::transpose(
+        glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
+    uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
+    uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
+    uniforms.NearClip = p_RenderDesc.Near;
+    uniforms.FarClip = p_RenderDesc.Far;
+
+    uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
+    uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
+    uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
+    uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
+    uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
+    uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
+    uniforms.NoiseTextureIdx = p_RenderDesc.NoiseTexSrv;
+
+    uniforms.Dimensions = m_Dimensions;
+    uniforms.CurrFrame = static_cast<uint32_t>(p_RenderDesc.CurrentFrame);
+
+    uniforms.CameraPos = p_RenderDesc.Camera.Position();
+
+    uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
+    uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
+    uniforms.HaltonXY = p_RenderDesc.HaltonXY;
+  }
+
   // 1. Data injection
   {
     PIXBeginEvent(p_CmdList, 0, "Data Injection");
@@ -411,37 +439,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
     BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
 
     // Set constant buffers
-
-    {
-      FogConstants uniforms;
-      // The transpose of a matrix is same as transpose of the inverse of that matrix.
-
-      uniforms.InvViewProj = glm::transpose(
-          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
-      uniforms.NearClip = p_RenderDesc.Near;
-      uniforms.FarClip = p_RenderDesc.Far;
-
-      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
-      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
-      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
-      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
-      uniforms.NoiseTextureIdx = p_RenderDesc.NoiseTexSrv;
-
-      uniforms.Dimensions = m_Dimensions;
-      uniforms.CurrFrame = static_cast<uint32_t>(p_RenderDesc.CurrentFrame);
-
-      uniforms.CameraPos = p_RenderDesc.Camera.Position();
-
-      uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
-      uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
-      uniforms.HaltonXY = p_RenderDesc.HaltonXY;
-
-      BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
-    }
+    BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
 
     AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
 
@@ -472,29 +470,7 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     // Set constant buffers
     {
-      FogConstants uniforms;
-      uniforms.InvViewProj = glm::transpose(
-          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
-      uniforms.NearClip = p_RenderDesc.Near;
-      uniforms.FarClip = p_RenderDesc.Far;
-
-      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
-      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
-      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
-      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
-
       uniforms.DataVolumeIdx = m_DataVolume.getSRV();
-
-      uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_RenderDesc.Camera.Position();
-
-      uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
-      uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
-
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
@@ -551,35 +527,12 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     // Set constant buffers
     {
-      FogConstants uniforms;
-      uniforms.PrevViewProj = p_RenderDesc.PrevViewProj;
-      uniforms.InvViewProj = glm::transpose(
-          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
-      uniforms.NearClip = p_RenderDesc.Near;
-      uniforms.FarClip = p_RenderDesc.Far;
-
-      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
-      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
-      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
-      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
-
       uniforms.DataVolumeIdx = m_DataVolume.getSRV();
       uniforms.FinalIntegrationVolumeIdx = m_FinalVolume.getSRV();
       uniforms.ScatteringVolumeIdx =
           m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].getSRV();
       uniforms.PreviousScatteringVolumeIdx =
-        m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].getSRV();
-
-      uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_RenderDesc.Camera.Position();
-
-      uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
-      uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
-
+          m_ScatteringVolumes[m_PrevLightScatteringTextureIndex].getSRV();
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
@@ -616,30 +569,8 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
 
     // Set constant buffers
     {
-      FogConstants uniforms;
-      uniforms.InvViewProj = glm::transpose(
-          glm::inverse(p_RenderDesc.Camera.ViewMatrix() * p_RenderDesc.Camera.ProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_RenderDesc.Camera.ProjectionMatrix());
-      uniforms.Resolution = glm::vec2(p_RenderDesc.ScreenWidth, p_RenderDesc.ScreenHeight);
-      uniforms.NearClip = p_RenderDesc.Near;
-      uniforms.FarClip = p_RenderDesc.Far;
-
-      uniforms.ClusterBufferIdx = p_RenderDesc.ClusterBufferSrv;
-      uniforms.DepthBufferIdx = p_RenderDesc.DepthBufferSrv;
-      uniforms.SpotLightShadowIdx = p_RenderDesc.SpotLightShadowSrv;
-      uniforms.UVMapIdx = p_RenderDesc.UVMapSrv;
-      uniforms.TangentFrameMapIndex = p_RenderDesc.TangentFrameSrv;
-      uniforms.MaterialIDMapIdx = p_RenderDesc.MaterialIdMapSrv;
-
       uniforms.ScatteringVolumeIdx =
           m_ScatteringVolumes[m_CurrLightScatteringTextureIndex].getSRV();
-
-      uniforms.Dimensions = m_Dimensions;
-      uniforms.CameraPos = p_RenderDesc.Camera.Position();
-
-      uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
-      uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
-
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 

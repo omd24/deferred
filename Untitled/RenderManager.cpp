@@ -1848,6 +1848,11 @@ void RenderManager::populateCommandList()
   m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
 #endif
 
+  // TAA pass
+  if (AppSettings::EnableTAA)
+  {
+    m_TAA.render(m_CmdList, camera);
+  }
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()
@@ -1960,6 +1965,9 @@ void RenderManager::onLoad()
   // Init test compute
   m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
+  // Init taa
+  m_TAA.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
+
   // Init imgui
   ImGuiHelper::init(g_WinHandle, m_Dev);
 
@@ -2057,6 +2065,8 @@ void RenderManager::onDestroy()
 
   m_Fog.deinit();
   m_TestCompute.deinit(true);
+
+  m_TAA.deinit(true);
 
   m_BlueNoiseTexture.Shutdown();
 
@@ -2398,6 +2408,9 @@ void RenderManager::onShaderChange()
 
     m_TestCompute.deinit(false);
     m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
+
+    m_TAA.deinit(false);
+    m_TAA.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
 #if (ENABLE_PARTICLE_EXPERIMENTAL > 0)
     m_Particle.createPSOs();

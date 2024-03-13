@@ -79,6 +79,9 @@ static void renderInternal()
     ImGui::Checkbox("Render Lights", (bool*)&AppSettings::RenderLights);
 
     ImGui::ColorEdit3("Lights Color", AppSettings::LightColor, ImGuiColorEditFlags_DisplayRGB);
+
+    ImGui::Checkbox("Enable TAA", (bool*)&AppSettings::EnableTAA);
+
     // Fog options:
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))

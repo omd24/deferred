@@ -11,6 +11,7 @@
 #include "AppSettings.hpp"
 #include "VolumetricFog.hpp"
 #include "TestPass.hpp"
+#include "TAA.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -182,6 +183,7 @@ private:
   Texture m_BlueNoiseTexture;
   VolumetricFog m_Fog;
   TestCompute m_TestCompute;
+  TAARenderPass m_TAA;
 
   FirstPersonCamera camera;
   PostProcessor m_PostFx;

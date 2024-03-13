@@ -2,6 +2,7 @@
 
 namespace AppSettings
 {
+bool32 EnableTAA = false;
 uint64_t MaxLightClamp = 32;
 bool32 RenderLights = true;
 bool32 ComputeUVGradients = true;

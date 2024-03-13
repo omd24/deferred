@@ -202,6 +202,7 @@
     <ClCompile Include="PostProcessor.cpp" />
     <ClCompile Include="RenderManager.cpp" />
     <ClCompile Include="SimpleParticle.cpp" />
+    <ClCompile Include="TAA.cpp" />
     <ClCompile Include="TestPass.cpp" />
     <ClCompile Include="VolumetricFog.cpp" />
   </ItemGroup>
@@ -228,6 +229,7 @@
     <ClInclude Include="PostProcessor.hpp" />
     <ClInclude Include="RenderManager.hpp" />
     <ClInclude Include="SimpleParticle.hpp" />
+    <ClInclude Include="TAA.hpp" />
     <ClInclude Include="TestPass.hpp" />
     <ClInclude Include="VolumetricFog.hpp" />
   </ItemGroup>

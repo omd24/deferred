@@ -14,6 +14,7 @@ static const uint64_t MaxSpotLights = 32;
 static const float SpotLightRange = 7.5000f;
 static const float SpotShadowNearClip = 0.1000f;
 
+extern bool32 EnableTAA;
 extern uint64_t MaxLightClamp;
 extern bool32 RenderLights;
 extern bool32 ComputeUVGradients;

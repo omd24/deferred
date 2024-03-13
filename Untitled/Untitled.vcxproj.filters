@@ -55,6 +55,7 @@
     </ClCompile>
     <ClCompile Include="VolumetricFog.cpp" />
     <ClCompile Include="TestPass.cpp" />
+    <ClCompile Include="TAA.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -117,6 +118,7 @@
     </ClInclude>
     <ClInclude Include="VolumetricFog.hpp" />
     <ClInclude Include="TestPass.hpp" />
+    <ClInclude Include="TAA.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

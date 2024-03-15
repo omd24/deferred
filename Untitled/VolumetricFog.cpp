@@ -19,7 +19,6 @@ static const uint32_t MaxInputs = 8;
 // - Add sky rendering
 // - Add sun shadow
 // - Add postfx shaft
-// - Add TAA
 // - Add dxc (and unify shader compilations)
 // - Add dialog box for hotreload
 

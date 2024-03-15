@@ -4,6 +4,11 @@
 #include "pix3.h"
 #include "../AppSettings.hpp"
 
+// TODOs
+// 1. apply jitter to camera (cpp)
+// 2. add motion vectors (a velocity texture)
+// 3. add simplest TAA ever :)
+
 namespace AppSettings
 {
 const extern uint32_t CBufferRegister;

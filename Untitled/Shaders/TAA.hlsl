@@ -13,6 +13,10 @@ struct UniformConstants
   row_major float4x4 ProjMat;
   row_major float4x4 InvViewProj;
 
+  uint SceneColorIdx;
+  float pad0;
+  float pad1;
+  float pad2;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 

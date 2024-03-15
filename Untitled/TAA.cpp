@@ -14,6 +14,11 @@ struct ConstantData
 {
   glm::mat4x4 ProjMat;
   glm::mat4x4 InvViewProj;
+
+  uint32_t SceneColorIdx;
+  float pad0;
+  float pad1;
+  float pad2;
 };
 
 enum RootParams : uint32_t
@@ -193,7 +198,8 @@ void TAARenderPass::deinit(bool p_ReleaseResources)
 //---------------------------------------------------------------------------//
 void TAARenderPass::render(
     ID3D12GraphicsCommandList* p_CmdList,
-    FirstPersonCamera const& p_Camera)
+    FirstPersonCamera const& p_Camera, 
+    const uint32_t p_InputTexSrv)
 {
   assert(p_CmdList != nullptr);
 
@@ -214,6 +220,7 @@ void TAARenderPass::render(
       ConstantData uniforms;
       uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
+      uniforms.SceneColorIdx = p_InputTexSrv;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

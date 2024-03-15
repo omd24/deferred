@@ -10,7 +10,8 @@ struct TAARenderPass
 
   void render(
       ID3D12GraphicsCommandList* p_CmdList,
-      FirstPersonCamera const& p_Camera);
+      FirstPersonCamera const& p_Camera,
+      const uint32_t p_InputTexSrv);
 
   ID3DBlobPtr m_TAAShader = nullptr;
 

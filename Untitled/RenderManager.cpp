@@ -984,7 +984,8 @@ void RenderManager::createRenderTargets()
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    rtInit.InitialState =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     rtInit.Name = L"Main Target";
     deferredTarget.init(rtInit);
   }
@@ -1568,7 +1569,9 @@ void RenderManager::renderDeferred()
 
   // prepare main render target as a UAV
   deferredTarget.transition(
-      m_CmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+      m_CmdList,
+      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
   m_CmdList->SetComputeRootSignature(deferredRootSig);
   m_CmdList->SetPipelineState(deferredPSO);
@@ -1597,8 +1600,7 @@ void RenderManager::renderDeferred()
         depthBuffer.getSrv(),
         tangentFrameTarget.srv(),
         m_Fog.m_FinalVolume.getSRV(),
-        m_BlueNoiseTexture.SRV
-    };
+        m_BlueNoiseTexture.SRV};
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
 
@@ -1792,29 +1794,27 @@ void RenderManager::populateCommandList()
       m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
     }
 
-
     VolumetricFog::RenderDesc desc = {
-      .ClusterBufferSrv = spotLightClusterBuffer.SRV,
-      .DepthBufferSrv = depthBuffer.getSrv(),
-      .SpotLightShadowSrv = spotLightShadowMap.getSrv(),
+        .ClusterBufferSrv = spotLightClusterBuffer.SRV,
+        .DepthBufferSrv = depthBuffer.getSrv(),
+        .SpotLightShadowSrv = spotLightShadowMap.getSrv(),
 
-      .UVMapSrv = uvTarget.srv(),
-      .TangentFrameSrv = tangentFrameTarget.srv(),
-      .MaterialIdMapSrv = materialIDTarget.srv(),
-      .NoiseTexSrv = m_BlueNoiseTexture.SRV,
+        .UVMapSrv = uvTarget.srv(),
+        .TangentFrameSrv = tangentFrameTarget.srv(),
+        .MaterialIdMapSrv = materialIDTarget.srv(),
+        .NoiseTexSrv = m_BlueNoiseTexture.SRV,
 
-      .Near = camera.NearClip(),
-      .Far = camera.FarClip(),
-      .ScreenWidth = static_cast<float>(m_Info.m_Width),
-      .ScreenHeight = static_cast<float>(m_Info.m_Height),
-      .CurrentFrame = g_CurrentCPUFrame,
+        .Near = camera.NearClip(),
+        .Far = camera.FarClip(),
+        .ScreenWidth = static_cast<float>(m_Info.m_Width),
+        .ScreenHeight = static_cast<float>(m_Info.m_Height),
+        .CurrentFrame = g_CurrentCPUFrame,
 
-      .Camera = camera,
-      .PrevViewProj = prevViewProj,
-      .LightsBuffer = spotLightBuffer,
+        .Camera = camera,
+        .PrevViewProj = prevViewProj,
+        .LightsBuffer = spotLightBuffer,
 
-      .HaltonXY = jitterOffsetXY
-    };
+        .HaltonXY = jitterOffsetXY};
 
     m_Fog.render(m_CmdList, desc);
   }
@@ -1825,34 +1825,21 @@ void RenderManager::populateCommandList()
 
   // prepare main render target for post processing
   deferredTarget.transition(
-      m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-#if 0 // test pass
-
-  m_TestCompute.render(
       m_CmdList,
-      deferredTarget.srv(),
-      m_Fog.m_FinalVolume.getSRV(),
-      depthBuffer.getSrv(),
-      camera.NearClip(),
-      camera.FarClip(),
-      static_cast<float>(m_Info.m_Width),
-      static_cast<float>(m_Info.m_Height),
-      m_Fog.m_Dimensions,
-      camera);
+      D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-  m_PostFx.render(m_CmdList, m_TestCompute.m_uavTarget, m_RenderTargets[m_FrameIndex]);
-
-#else // main pass
-
-  m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
-#endif
-
-  // TAA pass
+    // Toggle TAA pass
   if (AppSettings::EnableTAA)
   {
-    m_TAA.render(m_CmdList, camera);
+    m_TAA.render(m_CmdList, camera, deferredTarget.srv());
+    m_PostFx.render(m_CmdList, m_TAA.m_uavTarget, m_RenderTargets[m_FrameIndex]);
   }
+  else
+  {
+    m_PostFx.render(m_CmdList, deferredTarget, m_RenderTargets[m_FrameIndex]);
+  }
+
 }
 //---------------------------------------------------------------------------//
 void RenderManager::waitForRenderContext()

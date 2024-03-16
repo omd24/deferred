@@ -2157,6 +2157,12 @@ void RenderManager::onUpdate()
     AppSettings::CameraPosition = camera.Position();
   }
 
+  // Apply camera jitter if TAA is on
+  if (AppSettings::EnableTAA)
+  {
+    camera.ApplyJittering(jitterOffsetXY.x / float(m_Info.m_Width), jitterOffsetXY.y / float(m_Info.m_Height));
+  }
+
   // update light bound buffer for clustering
   updateLights();
 

@@ -310,5 +310,24 @@ public:
     glm::quat myquaternion = glm::quat(glm::vec3(xRot, yRot, 0)); // pitch, yaw, roll
     SetOrientation(myquaternion);
   }
+
+  void ApplyJittering (float x, float y)
+  {
+    // Reset camera projection
+    CreateProjection();
+
+    // projection.m20 += x;
+    // projection.m21 += y;
+
+    // TODO: unify all the 3D math stuff to avoid these discrepancies!!!
+    projection[0][2] += x;
+    projection[1][2] += y;
+
+    /*glm::mat4 jitteringMatrix = glm::mat4(1);
+    jitteringMatrix[3] = glm::vec4(x, y, 0.0f, 1);
+    projection = jitteringMatrix * projection;*/
+
+    viewProjection = view * projection;
+  }
 };
 //---------------------------------------------------------------------------//

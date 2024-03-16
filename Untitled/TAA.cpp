@@ -21,9 +21,8 @@ struct ConstantData
   glm::mat4x4 InvViewProj;
 
   uint32_t SceneColorIdx;
+  glm::vec2 Resolution;
   float pad0;
-  float pad1;
-  float pad2;
 };
 
 enum RootParams : uint32_t
@@ -226,6 +225,7 @@ void TAARenderPass::render(
       uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
       uniforms.SceneColorIdx = p_InputTexSrv;
+      uniforms.Resolution = {m_uavTarget.width(), m_uavTarget.height()};
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

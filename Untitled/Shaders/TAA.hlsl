@@ -14,9 +14,8 @@ struct UniformConstants
   row_major float4x4 InvViewProj;
 
   uint SceneColorIdx;
+  float2 Resolution;
   float pad0;
-  float pad1;
-  float pad2;
 };
 ConstantBuffer<UniformConstants> CBuffer : register(b0);
 
@@ -40,6 +39,11 @@ SamplerState LinearClampSampler : register(s3);
 void TaaCS(in uint3 DispatchID : SV_DispatchThreadID) 
 {
     const uint2 pixelPos = DispatchID.xy;
+    float2 invRTSize = 1.0f / float2(CBuffer.Resolution.x, CBuffer.Resolution.y);
+    float2 screenUV = (pixelPos + 0.5f) * invRTSize;
 
-    OutputTexture[pixelPos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    Texture2D inputTex = Tex2DTable[CBuffer.SceneColorIdx];
+    float4 sceneColor = inputTex.SampleLevel(LinearClampSampler, screenUV, 0);
+
+    OutputTexture[pixelPos] = sceneColor;
 }

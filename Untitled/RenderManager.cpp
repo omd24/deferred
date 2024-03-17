@@ -17,6 +17,8 @@ static const uint64_t SpotLightShadowMapSize = 1024;
 static const uint64_t NumConeSides = 16;
 static glm::mat4 prevViewProj = glm::mat4();
 static glm::vec2 jitterOffsetXY = glm::vec2(0.0f, 0.0f);
+static glm::vec2 jitterXY = glm::vec2(0.0f, 0.0f);
+static glm::vec2 prevJitterXY = glm::vec2(0.0f, 0.0f);
 
 //---------------------------------------------------------------------------//
 // Local helpers
@@ -1794,7 +1796,8 @@ void RenderManager::populateCommandList()
       m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
     }
 
-    VolumetricFog::RenderDesc desc = {
+    VolumetricFog::RenderDesc desc =
+    {
         .ClusterBufferSrv = spotLightClusterBuffer.SRV,
         .DepthBufferSrv = depthBuffer.getSrv(),
         .SpotLightShadowSrv = spotLightShadowMap.getSrv(),
@@ -1814,8 +1817,8 @@ void RenderManager::populateCommandList()
         .PrevViewProj = prevViewProj,
         .LightsBuffer = spotLightBuffer,
 
-        .HaltonXY = jitterOffsetXY};
-
+        .HaltonXY = jitterOffsetXY
+    };
     m_Fog.render(m_CmdList, desc);
   }
 
@@ -1829,10 +1832,25 @@ void RenderManager::populateCommandList()
       D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
       D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+  // Composite motion vectors
+  {
+    prevJitterXY = jitterXY;
+    jitterXY = glm::vec2(jitterOffsetXY.x / m_Info.m_Width, jitterOffsetXY.y / m_Info.m_Height);
+    MotionVector::RenderDesc desc =
+    { 
+      .DepthMapIdx = depthBuffer.getSrv(),
+      .JitterXY = jitterXY,
+      .PreviousJitterXY = prevJitterXY,
+      .Camera = camera,
+      .PrevViewProj = prevViewProj
+    };
+    m_MotionVectors.render(m_CmdList, desc);
+  }
+
     // Toggle TAA pass
   if (AppSettings::EnableTAA)
   {
-    m_TAA.render(m_CmdList, camera, deferredTarget.srv());
+    m_TAA.render(m_CmdList, camera, deferredTarget.srv(), m_MotionVectors.m_uavTarget.srv());
     m_PostFx.render(m_CmdList, m_TAA.m_uavTarget, m_RenderTargets[m_FrameIndex]);
   }
   else
@@ -1949,6 +1967,9 @@ void RenderManager::onLoad()
   // Init volumetric fog
   m_Fog.init(m_Dev);
 
+  // Init motion vectors
+  m_MotionVectors.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
+
   // Init test compute
   m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
@@ -2052,7 +2073,7 @@ void RenderManager::onDestroy()
 
   m_Fog.deinit();
   m_TestCompute.deinit(true);
-
+  m_MotionVectors.deinit(true);
   m_TAA.deinit(true);
 
   m_BlueNoiseTexture.Shutdown();
@@ -2106,6 +2127,7 @@ void RenderManager::onUpdate()
   // Cache previous view projection before updating camera
   prevViewProj = glm::transpose(camera.ViewMatrix() * camera.ProjectionMatrix());
 
+  // Update Camera
   // Rotate the camera with the mouse
   {
     // static float CamRotSpeed = 0.0005f * m_Timer.m_DeltaSecondsF;
@@ -2398,6 +2420,9 @@ void RenderManager::onShaderChange()
 
     m_Fog.deinit();
     m_Fog.init(m_Dev);
+
+    m_MotionVectors.deinit(false);
+    m_MotionVectors.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
     m_TestCompute.deinit(false);
     m_TestCompute.init(m_Dev, m_Info.m_Width, m_Info.m_Height);

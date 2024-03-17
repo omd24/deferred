@@ -13,6 +13,7 @@ static const uint32_t MaxInputs = 8;
 // - Add tricubic sampler
 // - Add volumetric shadows
 // - Add froxel debug view
+// - Add a global uniform for Fog, taa and motion vectors
 // 
 // Others:
 // - Add GI

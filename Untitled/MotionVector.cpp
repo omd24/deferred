@@ -1,13 +1,8 @@
 
-#include "TAA.hpp"
+#include "MotionVector.hpp"
 #include "d3dx12.h"
 #include "pix3.h"
 #include "../AppSettings.hpp"
-
-// TODOs
-// 1. apply jitter to camera (cpp)
-// 2. add motion vectors (a velocity texture)
-// 3. add simplest TAA ever :)
 
 namespace AppSettings
 {
@@ -17,12 +12,15 @@ void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParamet
 
 struct ConstantData
 {
-  glm::mat4x4 ProjMat;
+  glm::mat4x4 PrevViewProj;
   glm::mat4x4 InvViewProj;
 
+  glm::vec2 JitterXY;
+  glm::vec2 PreviousJitterXY;
+
   glm::vec2 Resolution;
-  uint32_t SceneColorIdx;
-  uint32_t MotionVectorsIdx;
+  uint32_t DepthMapIdx;
+  float pad0;
 };
 
 enum RootParams : uint32_t
@@ -37,12 +35,12 @@ enum RootParams : uint32_t
 
 enum RenderPass : uint32_t
 {
-  RenderPass_TAA,
+  RenderPass_MotionVectors,
 
   NumRenderPasses,
 };
 
-void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
+void MotionVector::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 {
   // Load and compile shaders:
   {
@@ -60,15 +58,15 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     WCHAR assetsPath[512];
     getAssetsPath(assetsPath, _countof(assetsPath));
     std::wstring shaderPath = assetsPath;
-    shaderPath += L"Shaders\\TAA.hlsl";
+    shaderPath += L"Shaders\\MotionVectors.hlsl";
 
-    // TAA compute shader
+    // MotionVector compute shader
     {
       HRESULT hr = D3DCompileFromFile(
           shaderPath.c_str(),
           nullptr,
           D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "TaaCS",
+          "MotionVectorsCS",
           "cs_5_1",
           compileFlags,
           0,
@@ -76,7 +74,7 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
           &errorBlob);
       if (nullptr == tempCompShader || FAILED(hr))
       {
-        OutputDebugStringA("Failed to load taa compute shader.\n");
+        OutputDebugStringA("Failed to load motion vectors shader.\n");
         if (errorBlob != nullptr)
           OutputDebugStringA((char*)errorBlob->GetBufferPointer());
         res = false;
@@ -87,9 +85,9 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     // Only update the shaders if there was no issue:
     if (res)
     {
-      m_TAAShader = tempCompShader;
+      m_MotionVectorShader = tempCompShader;
     }
-    assert(m_TAAShader);
+    assert(m_MotionVectorShader);
   }
 
   // Create root signature:
@@ -150,7 +148,7 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
     CreateRootSignature(&m_RootSig, rootSignatureDesc);
-    m_RootSig->SetName(L"TAA-RootSig");
+    m_RootSig->SetName(L"MotionVector-RootSig");
   }
 
   // Create psos
@@ -160,9 +158,9 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = m_RootSig;
 
-    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_TAAShader.GetInterfacePtr());
-    p_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_TAA]));
-    m_PSOs[RenderPass_TAA]->SetName(L"TAA PSO");
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_MotionVectorShader.GetInterfacePtr());
+    p_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_MotionVectors]));
+    m_PSOs[RenderPass_MotionVectors]->SetName(L"MotionVector PSO");
   }
 
   // Create uav target:
@@ -180,7 +178,7 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
   }
 }
 //---------------------------------------------------------------------------//
-void TAARenderPass::deinit(bool p_ReleaseResources)
+void MotionVector::deinit(bool p_ReleaseResources)
 {
   for (unsigned i = 0; i < NumRenderPasses; ++i)
   {
@@ -189,7 +187,7 @@ void TAARenderPass::deinit(bool p_ReleaseResources)
 
   m_RootSig->Release();
 
-  m_TAAShader = nullptr;
+  m_MotionVectorShader = nullptr;
 
   if (p_ReleaseResources)
   {
@@ -197,34 +195,32 @@ void TAARenderPass::deinit(bool p_ReleaseResources)
   }
 }
 //---------------------------------------------------------------------------//
-void TAARenderPass::render(
-    ID3D12GraphicsCommandList* p_CmdList,
-    FirstPersonCamera const& p_Camera, 
-    const uint32_t p_SceneTexSrv,
-    const uint32_t p_MotionVectorsSrv)
+void MotionVector::render(
+  ID3D12GraphicsCommandList* p_CmdList,
+  const RenderDesc& p_RenderDesc)
 {
   assert(p_CmdList != nullptr);
 
-  PIXBeginEvent(p_CmdList, 0, "TAA");
+  PIXBeginEvent(p_CmdList, 0, "MotionVector");
 
-  // TAA pass
+  // MotionVector pass
   {
     m_uavTarget.makeWritable(p_CmdList);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
-    p_CmdList->SetPipelineState(m_PSOs[RenderPass_TAA]);
+    p_CmdList->SetPipelineState(m_PSOs[RenderPass_MotionVectors]);
 
     BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
 
     // Set constant buffers
-
     {
       ConstantData uniforms;
-      uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
-      uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
-      uniforms.SceneColorIdx = p_SceneTexSrv;
-      uniforms.MotionVectorsIdx = p_MotionVectorsSrv;
+      uniforms.InvViewProj = glm::inverse(glm::transpose(p_RenderDesc.Camera.ViewProjectionMatrix()));
+      uniforms.PrevViewProj = p_RenderDesc.PrevViewProj;
+      uniforms.DepthMapIdx = p_RenderDesc.DepthMapIdx;
       uniforms.Resolution = {m_uavTarget.width(), m_uavTarget.height()};
+      uniforms.JitterXY = p_RenderDesc.JitterXY;
+      uniforms.PreviousJitterXY = p_RenderDesc.PreviousJitterXY;
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }

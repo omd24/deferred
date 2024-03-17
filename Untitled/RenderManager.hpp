@@ -12,6 +12,7 @@
 #include "VolumetricFog.hpp"
 #include "TestPass.hpp"
 #include "TAA.hpp"
+#include "MotionVector.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -184,6 +185,7 @@ private:
   VolumetricFog m_Fog;
   TestCompute m_TestCompute;
   TAARenderPass m_TAA;
+  MotionVector m_MotionVectors;
 
   FirstPersonCamera camera;
   PostProcessor m_PostFx;

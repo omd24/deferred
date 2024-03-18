@@ -1851,7 +1851,10 @@ void RenderManager::populateCommandList()
   if (AppSettings::EnableTAA)
   {
     m_TAA.render(m_CmdList, camera, deferredTarget.srv(), m_MotionVectors.m_uavTarget.srv());
-    m_PostFx.render(m_CmdList, m_TAA.m_uavTarget, m_RenderTargets[m_FrameIndex]);
+    m_PostFx.render(
+        m_CmdList,
+        m_TAA.m_uavTargets[TAARenderPass::ms_CurrOutputTextureIndex],
+        m_RenderTargets[m_FrameIndex]);
   }
   else
   {

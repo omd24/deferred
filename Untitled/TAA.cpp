@@ -20,9 +20,13 @@ struct ConstantData
   glm::mat4x4 ProjMat;
   glm::mat4x4 InvViewProj;
 
-  glm::vec2 Resolution;
   uint32_t SceneColorIdx;
+  uint32_t HistorySceneColorIdx;
   uint32_t MotionVectorsIdx;
+  uint32_t unused0;
+
+  glm::vec2 Resolution;
+  glm::vec2 unused1;
 };
 
 enum RootParams : uint32_t
@@ -41,6 +45,9 @@ enum RenderPass : uint32_t
 
   NumRenderPasses,
 };
+
+int TAARenderPass::ms_CurrOutputTextureIndex = 1;
+int TAARenderPass::ms_PrevOutputTextureIndex = 0;
 
 void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 {
@@ -165,8 +172,9 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     m_PSOs[RenderPass_TAA]->SetName(L"TAA PSO");
   }
 
-  // Create uav target:
+  // Create uav targets:
   {
+    ms_PrevOutputTextureIndex = 0;
     RenderTextureInit rtInit;
     rtInit.Width = w;
     rtInit.Height = h;
@@ -174,9 +182,25 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
     rtInit.MSAASamples = 1;
     rtInit.ArraySize = 1;
     rtInit.CreateUAV = true;
-    rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    rtInit.Name = L"Main Target";
-    m_uavTarget.init(rtInit);
+    rtInit.InitialState =
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"TAA Target 0";
+    m_uavTargets[ms_PrevOutputTextureIndex].init(rtInit);
+  }
+
+  {
+    ms_CurrOutputTextureIndex = 1;
+    RenderTextureInit rtInit;
+    rtInit.Width = w;
+    rtInit.Height = h;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = true;
+    rtInit.InitialState =
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"TAA Target 1";
+    m_uavTargets[ms_CurrOutputTextureIndex].init(rtInit);
   }
 }
 //---------------------------------------------------------------------------//
@@ -193,7 +217,8 @@ void TAARenderPass::deinit(bool p_ReleaseResources)
 
   if (p_ReleaseResources)
   {
-    m_uavTarget.deinit();
+    m_uavTargets[1].deinit();
+    m_uavTargets[0].deinit();
   }
 }
 //---------------------------------------------------------------------------//
@@ -205,11 +230,22 @@ void TAARenderPass::render(
 {
   assert(p_CmdList != nullptr);
 
+
+  ms_PrevOutputTextureIndex = ms_CurrOutputTextureIndex;
+  ms_CurrOutputTextureIndex = (ms_CurrOutputTextureIndex + 1) % 2;
+
   PIXBeginEvent(p_CmdList, 0, "TAA");
 
   // TAA pass
   {
-    m_uavTarget.makeWritable(p_CmdList);
+    // Prepare current output to be written onto
+    transitionResource(
+        p_CmdList,
+        m_uavTargets[ms_CurrOutputTextureIndex].resource(),
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
     p_CmdList->SetComputeRootSignature(m_RootSig);
     p_CmdList->SetPipelineState(m_PSOs[RenderPass_TAA]);
@@ -217,31 +253,38 @@ void TAARenderPass::render(
     BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
 
     // Set constant buffers
-
+    const uint64_t width = m_uavTargets[ms_CurrOutputTextureIndex].width();
+    const uint64_t height = m_uavTargets[ms_CurrOutputTextureIndex].height();
     {
       ConstantData uniforms;
       uniforms.InvViewProj = glm::inverse(glm::transpose(p_Camera.ViewProjectionMatrix()));
       uniforms.ProjMat = glm::transpose(p_Camera.ProjectionMatrix());
       uniforms.SceneColorIdx = p_SceneTexSrv;
       uniforms.MotionVectorsIdx = p_MotionVectorsSrv;
-      uniforms.Resolution = {m_uavTarget.width(), m_uavTarget.height()};
+      uniforms.HistorySceneColorIdx = m_uavTargets[ms_PrevOutputTextureIndex].srv();
+      uniforms.Resolution = {width, height};
 
       BindTempConstantBuffer(p_CmdList, uniforms, RootParam_Cbuffer, CmdListMode::Compute);
     }
 
     AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
 
-    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_uavTarget.m_UAV};
+    D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {m_uavTargets[ms_CurrOutputTextureIndex].m_UAV};
     BindTempDescriptorTable(
         p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
-    const uint32_t numComputeTilesX = alignUp<uint32_t>(uint32_t(m_uavTarget.width()), 8) / 8;
-    const uint32_t numComputeTilesY = alignUp<uint32_t>(uint32_t(m_uavTarget.height()), 8) / 8;
+    const uint32_t numComputeTilesX = alignUp<uint32_t>(uint32_t(width), 8) / 8;
+    const uint32_t numComputeTilesY = alignUp<uint32_t>(uint32_t(height), 8) / 8;
 
     p_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
     // Sync back render target to be read
-    m_uavTarget.makeReadable(p_CmdList);
+    transitionResource(
+        p_CmdList,
+        m_uavTargets[ms_CurrOutputTextureIndex].resource(),
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
   }
 
   PIXEndEvent(p_CmdList);

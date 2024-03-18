@@ -18,5 +18,9 @@ struct TAARenderPass
 
   std::vector<ID3D12PipelineState*> m_PSOs;
   ID3D12RootSignature* m_RootSig = nullptr;
-  RenderTexture m_uavTarget;
+
+  RenderTexture m_uavTargets[2];
+
+  static int ms_CurrOutputTextureIndex;
+  static int ms_PrevOutputTextureIndex;
 };

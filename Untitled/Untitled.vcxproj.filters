@@ -57,6 +57,9 @@
     <ClCompile Include="TestPass.cpp" />
     <ClCompile Include="TAA.cpp" />
     <ClCompile Include="MotionVector.cpp" />
+    <ClCompile Include="Common\Utility.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />

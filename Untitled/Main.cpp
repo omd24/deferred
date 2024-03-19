@@ -43,7 +43,7 @@ static LRESULT CALLBACK msgProc(HWND p_Wnd, UINT p_Message, WPARAM p_WParam, LPA
         switch (fileEvent.EventType)
         {
         case FileEvent::Type::Modified:
-          // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          //std::this_thread::sleep_for(std::chrono::milliseconds(1));
           g_Renderer->onShaderChange();
           break;
         case FileEvent::Type::Added:

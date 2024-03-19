@@ -116,25 +116,16 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Data injection shader
     {
-      const D3D_SHADER_MACRO definesCS[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
-      HRESULT hr = D3DCompileFromFile(
-          shaderPath.c_str(),
-          definesCS,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "DataInjectionCS",
-          "cs_5_1",
-          compileFlags,
-          0,
-          &tempDataInjShader,
-          &errorBlob);
-      if (nullptr == tempDataInjShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load data injection shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+      const D3D_SHADER_MACRO defines[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
+      compileShaderFXC(
+        "data injection",
+        shaderPath.c_str(),
+        defines,
+        compileFlags,
+        ShaderType::Compute,
+        "DataInjectionCS",
+        m_DataInjectionShader
+      );
     }
 
     // Light contribution shader
@@ -210,7 +201,6 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     // Only update the shaders if there was no issue:
     if (res)
     {
-      m_DataInjectionShader = tempDataInjShader;
       m_LightContributionShader = tempLightContributionShader;
       m_TemporalFilterShader = tempTemporalShader;
       m_FinalIntegralShader = tempFinalIntegralShader;
@@ -380,9 +370,9 @@ void VolumetricFog::deinit()
 
   m_RootSig->Release();
 
-  m_DataInjectionShader = nullptr;
-  m_LightContributionShader = nullptr;
-  m_FinalIntegralShader = nullptr;
+  //m_DataInjectionShader = nullptr;
+  //m_LightContributionShader = nullptr;
+  //m_FinalIntegralShader = nullptr;
 
   m_FinalVolume.deinit();
   m_ScatteringVolumes[1].deinit();

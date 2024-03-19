@@ -19,6 +19,7 @@ static glm::mat4 prevViewProj = glm::mat4();
 static glm::vec2 jitterOffsetXY = glm::vec2(0.0f, 0.0f);
 static glm::vec2 jitterXY = glm::vec2(0.0f, 0.0f);
 static glm::vec2 prevJitterXY = glm::vec2(0.0f, 0.0f);
+static bool pauseRendering = false;
 
 //---------------------------------------------------------------------------//
 // Local helpers
@@ -2088,6 +2089,9 @@ void RenderManager::onDestroy()
 //---------------------------------------------------------------------------//
 void RenderManager::onUpdate()
 {
+  if (pauseRendering)
+    return;
+
   m_Timer.update();
 
   // Wait for the previous Present to complete.
@@ -2211,6 +2215,9 @@ void RenderManager::onUpdate()
 //---------------------------------------------------------------------------//
 void RenderManager::onRender()
 {
+  if (pauseRendering)
+    return;
+
   if (m_Info.m_IsInitialized)
   {
     try
@@ -2336,6 +2343,9 @@ void RenderManager::onKeyUp(UINT8 p_Key) {}
 //---------------------------------------------------------------------------//
 void RenderManager::onResize()
 {
+  if (pauseRendering)
+    return;
+
   RECT clientRect;
   ::GetClientRect(g_WinHandle, &clientRect);
   if (clientRect.right > 0.0f && clientRect.bottom > 0.0f)
@@ -2409,13 +2419,14 @@ void RenderManager::onCodeChange() {}
 //---------------------------------------------------------------------------//
 void RenderManager::onShaderChange()
 {
+  pauseRendering = true;
+
   OutputDebugStringA("[RenderManager] Starting shader reload...\n");
   Sleep(1000);
   waitForRenderContext();
 
   if (compileShaders())
   {
-    OutputDebugStringA("[RenderManager] Shaders loaded\n");
     createPSOs();
 
     m_PostFx.deinit();
@@ -2437,12 +2448,17 @@ void RenderManager::onShaderChange()
     m_Particle.createPSOs();
 #endif
 
+    pauseRendering = false;
+    OutputDebugStringA("[RenderManager] Shaders load completed.\n");
+    
     return;
   }
   else
   {
     OutputDebugStringA("[RenderManager] Failed to reload the shaders\n");
   }
+
+  pauseRendering = false;
 }
 //---------------------------------------------------------------------------//
 void RenderManager::updateLights()

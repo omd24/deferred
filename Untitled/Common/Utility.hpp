@@ -411,8 +411,24 @@ inline void setName(ID3D12Object*, LPCWSTR) {}
 inline void setNameIndexed(ID3D12Object*, LPCWSTR, UINT) {}
 #endif
 //---------------------------------------------------------------------------//
+enum class ShaderType : uint8_t
+{
+  Vertex = 0,
+  Pixel,
+  Compute,
+
+  NumTypes
+};
+//---------------------------------------------------------------------------//
+static const char* ShaderTypeStringsFXC[] = {
+
+    "vs_5_1",
+    "ps_5_1",
+    "cs_5_1",
+};
+//---------------------------------------------------------------------------//
 #ifdef D3D_COMPILE_STANDARD_FILE_INCLUDE
-inline ID3DBlobPtr compileShaderFXC(
+inline ID3DBlobPtr compileShaderFXC_old(
     const std::wstring& p_Filename,
     const D3D_SHADER_MACRO* p_Defines,
     const std::string& p_Entrypoint,
@@ -446,6 +462,16 @@ inline ID3DBlobPtr compileShaderFXC(
   return byteCode;
 }
 #endif
+//---------------------------------------------------------------------------//
+// Compile shaders using FXC (updated version of the above function)
+bool compileShaderFXC (
+  const char* p_DbgName,
+  const wchar_t* p_ShaderPath,
+  const D3D_SHADER_MACRO* p_Defines,
+  unsigned int p_CompileFlags,
+  ShaderType p_ShaderType,
+  const char * p_EntryPoint,
+  ID3DBlobPtr & p_OutShader);
 //---------------------------------------------------------------------------//
 // Resets all elements in a ComPtr array
 template <typename T> inline void resetComPtrArray(T* p_ComPtrArray)

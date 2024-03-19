@@ -198,6 +198,7 @@
     <ClCompile Include="Common\Model.cpp" />
     <ClCompile Include="Common\PostFxHelper.cpp" />
     <ClCompile Include="Common\ShadowHelper.cpp" />
+    <ClCompile Include="Common\Utility.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MotionVector.cpp" />
     <ClCompile Include="PostProcessor.cpp" />

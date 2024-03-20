@@ -95,13 +95,6 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 {
   // Load and compile shaders:
   {
-    bool res = true;
-    ID3DBlobPtr errorBlob;
-    ID3DBlobPtr tempDataInjShader = nullptr;
-    ID3DBlobPtr tempLightContributionShader = nullptr;
-    ID3DBlobPtr tempTemporalShader = nullptr;
-    ID3DBlobPtr tempFinalIntegralShader = nullptr;
-
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
@@ -117,7 +110,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
     // Data injection shader
     {
       const D3D_SHADER_MACRO defines[] = {{"DATA_INJECTION", "1"}, {NULL, NULL}};
-      compileShaderFXC(
+      compileShader(
         "data injection",
         shaderPath.c_str(),
         defines,
@@ -130,81 +123,43 @@ void VolumetricFog::init(ID3D12Device * p_Device)
 
     // Light contribution shader
     {
-      const D3D_SHADER_MACRO definesCS[] = {{"LIGHT_SCATTERING", "1"}, {NULL, NULL}};
-      HRESULT hr = D3DCompileFromFile(
+      const D3D_SHADER_MACRO defines[] = {{"LIGHT_SCATTERING", "1"}, {NULL, NULL}};
+      compileShader(
+          "light contribution",
           shaderPath.c_str(),
-          definesCS,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "LightContributionCS",
-          "cs_5_1",
+          defines,
           compileFlags,
-          0,
-          &tempLightContributionShader,
-          &errorBlob);
-      if (nullptr == tempLightContributionShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load light contribution shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Compute,
+          "LightContributionCS",
+          m_LightContributionShader);
     }
 
     // Temporal filter shader
     {
-      const D3D_SHADER_MACRO definesCS[] = {{"TEMPORAL_FILTERING", "1"}, {NULL, NULL}};
-      HRESULT hr = D3DCompileFromFile(
+      const D3D_SHADER_MACRO defines[] = {{"TEMPORAL_FILTERING", "1"}, {NULL, NULL}};
+      compileShader(
+          "temporal filter",
           shaderPath.c_str(),
-          definesCS,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "TemporalFilterCS",
-          "cs_5_1",
+          defines,
           compileFlags,
-          0,
-          &tempTemporalShader,
-          &errorBlob);
-      if (nullptr == tempTemporalShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load temporal filter shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Compute,
+          "TemporalFilterCS",
+          m_TemporalFilterShader);
     }
-
 
     // Final integration shader
     {
-      const D3D_SHADER_MACRO definesCS[] = {{"FINAL_INTEGRATION", "1"}, {NULL, NULL}};
-      HRESULT hr = D3DCompileFromFile(
+      const D3D_SHADER_MACRO defines[] = {{"FINAL_INTEGRATION", "1"}, {NULL, NULL}};
+      compileShader(
+          "final integration",
           shaderPath.c_str(),
-          definesCS,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "FinalIntegrationCS",
-          "cs_5_1",
+          defines,
           compileFlags,
-          0,
-          &tempFinalIntegralShader,
-          &errorBlob);
-      if (nullptr == tempFinalIntegralShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load final integration shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Compute,
+          "FinalIntegrationCS",
+          m_FinalIntegralShader);
     }
 
-    // Only update the shaders if there was no issue:
-    if (res)
-    {
-      m_LightContributionShader = tempLightContributionShader;
-      m_TemporalFilterShader = tempTemporalShader;
-      m_FinalIntegralShader = tempFinalIntegralShader;
-    }
     assert(
         m_DataInjectionShader && m_LightContributionShader && m_FinalIntegralShader &&
         m_TemporalFilterShader);

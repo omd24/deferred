@@ -44,10 +44,6 @@ void MotionVector::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 {
   // Load and compile shaders:
   {
-    bool res = true;
-    ID3DBlobPtr errorBlob;
-    ID3DBlobPtr tempCompShader = nullptr;
-
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
@@ -62,31 +58,17 @@ void MotionVector::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 
     // MotionVector compute shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      const D3D_SHADER_MACRO defines[] = {{"DEBUG_MOTION_VECTORS", "1"}, {NULL, NULL}};
+      compileShader(
+          "motion vectors",
           shaderPath.c_str(),
-          nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "MotionVectorsCS",
-          "cs_5_1",
+          defines,
           compileFlags,
-          0,
-          &tempCompShader,
-          &errorBlob);
-      if (nullptr == tempCompShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load motion vectors shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Compute,
+          "MotionVectorsCS",
+          m_MotionVectorShader);
     }
 
-    // Only update the shaders if there was no issue:
-    if (res)
-    {
-      m_MotionVectorShader = tempCompShader;
-    }
     assert(m_MotionVectorShader);
   }
 
@@ -187,7 +169,7 @@ void MotionVector::deinit(bool p_ReleaseResources)
 
   m_RootSig->Release();
 
-  m_MotionVectorShader = nullptr;
+  //m_MotionVectorShader = nullptr;
 
   if (p_ReleaseResources)
   {

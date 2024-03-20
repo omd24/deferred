@@ -1,5 +1,7 @@
 #include "Utility.hpp"
 
+#define USE_FXC 1
+
 bool compileShaderFXC(
     const char* p_DbgName,
     const wchar_t* p_ShaderPath,
@@ -57,4 +59,31 @@ bool compileShaderFXC(
   }
 
   return ret;
+}
+//---------------------------------------------------------------------------//
+bool compileShader(
+    const char* p_DbgName,
+    const wchar_t* p_ShaderPath,
+    const D3D_SHADER_MACRO* p_Defines,
+    unsigned int p_CompileFlags,
+    ShaderType p_ShaderType,
+    const char* p_EntryPoint,
+    ID3DBlobPtr& p_OutShader)
+{
+#if USE_FXC
+
+  return compileShaderFXC(
+      p_DbgName,
+      p_ShaderPath,
+      p_Defines,
+      p_CompileFlags,
+      p_ShaderType,
+      p_EntryPoint,
+      p_OutShader);
+
+#else // USE_DXC
+
+    assert(false && "Not Implemented");
+#endif
+
 }

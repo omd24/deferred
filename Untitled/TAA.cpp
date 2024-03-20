@@ -53,10 +53,6 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 {
   // Load and compile shaders:
   {
-    bool res = true;
-    ID3DBlobPtr errorBlob;
-    ID3DBlobPtr tempCompShader = nullptr;
-
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
@@ -71,30 +67,15 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
 
     // TAA compute shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      const D3D_SHADER_MACRO defines[] = {{"DEBUG_TAA", "1"}, {NULL, NULL}};
+      compileShader(
+          "taa main",
           shaderPath.c_str(),
-          nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "TaaCS",
-          "cs_5_1",
+          defines,
           compileFlags,
-          0,
-          &tempCompShader,
-          &errorBlob);
-      if (nullptr == tempCompShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load taa compute shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
-    }
-
-    // Only update the shaders if there was no issue:
-    if (res)
-    {
-      m_TAAShader = tempCompShader;
+          ShaderType::Compute,
+          "TaaCS",
+          m_TAAShader);
     }
     assert(m_TAAShader);
   }
@@ -213,10 +194,9 @@ void TAARenderPass::deinit(bool p_ReleaseResources)
 
   m_RootSig->Release();
 
-  m_TAAShader = nullptr;
-
   if (p_ReleaseResources)
   {
+    m_TAAShader = nullptr;
     m_uavTargets[1].deinit();
     m_uavTargets[0].deinit();
   }

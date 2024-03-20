@@ -473,6 +473,16 @@ bool compileShaderFXC (
   const char * p_EntryPoint,
   ID3DBlobPtr & p_OutShader);
 //---------------------------------------------------------------------------//
+// Compile shader wrapper (to switch between dxc and fxc)
+bool compileShader(
+    const char* p_DbgName,
+    const wchar_t* p_ShaderPath,
+    const D3D_SHADER_MACRO* p_Defines,
+    unsigned int p_CompileFlags,
+    ShaderType p_ShaderType,
+    const char* p_EntryPoint,
+    ID3DBlobPtr& p_OutShader);
+//---------------------------------------------------------------------------//
 // Resets all elements in a ComPtr array
 template <typename T> inline void resetComPtrArray(T* p_ComPtrArray)
 {

@@ -14,6 +14,7 @@ static const uint32_t MaxInputs = 8;
 // - Add volumetric shadows
 // - Add froxel debug view
 // - Add a global uniform for Fog, taa and motion vectors
+// - Add local lights lut for fog sampling
 // 
 // Others:
 // - Add GI
@@ -21,7 +22,6 @@ static const uint32_t MaxInputs = 8;
 // - Add sun shadow
 // - Add postfx shaft
 // - Add dxc (and unify shader compilations)
-// - Add dialog box for hotreload
 
 
 namespace AppSettings

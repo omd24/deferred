@@ -74,123 +74,64 @@ void PostProcessor::init()
 
     // Tone mapping shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      compileShader(
+          "tone mapping",
           shaderPath.c_str(),
           nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "ToneMap",
-          "ps_5_1",
           compileFlags,
-          0,
-          &tempToneMapShader,
-          &errorBlob);
-      if (nullptr == tempToneMapShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load tone map shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Pixel,
+          "ToneMap",
+          m_ToneMapShader);
     }
 
     // Scale shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      compileShader(
+          "scale fragment",
           shaderPath.c_str(),
           nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "Scale",
-          "ps_5_1",
           compileFlags,
-          0,
-          &tempScaleShader,
-          &errorBlob);
-      if (nullptr == tempScaleShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load scale shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Pixel,
+          "Scale",
+          m_ScaleShader);
     }
 
     // BlurH shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      compileShader(
+          "horizontal blur",
           shaderPath.c_str(),
           nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "BlurH",
-          "ps_5_1",
           compileFlags,
-          0,
-          &tempBlurHShader,
-          &errorBlob);
-      if (nullptr == tempBlurHShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load hblur shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Pixel,
+          "BlurH",
+          m_BlurHShader);
     }
 
     // BlurV shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      compileShader(
+          "vertical blur",
           shaderPath.c_str(),
           nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "BlurV",
-          "ps_5_1",
           compileFlags,
-          0,
-          &tempBlurVShader,
-          &errorBlob);
-      if (nullptr == tempBlurVShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load vblur shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Pixel,
+          "BlurV",
+          m_BlurVShader);
     }
 
     // Bloom shader
     {
-      HRESULT hr = D3DCompileFromFile(
+      compileShader(
+          "bloom pixel",
           shaderPath.c_str(),
           nullptr,
-          D3D_COMPILE_STANDARD_FILE_INCLUDE,
-          "Bloom",
-          "ps_5_1",
           compileFlags,
-          0,
-          &tempBloomShader,
-          &errorBlob);
-      if (nullptr == tempBloomShader || FAILED(hr))
-      {
-        OutputDebugStringA("Failed to load bloom shader.\n");
-        if (errorBlob != nullptr)
-          OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        res = false;
-      }
-      errorBlob = nullptr;
+          ShaderType::Pixel,
+          "Bloom",
+          m_BloomShader);
     }
 
-    // Only update the postfx shaders if there was no issue:
-    if (res)
-    {
-      m_ToneMapShader = tempToneMapShader;
-      m_ScaleShader = tempScaleShader;
-      m_BloomShader = tempBloomShader;
-      m_BlurHShader = tempBlurHShader;
-      m_BlurVShader = tempBlurVShader;
-    }
     assert(m_ToneMapShader && m_ScaleShader && m_BloomShader && m_BlurHShader && m_BlurVShader);
   }
 }

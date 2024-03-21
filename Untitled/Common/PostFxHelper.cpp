@@ -26,9 +26,13 @@ PostFxHelper::~PostFxHelper() {}
 void PostFxHelper::init()
 {
   // Load and compile triangle shader:
+
   {
-    ID3DBlobPtr pixelShaderBlob = nullptr;
-    ID3DBlobPtr errorBlob = nullptr;
+    WCHAR assetsPath[512];
+    getAssetsPath(assetsPath, _countof(assetsPath));
+    std::wstring shaderPath = assetsPath;
+    shaderPath += L"Shaders\\FullscreenTriangle.hlsl";
+
 
 #if defined(_DEBUG)
     UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -36,28 +40,14 @@ void PostFxHelper::init()
     UINT compileFlags = 0;
 #endif
 
-    WCHAR assetsPath[512];
-    getAssetsPath(assetsPath, _countof(assetsPath));
-    std::wstring shaderPath = assetsPath;
-    shaderPath += L"Shaders\\FullscreenTriangle.hlsl";
-
-    HRESULT hr = D3DCompileFromFile(
+    compileShader(
+        "fullscreen triangle",
         shaderPath.c_str(),
         nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "VS",
-        "vs_5_1",
         compileFlags,
-        0,
-        &m_FullscreenTriangleVS,
-        &errorBlob);
-    if (nullptr == m_FullscreenTriangleVS)
-    {
-      if (errorBlob != nullptr)
-        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      assert(false && "Shader compilation failed");
-    }
-    errorBlob = nullptr;
+        ShaderType::Vertex,
+        "VS",
+        m_FullscreenTriangleVS);
   }
 
   // Create root signature:

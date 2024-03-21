@@ -323,250 +323,139 @@ struct ClusterVisConstants
 bool RenderManager::compileShaders()
 {
   bool ret = true;
-  ID3DBlobPtr tempVS;
-  ID3DBlobPtr tempPS;
-  ID3DBlobPtr tempCS;
+
+  #if defined(_DEBUG)
+  UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+  UINT compileFlags = 0;
+#endif
+  compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
 
   // Gbuffer shaders
   {
-    ID3DBlobPtr errorBlob;
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-    HRESULT hr = D3DCompileFromFile(
+    const D3D_SHADER_MACRO defines[] = {{"GBUFFER_VS_DBG", "1"}, {NULL, NULL}};
+    compileShader(
+        "gbuffer vertex",
         getShaderPath(L"Mesh.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        defines,
+        compileFlags,
+        ShaderType::Vertex,
         "VS",
-        "vs_5_1",
-        compileFlags,
-        0,
-        &tempVS,
-        &errorBlob);
-    if (nullptr == tempVS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load gbuffer vertex shader.\n");
-      if (errorBlob != nullptr)
-        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      ret = false;
-    }
-    errorBlob = nullptr;
-    hr = D3DCompileFromFile(
+        m_GBufferVS);
+  }
+
+  {
+    const D3D_SHADER_MACRO defines[] = {{"GBUFFER_PS_DBG", "1"}, {NULL, NULL}};
+    compileShader(
+        "gbuffer fragment",
         getShaderPath(L"Mesh.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "PS",
-        "ps_5_1",
+        defines,
         compileFlags,
-        0,
-        &tempPS,
-        &errorBlob);
-    if (nullptr == tempPS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load gbuffer pixel shader.\n");
-      if (errorBlob != nullptr)
-        OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-      ret = false;
-    }
+        ShaderType::Pixel,
+        "PS",
+        m_GBufferPS);
   }
 
   // Deferred shader
   {
-    ID3DBlobPtr csErrorBlob;
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-    HRESULT hr = D3DCompileFromFile(
+    const D3D_SHADER_MACRO defines[] = {{"DEFERRED_DBG", "1"}, {NULL, NULL}};
+    compileShader(
+        "deferred compute",
         getShaderPath(L"Deferred.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        defines,
+        compileFlags,
+        ShaderType::Compute,
         "CS",
-        "cs_5_1",
-        compileFlags,
-        0,
-        &tempCS,
-        &csErrorBlob);
-    if (nullptr == tempCS || FAILED(hr))
+        m_DeferredCS);
+  }
+
+  // Clustering shaders
+  {
     {
-      OutputDebugStringA("Failed to load deferred compute shader.\n");
-      if (csErrorBlob != nullptr)
-        OutputDebugStringA((char*)csErrorBlob->GetBufferPointer());
-      ret = false;
+      const D3D_SHADER_MACRO defines[] = {
+          {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
+      compileShader(
+          "cluster vertex",
+          getShaderPath(L"Clusters.hlsl").c_str(),
+          defines,
+          compileFlags,
+          ShaderType::Vertex,
+          "ClusterVS",
+          clusterVS);
+    }
+
+    {
+      const D3D_SHADER_MACRO defines[] = {
+          {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
+      compileShader(
+          "cluster frontface",
+          getShaderPath(L"Clusters.hlsl").c_str(),
+          defines,
+          compileFlags,
+          ShaderType::Pixel,
+          "ClusterPS",
+          clusterFrontFacePS);
+    }
+
+    {
+      const D3D_SHADER_MACRO defines[] = {
+          {"FrontFace_", "0"}, {"BackFace_", "1"}, {"Intersecting_", "0"}, {NULL, NULL}};
+      compileShader(
+          "cluster backface",
+          getShaderPath(L"Clusters.hlsl").c_str(),
+          defines,
+          compileFlags,
+          ShaderType::Pixel,
+          "ClusterPS",
+          clusterBackFacePS);
+    }
+
+    {
+      const D3D_SHADER_MACRO defines[] = {
+          {"FrontFace_", "0"}, {"BackFace_", "0"}, {"Intersecting_", "1"}, {NULL, NULL}};
+      compileShader(
+          "cluster intersecting",
+          getShaderPath(L"Clusters.hlsl").c_str(),
+          defines,
+          compileFlags,
+          ShaderType::Pixel,
+          "ClusterPS",
+          clusterIntersectingPS);
+    }
+
+    {
+      compileShader(
+          "cluster visualizer",
+          getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
+          nullptr,
+          compileFlags,
+          ShaderType::Pixel,
+          "ClusterVisualizerPS",
+          clusterVisPS);
+    }
+
+    {
+      compileShader(
+          "cluster visualizer",
+          getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
+          nullptr,
+          compileFlags,
+          ShaderType::Pixel,
+          "ClusterVisualizerPS",
+          clusterVisPS);
     }
   }
 
-  // Cluster shaders
-  ID3DBlobPtr tempClusterVS;
-  ID3DBlobPtr tempClusterFrontFacePS;
-  ID3DBlobPtr tempClusterBackFacePS;
-  ID3DBlobPtr tempClusterIntersectingPS;
-  ID3DBlobPtr tempClusterVisPS;
-
+  // Fullscreen triangle
   {
-    ID3DBlobPtr clusterErrorBlob;
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-
-    const D3D_SHADER_MACRO definesVS[] = {
-        {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
-    HRESULT hr = D3DCompileFromFile(
-        getShaderPath(L"Clusters.hlsl").c_str(),
-        definesVS,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "ClusterVS",
-        "vs_5_1",
-        compileFlags,
-        0,
-        &tempClusterVS,
-        &clusterErrorBlob);
-    if (nullptr == tempClusterVS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load cluster shader.\n");
-      if (clusterErrorBlob != nullptr)
-        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
-      ret = false;
-    }
-
-    // front face cluster ps
-    clusterErrorBlob = nullptr;
-    const D3D_SHADER_MACRO definesFrontFacePS[] = {
-        {"FrontFace_", "1"}, {"BackFace_", "0"}, {"Intersecting_", "0"}, {NULL, NULL}};
-    hr = D3DCompileFromFile(
-        getShaderPath(L"Clusters.hlsl").c_str(),
-        definesFrontFacePS,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "ClusterPS",
-        "ps_5_1",
-        compileFlags,
-        0,
-        &tempClusterFrontFacePS,
-        &clusterErrorBlob);
-    if (nullptr == tempClusterFrontFacePS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load front face cluster pixel shader.\n");
-      if (clusterErrorBlob != nullptr)
-        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
-      ret = false;
-    }
-
-    // backface cluster ps
-    clusterErrorBlob = nullptr;
-    const D3D_SHADER_MACRO definesBackFacePS[] = {
-        {"FrontFace_", "0"}, {"BackFace_", "1"}, {"Intersecting_", "0"}, {NULL, NULL}};
-    hr = D3DCompileFromFile(
-        getShaderPath(L"Clusters.hlsl").c_str(),
-        definesBackFacePS,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "ClusterPS",
-        "ps_5_1",
-        compileFlags,
-        0,
-        &tempClusterBackFacePS,
-        &clusterErrorBlob);
-    if (nullptr == tempClusterBackFacePS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load back face cluster pixel shader.\n");
-      if (clusterErrorBlob != nullptr)
-        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
-      ret = false;
-    }
-
-    // intersecting cluster ps
-    clusterErrorBlob = nullptr;
-    const D3D_SHADER_MACRO definesIntersectingPS[] = {
-        {"FrontFace_", "0"}, {"BackFace_", "0"}, {"Intersecting_", "1"}, {NULL, NULL}};
-    hr = D3DCompileFromFile(
-        getShaderPath(L"Clusters.hlsl").c_str(),
-        definesIntersectingPS,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "ClusterPS",
-        "ps_5_1",
-        compileFlags,
-        0,
-        &tempClusterIntersectingPS,
-        &clusterErrorBlob);
-    if (nullptr == tempClusterIntersectingPS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load intersecting cluster pixel shader.\n");
-      if (clusterErrorBlob != nullptr)
-        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
-      ret = false;
-    }
-
-    // cluster visualizer ps
-    clusterErrorBlob = nullptr;
-    hr = D3DCompileFromFile(
-        getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
-        nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "ClusterVisualizerPS",
-        "ps_5_1",
-        compileFlags,
-        0,
-        &tempClusterVisPS,
-        &clusterErrorBlob);
-    if (nullptr == tempClusterVisPS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load cluster visualizer pixel shader.\n");
-      if (clusterErrorBlob != nullptr)
-        OutputDebugStringA((char*)clusterErrorBlob->GetBufferPointer());
-      ret = false;
-    }
-  }
-
-  // Fullscreen triangle vs
-  ID3DBlobPtr tempfullScreenTriVS;
-
-  {
-    ID3DBlobPtr errBlob = nullptr;
-#if defined(_DEBUG)
-    UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-    UINT compileFlags = 0;
-#endif
-    compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
-    HRESULT hr = D3DCompileFromFile(
+    compileShader(
+        "fullscreen triangle",
         getShaderPath(L"FullScreenTriangle.hlsl").c_str(),
         nullptr,
-        D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        "VS",
-        "vs_5_1",
         compileFlags,
-        0,
-        &tempfullScreenTriVS,
-        &errBlob);
-    if (nullptr == tempfullScreenTriVS || FAILED(hr))
-    {
-      OutputDebugStringA("Failed to load fullscreen triangle vertex shader.\n");
-      if (errBlob != nullptr)
-        OutputDebugStringA((char*)errBlob->GetBufferPointer());
-      ret = false;
-    }
-  }
-
-  // Don't update shaders if there was any issue:
-  if (ret)
-  {
-    m_GBufferVS = tempVS;
-    m_GBufferPS = tempPS;
-    m_DeferredCS = tempCS;
-
-    clusterVS = tempClusterVS;
-    clusterFrontFacePS = tempClusterFrontFacePS;
-    clusterBackFacePS = tempClusterBackFacePS;
-    clusterIntersectingPS = tempClusterIntersectingPS;
-    clusterVisPS = tempClusterVisPS;
-
-    fullScreenTriVS = tempfullScreenTriVS;
+        ShaderType::Vertex,
+        "VS",
+        fullScreenTriVS);
   }
 
   return ret;

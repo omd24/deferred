@@ -86,7 +86,8 @@ static void renderInternal()
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))
     {
-      ImGui::Checkbox("Use Linear Sampler", (bool*)&AppSettings::FOG_UseLinearClamp);
+      ImGui::Checkbox("Linear Sampler (Fog Composition & Sampling)", (bool*)&AppSettings::FOG_UseLinearClamp);
+      ImGui::Checkbox("Tricubic Filtering", (bool*)&AppSettings::FOG_SampleUsingTricubicFiltering);
       ImGui::Checkbox("Disable Light Scattering", (bool*)&AppSettings::FOG_DisableLightScattering);
       ImGui::Checkbox("Use Clustered Lighting", (bool*)&AppSettings::FOG_UseClusteredLighting);
       ImGui::Checkbox("Enable Shadow Map Sampling", (bool*)&AppSettings::FOG_EnableShadowMapSampling);

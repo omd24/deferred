@@ -215,27 +215,6 @@ void ShadeSample(in uint2 pixelPos)
 
   OutputTexture[pixelPos] = float4(shadingResult, 1.0f);
 
-  // TEST Fog volume:
-#if 0
-  const float near = DeferredCBuffer.Near;
-  const float far = DeferredCBuffer.Far;
-  const int numSlices = 128;
-  float depthUV = linearDepthToUV(near, far, linearDepth, numSlices );
-  float3 froxelUVW = float3(screenUV.xy, depthUV);
-
-  float t = 0;
-  float3 boxSize = float3(2.0, 2.0, 2.0);
-  float3 boxPos = float3(0, 1, 0);
-  float3 boxDist = abs(positionWS - boxPos);
-  if (all(boxDist <= boxSize)) {
-    t = 1.0;
-  }
-
-  float4 fogSample = fogVolume[froxelUVW];
-  float4 blend = lerp(OutputTexture[pixelPos], fogSample, t);
-  OutputTexture[pixelPos] = blend;
-#endif
-
   // TEST
   // OutputTexture[pixelPos] = AlbedoMap.SampleGrad(AnisoSampler, uv, uvDX, uvDY);
 }

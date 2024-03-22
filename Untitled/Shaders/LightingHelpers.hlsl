@@ -137,7 +137,7 @@ float interleavedGradientNoise (float2 pixel, int frame)
 //=================================================================================================
 // Custom filtering
 // https://gist.github.com/Fewes/59d2c831672040452aa77da6eaab2234
-float4 tricubicFiltering (uint textureIndex, float3 uvw, float3 textureSize, SamplerState linearSampler)
+float4 tricubicFiltering (in Texture3D volumeTexture, float3 uvw, float3 textureSize, SamplerState linearSampler)
 {
     // Shift the coordinate from [0,1] to [-0.5, textureSize-0.5]
     float3 coordGrid = uvw * textureSize - 0.5;
@@ -158,29 +158,28 @@ float4 tricubicFiltering (uint textureIndex, float3 uvw, float3 textureSize, Sam
 
     // Fetch the eight linear interpolations
     // Weighting and fetching is interleaved for performance and stability reasons
-    Texture3D noiseTexture = Tex3DTable[NonUniformResourceIndex(textureIndex)];
 
-    float4 tex000 = noiseTexture.SampleLevel(linearSampler, h0, 0);
-    float4 tex100 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h0.z), 0);
+    float4 tex000 = volumeTexture.SampleLevel(linearSampler, h0, 0);
+    float4 tex100 = volumeTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h0.z), 0);
     tex000 = lerp(tex100, tex000, g0.x); // Weigh along the x-direction
 
-    float4 tex010 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h0.z), 0);
-    float4 tex110 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h0.z), 0);
-    // float4 tex010 = noiseTexture[float4(h0.x, h1.y, h0.z, 0)];
-    // float4 tex110 = noiseTexture[float4(h1.x, h1.y, h0.z, 0)];
+    float4 tex010 = volumeTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h0.z), 0);
+    float4 tex110 = volumeTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h0.z), 0);
+    // float4 tex010 = volumeTexture[float4(h0.x, h1.y, h0.z, 0)];
+    // float4 tex110 = volumeTexture[float4(h1.x, h1.y, h0.z, 0)];
     tex010 = lerp(tex110, tex010, g0.x); // Weigh along the x-direction
     tex000 = lerp(tex010, tex000, g0.y); // Weigh along the y-direction
 
-    float4 tex001 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h0.y, h1.z), 0);
-    float4 tex101 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h1.z), 0);
-    // float4 tex001 = noiseTexture[float4(h0.x, h0.y, h1.z, 0)];
-    // float4 tex101 = noiseTexture[float4(h1.x, h0.y, h1.z, 0)];
+    float4 tex001 = volumeTexture.SampleLevel(linearSampler, float3(h0.x, h0.y, h1.z), 0);
+    float4 tex101 = volumeTexture.SampleLevel(linearSampler, float3(h1.x, h0.y, h1.z), 0);
+    // float4 tex001 = volumeTexture[float4(h0.x, h0.y, h1.z, 0)];
+    // float4 tex101 = volumeTexture[float4(h1.x, h0.y, h1.z, 0)];
     tex001 = lerp(tex101, tex001, g0.x); // Weigh along the x-direction
 
-    float4 tex011 = noiseTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h1.z), 0);
-    float4 tex111 = noiseTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h1.z), 0);
-    // float4 tex011 = noiseTexture[float4(h0.x, h1.y, h1.z, 0)];
-    // float4 tex111 = noiseTexture[float4(h1, 0)];
+    float4 tex011 = volumeTexture.SampleLevel(linearSampler, float3(h0.x, h1.y, h1.z), 0);
+    float4 tex111 = volumeTexture.SampleLevel(linearSampler, float3(h1.x, h1.y, h1.z), 0);
+    // float4 tex011 = volumeTexture[float4(h0.x, h1.y, h1.z, 0)];
+    // float4 tex111 = volumeTexture[float4(h1, 0)];
     tex011 = lerp(tex111, tex011, g0.x); // Weigh along the x-direction
     tex001 = lerp(tex011, tex001, g0.y); // Weigh along the y-direction
 

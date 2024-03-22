@@ -36,6 +36,7 @@ extern uint32_t CurrentFrame;
 
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
+extern bool32 FOG_SampleUsingTricubicFiltering;
 extern bool32 FOG_DisableLightScattering;
 extern bool32 FOG_UseClusteredLighting;
 extern bool32 FOG_EnableShadowMapSampling;
@@ -82,7 +83,7 @@ struct AppSettingsCBuffer
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
-  float unused;
+  bool32 FOG_SampleUsingTricubicFiltering;
   float unused1;
   float unused2;
 

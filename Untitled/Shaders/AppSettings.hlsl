@@ -20,7 +20,7 @@ struct AppSettingsCbuffer
 
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
-  float unused;
+  bool FOG_SampleUsingTricubicFiltering;
   float unused1;
   float unused2;
 

@@ -24,6 +24,7 @@ uint32_t CurrentFrame = 0;
 
 // Volumetric fog:
 bool32 FOG_UseLinearClamp = true;
+bool32 FOG_SampleUsingTricubicFiltering = false;
 bool32 FOG_DisableLightScattering = false;
 bool32 FOG_UseClusteredLighting = false;
 bool32 FOG_EnableShadowMapSampling = true;
@@ -77,6 +78,7 @@ void updateCBuffer()
 
   // Volumetric data
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;
+  cbData.FOG_SampleUsingTricubicFiltering = FOG_SampleUsingTricubicFiltering;
   cbData.FOG_DisableLightScattering = FOG_DisableLightScattering;
   cbData.FOG_UseClusteredLighting = FOG_UseClusteredLighting;
   cbData.FOG_EnableShadowMapSampling = FOG_EnableShadowMapSampling;

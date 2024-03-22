@@ -47,10 +47,14 @@ float3 applyVolumetricFog (float2 screenUV, float rawDepth, float near, float fa
     float3 froxelUVW = float3(screenUV.xy, depthUV);
     
     float4 scatteringTransmittance = float4(0, 0, 0, 0);
-    if (AppSettings.FOG_UseLinearClamp)
+    if (AppSettings.FOG_SampleUsingTricubicFiltering)
+    {
+      scatteringTransmittance = tricubicFiltering(fogVolume, froxelUVW, float3(numSlices, numSlices, numSlices), fogSampler);
+    }
+    else if (AppSettings.FOG_UseLinearClamp)
       scatteringTransmittance = fogVolume.SampleLevel(fogSampler, froxelUVW, 0);
     else
-      scatteringTransmittance = fogVolume[froxelUVW * float3(128, 128, 128)];
+      scatteringTransmittance = fogVolume[froxelUVW * float3(numSlices, numSlices, numSlices)];
 
     // Add animated noise to transmittance to remove banding.
     float2 blueNoise = blueNoiseTexture.SampleLevel(noiseSampler, screenUV, 0).rg;

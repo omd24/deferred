@@ -13,15 +13,25 @@ float3 PosWSFromDepth(in float zw, in float2 uv, in float4x4 invViewProj)
 }
 // ==========================================================================
 // http://www.aortiz.me/2018/12/21/CG.html
-// Convert linear depth (near...far) to (0...1) value distributed with exponential functions
+// Convert linear depth (near...far) to (0...1) normalized value distributed with exponential functions
 // This function is performing all calculations, a more optimized one precalculates factors on CPU.
+
+// See comparisons here:
+// https://www.desmos.com/calculator/myr1vu75cu
 float linearDepthToUV (float near, float far, float linearDepth, int numSlices)
 {
-    const float oneOverLog2FarOverNear = 1.0f / log2( far / near );
-    const float scale = numSlices * oneOverLog2FarOverNear;
-    const float bias = - ( numSlices * log2(near) * oneOverLog2FarOverNear );
+    if (1 == AppSettings.FOG_DepthMode)
+      return log2(linearDepth * AppSettings.FOG_GridParams.x + AppSettings.FOG_GridParams.y) * AppSettings.FOG_GridParams.z / float(numSlices);
 
+    // Default
+    const float oneOverLog2FarOverNear = 1.0f / log2(far / near);
+    const float scale = numSlices * oneOverLog2FarOverNear;
+    const float bias = -(numSlices * log2(near) * oneOverLog2FarOverNear);
     return max(log2(linearDepth) * scale + bias, 0.0f) / float(numSlices);
+
+    // According to the doom 2016 equation, this should be the inverse depth function
+    // but for some unknown it causes more slicing artifacts which proves the froxel depth distribution is buggy!
+    //return (numSlices * log2(linearDepth / near) / log2(far / near) - 0.5f) / float(numSlices);
 }
 // ==========================================================================
 // Convert rawDepth (0..1) to linear depth (near...far)

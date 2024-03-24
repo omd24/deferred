@@ -10,7 +10,6 @@ static const uint32_t MaxInputs = 8;
 // - Add spatial filter
 // - Add 3D noise baking pass
 // - Add 3D noise for froxelization
-// - Add tricubic sampler
 // - Add volumetric shadows
 // - Add froxel debug view
 // - Add a global uniform for Fog, taa and motion vectors
@@ -23,6 +22,13 @@ static const uint32_t MaxInputs = 8;
 // - Add postfx shaft
 // - Add dxc (and unify shader compilations)
 
+// TODOs (known issues):
+// - Investigate temporal pass as it might be related to the froxelization issues
+// - Investigate froxel depth distribution bug (the depth/slice computation seems inaccurate):
+//   https://www.desmos.com/calculator/myr1vu75cu
+// - Investigate tricubic filter and compare with the other implementation:
+//   https://www.desmos.com/calculator/gy9chfclsv
+// - Investigate jitter and dither and alternative methods
 
 namespace AppSettings
 {
@@ -90,6 +96,24 @@ enum RenderPass : uint32_t
 int VolumetricFog::m_CurrLightScatteringTextureIndex = 1;
 int VolumetricFog::m_PrevLightScatteringTextureIndex = 0;
 bool VolumetricFog::m_BuffersInitialized = false;
+
+
+glm::vec3 getVolumetricFogGridZParams(float nearPlane, float farPlane, int gridSizeZ, float exponent, float offset)
+{
+  // S = distribution scale
+  // B, O are solved for given the z distances of the first+last slice, and the # of slices.
+  //
+  // slice = log2(z*B + O) * S
+
+  float S = exponent;
+  float N = nearPlane + offset;
+  float F = farPlane;
+
+  float O = (F - N * pow(2.0f, (gridSizeZ - 1.0f) / S)) / (F - N);
+  float B = (1.0f - O) / N;
+
+  return glm::vec3(B, O, S);
+}
 
 void VolumetricFog::init(ID3D12Device * p_Device)
 {
@@ -374,6 +398,9 @@ void VolumetricFog::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDes
     uniforms.NumXTiles = uint32_t(AppSettings::NumXTiles);
     uniforms.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
     uniforms.HaltonXY = p_RenderDesc.HaltonXY;
+
+    AppSettings::FOG_GridParams =
+        getVolumetricFogGridZParams(p_RenderDesc.Near, p_RenderDesc.Far, m_Dimensions.z, AppSettings::FOG_Exponent, AppSettings::FOG_Offset);
   }
 
   // 1. Data injection

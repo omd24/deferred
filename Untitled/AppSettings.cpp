@@ -46,6 +46,10 @@ float FOG_BoxPosition[3] = {0.0f, 2.0f, 0.0f};
 float FOG_BoxFogDensity = .9f;
 float FOG_BoxColor[3] = {0.0f, 1.0f, 0.0f};
 float FOG_PhaseAnisotropy = 0.5f;
+float FOG_Exponent = 30.0f;
+float FOG_Offset = 0.0f;
+glm::vec3 FOG_GridParams = glm::vec3(0.0f);
+int32_t FOG_DepthMode = 0;
 
 ConstantBuffer CBuffer;
 const uint32_t CBufferRegister = 12;
@@ -98,6 +102,8 @@ void updateCBuffer()
   cbData.FOG_BoxSize = FOG_BoxSize;
   cbData.FOG_BoxFogDensity = FOG_BoxFogDensity;
   cbData.FOG_PhaseAnisotropy = FOG_PhaseAnisotropy;
+  cbData.FOG_GridParams = FOG_GridParams;
+  cbData.FOG_DepthMode = FOG_DepthMode;
 
   // Box position (float3)
   memcpy(cbData.FOG_BoxPosition, FOG_BoxPosition, sizeof(cbData.FOG_BoxPosition));

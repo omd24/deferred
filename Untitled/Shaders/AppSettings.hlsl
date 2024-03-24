@@ -21,7 +21,7 @@ struct AppSettingsCbuffer
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
   bool FOG_SampleUsingTricubicFiltering;
-  float unused1;
+  int FOG_DepthMode;
   float unused2;
 
   bool FOG_DisableLightScattering;
@@ -29,10 +29,8 @@ struct AppSettingsCbuffer
   bool FOG_EnableShadowMapSampling;
   bool FOG_EnableTemporalFilter;
 
+  float3 FOG_GridParams;
   bool FOG_ApplyXYJitter;
-  float unused3;
-  float unused4;
-  float unused5;
 
   bool FOG_ApplyZJitter;
   float FOG_ScatteringFactor;

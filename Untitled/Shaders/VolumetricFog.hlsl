@@ -135,11 +135,19 @@ float generateNoise (float2 pixel, int frame, float scale)
 // Convert slice index to (near...far) value distributed with exponential function.
 float sliceToExponentialDepth (float near, float far, int slice, int numSlices)
 {
-    return near * pow( far / near, (float(slice) + 0.5f) / float(numSlices) );
+    if (1 == AppSettings.FOG_DepthMode)
+        return (exp2(slice / AppSettings.FOG_GridParams.z) - AppSettings.FOG_GridParams.y) / AppSettings.FOG_GridParams.x;
+
+    // Default:
+    return near * pow(far / near, (float(slice) + 0.5f) / float(numSlices));
 }
 // ==========================================================================
 float sliceToExponentialDepthJittered (float near, float far, float jitter, int slice, int numSlices)
 {
+    if (1 == AppSettings.FOG_DepthMode)
+        return (exp2(slice / AppSettings.FOG_GridParams.z) - AppSettings.FOG_GridParams.y) / AppSettings.FOG_GridParams.x;
+
+    // Default:
     return near * pow(far / near, (float(slice) + 0.5f + jitter) / float(numSlices));
 }
 // ==========================================================================
@@ -195,18 +203,18 @@ float4 worldFromFroxel(uint3 froxelCoord, bool jitter)
     return worldPos;
 }
 // ==========================================================================
-float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
-{
-    const float3 absoluteVec = abs(direction);
-    const float localZComponent = max(absoluteVec.x, max(absoluteVec.y, absoluteVec.z));
+// float vectorToDepthValue( float3 direction, float radius, float rcpNminusF )
+// {
+//     const float3 absoluteVec = abs(direction);
+//     const float localZComponent = max(absoluteVec.x, max(absoluteVec.y, absoluteVec.z));
 
-    const float f = radius;
-    const float n = 0.01f;
-    // Original value, left for reference.
-    //const float normalizedZComponent = -(f / (n - f) - (n * f) / (n - f) / localZComponent);
-    const float normalizedZComponent = ( n * f * rcpNminusF ) / localZComponent - f * rcpNminusF;
-    return normalizedZComponent;
-}
+//     const float f = radius;
+//     const float n = 0.01f;
+//     // Original value, left for reference.
+//     //const float normalizedZComponent = -(f / (n - f) - (n * f) / (n - f) / localZComponent);
+//     const float normalizedZComponent = ( n * f * rcpNminusF ) / localZComponent - f * rcpNminusF;
+//     return normalizedZComponent;
+// }
 // ==========================================================================
 float attenuationSquareFalloff(float3 positionToLight, float lightInverseRadius)
 {

@@ -96,6 +96,12 @@ static void renderInternal()
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderInt("Depth Distribution Mode", &AppSettings::FOG_DepthMode, 0.0f, 1.0f, "%.2f");
+      if (1 == AppSettings::FOG_DepthMode)
+      {
+        ImGui::SliderFloat("Depth Exponent Factor", &AppSettings::FOG_Exponent, 10.0f, 100.0f, "%.2f");
+        ImGui::SliderFloat("Depth Offset", &AppSettings::FOG_Offset, 0.0f, 20.0f, "%.2f");
+      }
 
       ImGui::SeparatorText("Noise Options");
       ImGui::Checkbox("Enable Z-Jitter", (bool*)&AppSettings::FOG_ApplyZJitter);
@@ -110,7 +116,7 @@ static void renderInternal()
 
       ImGui::SeparatorText("Temporal Pass Options");
       ImGui::Checkbox("Enable Temporal Filter", (bool*)&AppSettings::FOG_EnableTemporalFilter);
-      ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.3f");
+      ImGui::SliderFloat("Temporal Reprojection Percentage", &AppSettings::FOG_TemporalPercentage, 0.0f, 1.0f, "%.4f");
       
       ImGui::SeparatorText("Box Volume Options");
       ImGui::SliderFloat("Box Size", &AppSettings::FOG_BoxSize, 0.0f, 10.0f, "%.2f");

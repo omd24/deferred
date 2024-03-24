@@ -137,6 +137,9 @@ float interleavedGradientNoise (float2 pixel, int frame)
 //=================================================================================================
 // Custom filtering
 // https://gist.github.com/Fewes/59d2c831672040452aa77da6eaab2234
+
+// TODO: compare with this optimized implementation:
+// https://www.desmos.com/calculator/gy9chfclsv
 float4 tricubicFiltering (in Texture3D volumeTexture, float3 uvw, float3 textureSize, SamplerState linearSampler)
 {
     // Shift the coordinate from [0,1] to [-0.5, textureSize-0.5]

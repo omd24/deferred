@@ -37,6 +37,7 @@ extern uint32_t CurrentFrame;
 // Volumetric fog
 extern bool32 FOG_UseLinearClamp;
 extern bool32 FOG_SampleUsingTricubicFiltering;
+extern int32_t FOG_DepthMode;
 extern bool32 FOG_DisableLightScattering;
 extern bool32 FOG_UseClusteredLighting;
 extern bool32 FOG_EnableShadowMapSampling;
@@ -58,6 +59,9 @@ extern float FOG_BoxPosition[3];
 extern float FOG_BoxFogDensity;
 extern float FOG_BoxColor[3];
 extern float FOG_PhaseAnisotropy;
+extern float FOG_Exponent;
+extern float FOG_Offset;
+extern glm::vec3 FOG_GridParams;
 
 // Be ware of the alignment rules:
 // https://maraneshi.github.io/HLSL-ConstantBufferLayoutVisualizer/
@@ -84,7 +88,7 @@ struct AppSettingsCBuffer
   // Volumetric fog
   bool32 FOG_UseLinearClamp;
   bool32 FOG_SampleUsingTricubicFiltering;
-  float unused1;
+  int32_t FOG_DepthMode;
   float unused2;
 
   bool32 FOG_DisableLightScattering;
@@ -92,10 +96,8 @@ struct AppSettingsCBuffer
   bool32 FOG_EnableShadowMapSampling;
   bool32 FOG_EnableTemporalFilter;
 
+  glm::vec3 FOG_GridParams;
   bool32 FOG_ApplyXYJitter;
-  float unused3;
-  float unused4;
-  float unused5;
 
   bool32 FOG_ApplyZJitter;
   float FOG_ScatteringFactor;

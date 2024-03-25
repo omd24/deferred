@@ -60,6 +60,12 @@
     <ClCompile Include="Common\Utility.cpp">
       <Filter>Common</Filter>
     </ClCompile>
+    <ClCompile Include="Common\Spectrum.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\SphericalHarmonics.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -124,6 +130,12 @@
     <ClInclude Include="TestPass.hpp" />
     <ClInclude Include="TAA.hpp" />
     <ClInclude Include="MotionVector.hpp" />
+    <ClInclude Include="Common\Spectrum.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\SphericalHarmonics.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

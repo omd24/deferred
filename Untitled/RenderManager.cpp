@@ -2353,7 +2353,6 @@ void RenderManager::onShaderChange()
 void RenderManager::updateLights()
 {
   const uint64_t numSpotLights = std::min<uint64_t>(spotLights.size(), AppSettings::MaxLightClamp);
-  const float Pi = 3.141592654f;
 
   // An additional scale factor that is needed to make sure that our polygonal bounding cone fully
   // encloses the actual cone representing the light's area of influence

@@ -21,6 +21,7 @@ extern uint64_t g_CurrFrameIdx; // CurrentCPUFrame % RenderLatency
 #define RENDER_LATENCY 2
 
 struct Texture;
+struct ReadbackBuffer;
 
 extern ID3D12Device* g_Device;
 
@@ -31,6 +32,9 @@ void initializeUpload(ID3D12Device* p_Dev);
 void shutdownUpload();
 
 void EndFrame_Upload(ID3D12CommandQueue* p_Queue);
+
+void convertAndReadbackTexture(
+    const Texture& texture, DXGI_FORMAT outputFormat, ReadbackBuffer& buffer);
 
 inline void setViewport(
     ID3D12GraphicsCommandList* p_CmdList,
@@ -742,6 +746,25 @@ private:
 
   D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc(uint64_t bufferIdx) const;
   void updateDynamicSRV() const;
+};
+
+struct ReadbackBuffer
+{
+  ID3D12Resource* Resource = nullptr;
+  uint64_t Size = 0;
+
+  ReadbackBuffer();
+  ~ReadbackBuffer();
+
+  void init(uint64_t size);
+  void deinit();
+
+  void* map();
+  template <typename T> T* map() { return reinterpret_cast<T*>(map()); };
+  void unmap();
+
+private:
+  ReadbackBuffer(const ReadbackBuffer& other) {}
 };
 
 //---------------------------------------------------------------------------//

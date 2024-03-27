@@ -381,3 +381,23 @@ void makeConeGeometry(
     FormattedBuffer& idxBuffer,
     std::vector<glm::vec3>& positions);
 void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, FormattedBuffer& idxBuffer);
+
+// Some additional texture helpers:
+template <typename T> struct TextureData
+{
+  std::vector<T> Texels;
+  uint32 Width = 0;
+  uint32 Height = 0;
+  uint32 NumSlices = 0;
+
+  void init(uint32 width, uint32 height, uint32 numSlices)
+  {
+    Width = width;
+    Height = height;
+    NumSlices = numSlices;
+    Texels.resize(width * height * numSlices);
+  }
+};
+// Decode a texture and copies it to the CPU
+void getTextureData(const Texture& texture, TextureData<glm::vec4>& textureData);
+glm::vec3 mapXYSToDirection(uint64_t x, uint64_t y, uint64_t s, uint64_t width, uint64_t height);

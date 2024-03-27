@@ -1048,4 +1048,24 @@ void makeConeGeometry(
 }
 void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, FormattedBuffer& idxBuffer)
 {
+  assert(false && "Not implemented yet."); 
 }
+
+template <typename T>
+static void getTextureData(const Texture& texture, DXGI_FORMAT outFormat, TextureData<T>& texData)
+{
+  assert(DirectX::BitsPerPixel(outFormat) / 8 == sizeof(T));
+  assert(texture.Depth == 1);
+
+  ...to do
+  ReadbackBuffer readbackBuffer;
+  convertAndReadbackTexture(texture, outFormat, readbackBuffer);
+
+  texData.Init(texture.Width, texture.Height, texture.ArraySize);
+  assert(texData.Texels.MemorySize() == readbackBuffer.Size);
+  memcpy(texData.Texels.Data(), readbackBuffer.Map(), readbackBuffer.Size);
+
+  readbackBuffer.Shutdown();
+}
+void getTextureData(const Texture& texture, TextureData<glm::vec4>& textureData);
+glm::vec3 mapXYSToDirection(uint64_t x, uint64_t y, uint64_t s, uint64_t width, uint64_t height);

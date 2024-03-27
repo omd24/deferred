@@ -91,6 +91,14 @@ using I64 = int64_t;
 using U32 = uint32_t;
 using U64 = uint64_t;
 
+// Constants
+const float Pi = 3.141592654f;
+const float Pi2 = 6.283185307f;
+const float Pi_2 = 1.570796327f;
+const float Pi_4 = 0.7853981635f;
+const float InvPi = 0.318309886f;
+const float InvPi2 = 0.159154943f;
+
 //---------------------------------------------------------------------------//
 // Helper macros:
 //---------------------------------------------------------------------------//

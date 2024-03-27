@@ -211,7 +211,6 @@ void SimpleParticle::render(
 
   // Calculate particle position
   glm::mat4 world = m_Transforms[0];
-  const float pi = 3.141592654f;
   // Animate particle position:
   {
     // const float particleIndex = 1.0f;

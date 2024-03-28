@@ -12,22 +12,6 @@ uint64_t g_CurrFrameIdx = 0; // CurrentCPUFrame % RenderLatency
 
 ID3D12Device* g_Device = nullptr;
 
-// local cmdlists and corresponding allocators and fences
-static ID3D12GraphicsCommandList1* convertCmdList = nullptr;
-static ID3D12CommandQueue* convertCmdQueue = nullptr;
-static ID3D12CommandAllocator* convertCmdAllocator = nullptr;
-static ID3D12RootSignature* convertRootSignature = nullptr;
-static ID3D12PipelineState* convertPSO = nullptr;
-static ID3D12PipelineState* convertArrayPSO = nullptr;
-static ID3DBlobPtr convertCS;
-static ID3DBlobPtr convertArrayCS;
-static uint32_t convertTGSize = 16;
-static Fence convertFence;
-
-static ID3D12GraphicsCommandList1* readbackCmdList = nullptr;
-static ID3D12CommandAllocator* readbackCmdAllocator = nullptr;
-static Fence readbackFence;
-
 static const uint64_t g_UploadBufferSize = 32 * 1024 * 1024;
 
 size_t bitsPerPixel(DXGI_FORMAT fmt)
@@ -347,8 +331,10 @@ static void ClearFinishedUploads(uint64_t flushCount)
   }
 }
 
-void initializeHelpers()
+void initializeHelpers(ID3D12Device* dev)
 {
+  g_Device = dev;
+
   RTVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, false);
   SRVDescriptorHeap.Init(1024, 1024, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
   DSVDescriptorHeap.Init(256, 0, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, false);
@@ -1408,7 +1394,9 @@ void initializeUpload(ID3D12Device* dev)
     std::wstring shaderPath = assetsPath;
     shaderPath += L"Shaders\\DecodeTextureCS.hlsl";
 
-    const D3D_SHADER_MACRO defines[] = {{"TGSize_", std::to_string(convertTGSize).c_str()}, {NULL, NULL}};
+    std::string s = std::to_string(convertTGSize);
+    char const* tgSize = s.c_str(); // use char const* as target type
+    const D3D_SHADER_MACRO defines[] = {{"TGSize_", tgSize}, {NULL, NULL}};
     compileShader(
         "decode texture",
         shaderPath.c_str(),
@@ -1448,7 +1436,7 @@ void initializeUpload(ID3D12Device* dev)
     rootParameters[ConvertParams_UAV].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[ConvertParams_UAV].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     rootParameters[ConvertParams_UAV].DescriptorTable.pDescriptorRanges = uavRanges;
-    rootParameters[ConvertParams_UAV].DescriptorTable.NumDescriptorRanges = arrayCount(uavRanges);
+    rootParameters[ConvertParams_UAV].DescriptorTable.NumDescriptorRanges = arrayCount32(uavRanges);
 
     rootParameters[ConvertParams_SRVIndex].ParameterType =
         D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -1458,7 +1446,7 @@ void initializeUpload(ID3D12Device* dev)
     rootParameters[ConvertParams_SRVIndex].Constants.ShaderRegister = 0;
 
     D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
-    rootSignatureDesc.NumParameters = arrayCount(rootParameters);
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
     rootSignatureDesc.pParameters = rootParameters;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
@@ -1476,7 +1464,7 @@ void initializeUpload(ID3D12Device* dev)
     g_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&convertArrayPSO));
   }
 
-  convertFence.Init(0);
+  convertFence.init(0);
 
   // Readback resources
   D3D_EXEC_CHECKED(g_Device->CreateCommandAllocator(
@@ -1490,7 +1478,7 @@ void initializeUpload(ID3D12Device* dev)
   D3D_EXEC_CHECKED(readbackCmdList->Close());
   D3D_EXEC_CHECKED(readbackCmdList->Reset(readbackCmdAllocator, nullptr));
 
-  readbackFence.Init(0);
+  readbackFence.init(0);
 }
 void shutdownUpload()
 {
@@ -1521,9 +1509,6 @@ void shutdownUpload()
 
   readbackCmdAllocator->Release();
   readbackCmdList->Release();
-
-  convertFence.Shutdown();
-  readbackFence.Shutdown();
 }
 void EndFrame_Upload(ID3D12CommandQueue* p_GfxQueue)
 {
@@ -1591,12 +1576,12 @@ void convertAndReadbackTexture(
   ID3D12CommandList* cmdLists[1] = {convertCmdList};
   convertCmdQueue->ExecuteCommandLists(1, cmdLists);
 
-  convertFence.Signal(convertCmdQueue, 1);
+  convertFence.signal(convertCmdQueue, 1);
 
   // Have the readback wait for conversion finish, and then have it copy the data to a readback
   // buffer
   ID3D12CommandQueue* readbackQueue = s_UploadCmdQueue;
-  readbackQueue->Wait(convertFence.D3DFence, 1);
+  readbackQueue->Wait(convertFence.m_D3DFence, 1);
 
   readbackBuffer.deinit();
   readbackBuffer.init(convertBuffer.InternalBuffer.m_Size);
@@ -1608,13 +1593,13 @@ void convertAndReadbackTexture(
   cmdLists[0] = readbackCmdList;
   readbackQueue->ExecuteCommandLists(1, cmdLists);
 
-  readbackFence.Signal(readbackQueue, 1);
+  readbackFence.signal(readbackQueue, 1);
 
-  readbackFence.Wait(1);
+  readbackFence.wait(1);
 
   // Clean up
-  convertFence.Clear(0);
-  readbackFence.Clear(0);
+  convertFence.clear(0);
+  readbackFence.clear(0);
 
   D3D_EXEC_CHECKED(convertCmdAllocator->Reset());
   D3D_EXEC_CHECKED(convertCmdList->Reset(convertCmdAllocator, nullptr));
@@ -2483,6 +2468,8 @@ void RawBuffer::updateDynamicSRV() const
 //---------------------------------------------------------------------------//
 // ReadbackBuffer
 //---------------------------------------------------------------------------//
+ReadbackBuffer::ReadbackBuffer() {}
+ReadbackBuffer::~ReadbackBuffer() { assert(Resource == nullptr); }
 void ReadbackBuffer::init(uint64_t size)
 {
   assert(size > 0);

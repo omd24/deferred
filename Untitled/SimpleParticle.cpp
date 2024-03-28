@@ -250,7 +250,7 @@ void SimpleParticle::render(
     glm::vec3 new_x = glm::normalize(glm::cross(new_y, new_z));
     // spriteConstants.RotationMatrix = glm::transpose(glm::mat3(new_x, new_y, new_z));
     spriteConstants.InvView = glm::inverse(p_ViewMat);
-    spriteConstants.Params0.x = std::cos(p_DeltaTime * pi / 50.0f); // scale factor
+    spriteConstants.Params0.x = std::cos(p_DeltaTime * Pi / 50.0f); // scale factor
     spriteConstants.InvView3 = invViewRot;
     spriteConstants.QuatCamera = p_CameraOrientation;
     spriteConstants.CamUp = p_CameraUp;

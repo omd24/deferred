@@ -579,8 +579,8 @@ void RenderManager::loadD3D12Pipeline()
   }
 
   // Init uploads and other helpers
+  initializeHelpers(m_Dev);
   initializeUpload(m_Dev);
-  initializeHelpers();
 
   // Create frame resources.
   {

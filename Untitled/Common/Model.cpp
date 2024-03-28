@@ -1,7 +1,6 @@
 #include "Model.hpp"
 
-// DirectX Tex
-#include "..\\Externals\\DirectXTex July 2017\\Include\\DirectXTex.h"
+
 #ifdef _DEBUG
 #  pragma comment(lib, "..\\Externals\\DirectXTex July 2017\\Lib 2017\\Debug\\DirectXTex.lib")
 #else
@@ -1051,21 +1050,36 @@ void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, Formatted
   assert(false && "Not implemented yet."); 
 }
 
-template <typename T>
-static void getTextureData(const Texture& texture, DXGI_FORMAT outFormat, TextureData<T>& texData)
+glm::vec3 mapXYSToDirection(uint64_t x, uint64_t y, uint64_t s, uint64_t width, uint64_t height)
 {
-  assert(DirectX::BitsPerPixel(outFormat) / 8 == sizeof(T));
-  assert(texture.Depth == 1);
+  float u = ((x + 0.5f) / float(width)) * 2.0f - 1.0f;
+  float v = ((y + 0.5f) / float(height)) * 2.0f - 1.0f;
+  v *= -1.0f;
 
-  ...to do
-  ReadbackBuffer readbackBuffer;
-  convertAndReadbackTexture(texture, outFormat, readbackBuffer);
+  glm::vec3 dir = glm::vec3(0.0f);
 
-  texData.Init(texture.Width, texture.Height, texture.ArraySize);
-  assert(texData.Texels.MemorySize() == readbackBuffer.Size);
-  memcpy(texData.Texels.Data(), readbackBuffer.Map(), readbackBuffer.Size);
+  // +x, -x, +y, -y, +z, -z
+  switch (s)
+  {
+  case 0:
+    dir = glm::normalize(glm::vec3(1.0f, v, -u));
+    break;
+  case 1:
+    dir = glm::normalize(glm::vec3(-1.0f, v, u));
+    break;
+  case 2:
+    dir = glm::normalize(glm::vec3(u, 1.0f, -v));
+    break;
+  case 3:
+    dir = glm::normalize(glm::vec3(u, -1.0f, v));
+    break;
+  case 4:
+    dir = glm::normalize(glm::vec3(u, v, 1.0f));
+    break;
+  case 5:
+    dir = glm::normalize(glm::vec3(-u, v, -1.0f));
+    break;
+  }
 
-  readbackBuffer.Shutdown();
+  return dir;
 }
-void getTextureData(const Texture& texture, TextureData<glm::vec4>& textureData);
-glm::vec3 mapXYSToDirection(uint64_t x, uint64_t y, uint64_t s, uint64_t width, uint64_t height);

@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+// DirectX Tex
+#include "..\\Externals\\DirectXTex July 2017\\Include\\DirectXTex.h"
+
 struct aiMesh;
 
 struct MeshVertex
@@ -386,11 +389,11 @@ void makeConeGeometry(uint64_t divisions, StructuredBuffer& vtxBuffer, Formatted
 template <typename T> struct TextureData
 {
   std::vector<T> Texels;
-  uint32 Width = 0;
-  uint32 Height = 0;
-  uint32 NumSlices = 0;
+  uint32_t Width = 0;
+  uint32_t Height = 0;
+  uint32_t NumSlices = 0;
 
-  void init(uint32 width, uint32 height, uint32 numSlices)
+  void init(uint32_t width, uint32_t height, uint32_t numSlices)
   {
     Width = width;
     Height = height;
@@ -399,5 +402,24 @@ template <typename T> struct TextureData
   }
 };
 // Decode a texture and copies it to the CPU
-void getTextureData(const Texture& texture, TextureData<glm::vec4>& textureData);
+template <typename T>
+inline void getTextureData(const Texture& texture, DXGI_FORMAT outFormat, TextureData<T>& texData)
+{
+  assert(DirectX::BitsPerPixel(outFormat) / 8 == sizeof(T));
+  assert(texture.Depth == 1);
+
+  ReadbackBuffer readbackBuffer;
+  convertAndReadbackTexture(texture, outFormat, readbackBuffer);
+
+  texData.init(texture.Width, texture.Height, texture.ArraySize);
+  assert(texData.Texels.size() * sizeof(T) == readbackBuffer.Size);
+  memcpy(texData.Texels.data(), readbackBuffer.map(), readbackBuffer.Size);
+
+  readbackBuffer.deinit();
+}
+
+inline void getTextureData(const Texture& texture, TextureData<glm::vec4>& textureData)
+{
+  getTextureData(texture, DXGI_FORMAT_R32G32B32A32_FLOAT, textureData);
+}
 glm::vec3 mapXYSToDirection(uint64_t x, uint64_t y, uint64_t s, uint64_t width, uint64_t height);

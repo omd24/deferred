@@ -282,7 +282,7 @@ const uint32_t NumUserDescriptorRanges = 16;
 const uint32_t NumStandardDescriptorRanges = 7 + NumUserDescriptorRanges;
 
 // Lifetime
-void initializeHelpers();
+void initializeHelpers(ID3D12Device* dev);
 void shutdownHelpers();
 
 void endFrameHelpers();

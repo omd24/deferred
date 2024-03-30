@@ -2983,3 +2983,214 @@ void DepthBuffer::makeWritable(ID3D12GraphicsCommandList* cmdList, uint64_t arra
       D3D12_RESOURCE_STATE_DEPTH_WRITE,
       subResourceIdx);
 }
+
+// Returns the number of mip levels given a texture size
+static uint64_t numMipLevels(uint64_t width, uint64_t height, uint64_t depth = 1)
+{
+  uint64_t numMips = 0;
+  uint64_t size = std::max(std::max(width, height), depth);
+  while (1ull << numMips <= size)
+    ++numMips;
+
+  if (1ull << numMips < size)
+    ++numMips;
+
+  return numMips;
+}
+static void uploadTextureData(
+    const Texture& texture,
+    const void* initData,
+    ID3D12GraphicsCommandList* cmdList,
+    ID3D12Resource* uploadResource,
+    void* uploadCPUMem,
+    uint64_t resourceOffset)
+{
+  ID3D12Device* device = g_Device;
+  D3D12_RESOURCE_DESC textureDesc = texture.Resource->GetDesc();
+
+  const uint64_t arraySize = texture.Cubemap ? texture.ArraySize * 6 : texture.ArraySize;
+
+  const uint64_t numSubResources = texture.NumMips * arraySize;
+  D3D12_PLACED_SUBRESOURCE_FOOTPRINT* layouts = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT*)_alloca(
+      sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) * numSubResources);
+  uint32_t* numRows = (uint32_t*)_alloca(sizeof(uint32_t) * numSubResources);
+  uint64_t* rowSizes = (uint64_t*)_alloca(sizeof(uint64_t) * numSubResources);
+
+  uint64_t textureMemSize = 0;
+  device->GetCopyableFootprints(
+      &textureDesc, 0, uint32_t(numSubResources), 0, layouts, numRows, rowSizes, &textureMemSize);
+
+  // Get a GPU upload buffer
+  uint8_t* uploadMem = reinterpret_cast<uint8_t*>(uploadCPUMem);
+
+  const uint8_t* srcMem = reinterpret_cast<const uint8_t*>(initData);
+  const uint64_t srcTexelSize = bitsPerPixel(texture.Format) / 8;
+
+  for (uint64_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx)
+  {
+    uint64_t mipWidth = texture.Width;
+    for (uint64_t mipIdx = 0; mipIdx < texture.NumMips; ++mipIdx)
+    {
+      const uint64_t subResourceIdx = mipIdx + (arrayIdx * texture.NumMips);
+
+      const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& subResourceLayout = layouts[subResourceIdx];
+      const uint64_t subResourceHeight = numRows[subResourceIdx];
+      const uint64_t subResourcePitch = subResourceLayout.Footprint.RowPitch;
+      const uint64_t subResourceDepth = subResourceLayout.Footprint.Depth;
+      const uint64_t srcPitch = mipWidth * srcTexelSize;
+      uint8_t* dstSubResourceMem = uploadMem + subResourceLayout.Offset;
+
+      for (uint64_t z = 0; z < subResourceDepth; ++z)
+      {
+        for (uint64_t y = 0; y < subResourceHeight; ++y)
+        {
+          memcpy(dstSubResourceMem, srcMem, std::min(subResourcePitch, srcPitch));
+          dstSubResourceMem += subResourcePitch;
+          srcMem += srcPitch;
+        }
+      }
+
+      mipWidth = std::max(mipWidth / 2, 1ull);
+    }
+  }
+
+  for (uint64_t subResourceIdx = 0; subResourceIdx < numSubResources; ++subResourceIdx)
+  {
+    D3D12_TEXTURE_COPY_LOCATION dst = {};
+    dst.pResource = texture.Resource;
+    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    dst.SubresourceIndex = uint32_t(subResourceIdx);
+    D3D12_TEXTURE_COPY_LOCATION src = {};
+    src.pResource = uploadResource;
+    src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    src.PlacedFootprint = layouts[subResourceIdx];
+    src.PlacedFootprint.Offset += resourceOffset;
+    cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+  }
+}
+static void uploadTexture(const Texture& texture, const void* initData)
+{
+  ID3D12Device* device = g_Device;
+  D3D12_RESOURCE_DESC textureDesc = texture.Resource->GetDesc();
+
+  const uint64_t numSubResources = texture.NumMips * texture.ArraySize;
+  uint64_t textureMemSize = 0;
+  device->GetCopyableFootprints(
+      &textureDesc, 0, uint32_t(numSubResources), 0, nullptr, nullptr, nullptr, &textureMemSize);
+
+  // Get a GPU upload buffer
+  UploadContext uploadContext = resourceUploadBegin(textureMemSize);
+
+  uploadTextureData(
+      texture,
+      initData,
+      uploadContext.CmdList,
+      uploadContext.Resource,
+      uploadContext.CpuAddress,
+      uploadContext.ResourceOffset);
+
+  resourceUploadEnd(uploadContext);
+}
+
+void create2DTexture(
+    Texture& texture,
+    uint64_t width,
+    uint64_t height,
+    uint64_t numMips,
+    uint64_t arraySize,
+    DXGI_FORMAT format,
+    bool cubeMap,
+    const void* initData)
+{
+  texture.Shutdown();
+
+  assert(width > 0);
+  assert(height > 0);
+  assert(arraySize > 0);
+  const uint64_t maxMipLevels = numMipLevels(width, height);
+  if (numMips == 0)
+    numMips = maxMipLevels;
+  assert(numMips <= maxMipLevels);
+
+  const uint64_t srvArraySize = arraySize;
+  if (cubeMap)
+    arraySize *= 6;
+
+  D3D12_RESOURCE_DESC textureDesc = {};
+  textureDesc.MipLevels = uint16_t(numMips);
+  textureDesc.Format = format;
+  textureDesc.Width = uint32_t(width);
+  textureDesc.Height = uint32_t(height);
+  textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+  textureDesc.DepthOrArraySize = uint16_t(arraySize);
+  textureDesc.SampleDesc.Count = 1;
+  textureDesc.SampleDesc.Quality = 0;
+  textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+  textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+  textureDesc.Alignment = 0;
+
+  ID3D12Device* device = g_Device;
+  D3D_EXEC_CHECKED(device->CreateCommittedResource(
+      GetDefaultHeapProps(),
+      D3D12_HEAP_FLAG_NONE,
+      &textureDesc,
+      initData ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+      nullptr,
+      IID_PPV_ARGS(&texture.Resource)));
+
+  PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
+  texture.SRV = srvAlloc.Index;
+
+  D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = format;
+  srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+  if (srvArraySize == 1 && cubeMap == false)
+  {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = uint32_t(numMips);
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.PlaneSlice = 0;
+    srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+  }
+  else if (srvArraySize > 1 && cubeMap == false)
+  {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+    srvDesc.Texture2DArray.MipLevels = uint32_t(numMips);
+    srvDesc.Texture2DArray.MostDetailedMip = 0;
+    srvDesc.Texture2DArray.PlaneSlice = 0;
+    srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+    srvDesc.Texture2DArray.ArraySize = uint32_t(srvArraySize);
+    srvDesc.Texture2DArray.FirstArraySlice = 0;
+  }
+  else if (srvArraySize == 1 && cubeMap)
+  {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    srvDesc.TextureCube.MipLevels = uint32_t(numMips);
+    srvDesc.TextureCube.MostDetailedMip = 0;
+    srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+  }
+  else if (srvArraySize > 1 && cubeMap)
+  {
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    srvDesc.TextureCubeArray.MipLevels = uint32_t(numMips);
+    srvDesc.TextureCubeArray.MostDetailedMip = 0;
+    srvDesc.TextureCubeArray.ResourceMinLODClamp = 0.0f;
+    srvDesc.TextureCubeArray.First2DArrayFace = 0;
+    srvDesc.TextureCubeArray.NumCubes = uint32_t(srvArraySize);
+  }
+
+  for (uint32_t i = 0; i < SRVDescriptorHeap.NumHeaps; ++i)
+    device->CreateShaderResourceView(texture.Resource, &srvDesc, srvAlloc.Handles[i]);
+
+  texture.Width = uint32_t(width);
+  texture.Height = uint32_t(height);
+  texture.Depth = 1;
+  texture.NumMips = uint32_t(numMips);
+  texture.ArraySize = uint32_t(srvArraySize);
+  texture.Format = format;
+  texture.Cubemap = cubeMap;
+
+  if (initData != nullptr)
+    uploadTexture(texture, initData);
+}

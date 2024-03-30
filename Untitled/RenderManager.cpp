@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "Common/Input.hpp"
 #include "ShadowHelper.hpp"
+#include "Common/Quaternion.hpp"
 
 #define ENABLE_PARTICLE_EXPERIMENTAL 0
 #define ENABLE_GPU_BASED_VALIDATION 0
@@ -70,18 +71,6 @@ static bool _sphereConeIntersectionBartWronski(
   const bool frontCull = V1len > sphereRadius + coneHeight;
   const bool backCull = V1len < -sphereRadius;
   return !(angleCull || frontCull || backCull);
-}
-//---------------------------------------------------------------------------//
-// mimicking XMVector3TransofrmCoord
-// i.e., setting w = 1 for the input and forcing the result to have w = 1
-// https://learn.microsoft.com/en-us/windows/win32/api/directxmath/nf-directxmath-xmvector3transformcoord
-glm::vec3 _transformVec3Mat4(const glm::vec3& v, const glm::mat4& m)
-{
-  glm::vec4 v4 = glm::vec4(v.x, v.y, v.z, 1.0f) * m;
-  v4 /= v4.w;
-
-  glm::vec3 ret = glm::vec3(v4.x, v4.y, v4.z);
-  return ret;
 }
 //---------------------------------------------------------------------------//
 // Numerical sequences
@@ -228,50 +217,6 @@ struct LightConstants
 {
   SpotLight Lights[AppSettings::MaxSpotLights];
   glm::mat4x4 ShadowMatrices[AppSettings::MaxSpotLights];
-};
-
-struct Quaternion
-{
-  float x, y, z, w;
-
-  Quaternion() { *this = Quaternion::Identity(); }
-  Quaternion(float x_, float y_, float z_, float w_)
-  {
-    // NOTE: glm component order differs
-    x = x_;
-    y = y_;
-    z = z_;
-    w = w_;
-  }
-  Quaternion(const glm::vec3& axis, float angle) { *this = Quaternion::FromAxisAngle(axis, angle); }
-
-  Quaternion& operator=(const glm::quat& other)
-  {
-    // NOTE: glm component order differs
-    x = other.x;
-    y = other.y;
-    z = other.z;
-    w = other.w;
-    return *this;
-  }
-
-  static Quaternion Identity()
-  {
-    // NOTE: glm component order differs
-    return Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
-  }
-  static Quaternion FromAxisAngle(const glm::vec3& axis, float angle)
-  {
-    assert(false); // TODO!}
-  };
-
-  glm::mat3 ToMat3()
-  {
-    // glm component orders differs from human understanding ^^
-    // GLM_FUNC_QUALIFIER GLM_CONSTEXPR qua<T, Q>::qua(T _w, T _x, T _y, T _z)
-    glm::quat q = glm::quat(w, x, y, z);
-    return glm::mat3_cast(q);
-  }
 };
 
 struct ClusterBounds

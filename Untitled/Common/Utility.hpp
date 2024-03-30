@@ -99,6 +99,16 @@ const float Pi_4 = 0.7853981635f;
 const float InvPi = 0.318309886f;
 const float InvPi2 = 0.159154943f;
 
+// Max value that we can store in an fp16 buffer (actually a little less so that we have room for
+// error, real max is 65504)
+const float FP16Max = 65000.0f;
+
+// Scale factor used for storing physical light units in fp16 floats (equal to 2^-10).
+// https://www.reedbeta.com/blog/artist-friendly-hdr-with-exposure-values/#fitting-into-half-float
+// We basically shift input light values by -10EV (i.e., 2^-10) here and reapply the scale factor
+// during exposure/tone-mapping to get back the real values.
+const float FP16Scale = 0.0009765625f;
+
 //---------------------------------------------------------------------------//
 // Helper macros:
 //---------------------------------------------------------------------------//
@@ -188,7 +198,7 @@ template <typename T> inline T lerp(const T& p_Begin, const T& p_End, float p_In
   return (T)(p_Begin * (1 - p_InterpolationValue) + p_End * p_InterpolationValue);
 }
 //---------------------------------------------------------------------------//
-template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
+template <typename T> inline T _clamp(T p_Value, T p_Min, T p_Max)
 {
   assert(p_Max > p_Min);
 
@@ -202,9 +212,48 @@ template <typename T> inline T clamp(T p_Value, T p_Min, T p_Max)
   }
   return p_Value;
 }
-// Clamps a value to [0, 1]
-template <typename T> T saturate(T p_Value) { return clamp<T>(p_Value, T(0.0f), T(1.0f)); }
 //---------------------------------------------------------------------------//
+inline glm::vec3 _clamp(glm::vec3 p_Value, glm::vec3 p_Min, glm::vec3 p_Max)
+{
+  assert(p_Max.x > p_Min.x && p_Max.y > p_Min.y && p_Max.z > p_Min.z);
+
+  glm::vec3 ret = p_Value;
+  for (unsigned i = 0; i < 3; ++i)
+  {
+    if (p_Value[i] < p_Min[i])
+    {
+      ret[i] = p_Min[i];
+    }
+    else if (p_Value[i] > p_Max[i])
+    {
+      ret[i] = p_Max[i];
+    }
+  }
+  return ret;
+}
+// Clamps a value to [0, 1]
+inline glm::vec3 saturate(glm::vec3 p_Value)
+{
+  return _clamp(p_Value, glm::vec3(0.0f), glm::vec3(1.0f));
+}
+
+// Clamps a value to [0, 1]
+template <typename T> T saturate(T p_Value) { return _clamp<T>(p_Value, T(0.0f), T(1.0f)); }
+//---------------------------------------------------------------------------//
+template <typename T> void swap(T& a, T& b)
+{
+  T tmp = a;
+  a = b;
+  b = tmp;
+}
+//---------------------------------------------------------------------------//
+// Returns x * x
+template <typename T> T square(T x) { return x * x; }
+//---------------------------------------------------------------------------//
+inline float degToRad(float deg) { return deg * (1.0f / 180.0f) * 3.14159265359f; }
+//---------------------------------------------------------------------------//
+inline float radToDeg(float rad) { return rad * (1.0f / 3.14159265359f) * 180.0f; }
+// 
 // Converts a string to a wide-string
 inline std::wstring strToWideStr(const std::string& p_Str)
 {
@@ -662,3 +711,14 @@ inline float randFloat()
   return ret;
 }
 //---------------------------------------------------------------------------//
+// mimicking XMVector3TransofrmCoord
+// i.e., setting w = 1 for the input and forcing the result to have w = 1
+// https://learn.microsoft.com/en-us/windows/win32/api/directxmath/nf-directxmath-xmvector3transformcoord
+inline glm::vec3 _transformVec3Mat4(const glm::vec3& v, const glm::mat4& m)
+{
+  glm::vec4 v4 = glm::vec4(v.x, v.y, v.z, 1.0f) * m;
+  v4 /= v4.w;
+
+  glm::vec3 ret = glm::vec3(v4.x, v4.y, v4.z);
+  return ret;
+}

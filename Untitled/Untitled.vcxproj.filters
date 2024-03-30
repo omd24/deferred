@@ -10,6 +10,12 @@
     <Filter Include="Common\Imgui">
       <UniqueIdentifier>{87b14766-f3ca-460a-a530-eb1dec943ab8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SkyModels">
+      <UniqueIdentifier>{837c6b9e-b9b6-45fd-9249-312445380f32}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SkyModels\HosekSky">
+      <UniqueIdentifier>{979d553c-5331-4e8b-9216-8ef3cf5a175d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
@@ -65,6 +71,15 @@
     </ClCompile>
     <ClCompile Include="Common\SphericalHarmonics.cpp">
       <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="SkyModels\AnalyticalSkyModel.cpp">
+      <Filter>SkyModels</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Sampling.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="SkyModels\HosekSky\ArHosekSkyModel.cpp">
+      <Filter>SkyModels\HosekSky</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -135,6 +150,27 @@
     </ClInclude>
     <ClInclude Include="Common\SphericalHarmonics.hpp">
       <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyModels\AnalyticalSkyModel.hpp">
+      <Filter>SkyModels</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Sampling.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Quaternion.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModel.h">
+      <Filter>SkyModels\HosekSky</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_CIEXYZ.h">
+      <Filter>SkyModels\HosekSky</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_RGB.h">
+      <Filter>SkyModels\HosekSky</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_Spectral.h">
+      <Filter>SkyModels\HosekSky</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

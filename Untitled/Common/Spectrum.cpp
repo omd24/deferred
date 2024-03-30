@@ -48,7 +48,7 @@ template <typename Predicate> int FindInterval(int size, const Predicate& pred)
     else
       len = half;
   }
-  return clamp(first - 1, 0, size - 2);
+  return _clamp(first - 1, 0, size - 2);
 }
 
 // Spectrum Method Definitions

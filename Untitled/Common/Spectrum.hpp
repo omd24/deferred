@@ -271,7 +271,7 @@ public:
   {
     CoefficientSpectrum ret;
     for (int i = 0; i < nSpectrumSamples; ++i)
-      ret.c[i] = clamp(c[i], low, high);
+      ret.c[i] = _clamp(c[i], low, high);
     assert(!ret.HasNaNs());
     return ret;
   }

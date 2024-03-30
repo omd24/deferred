@@ -973,3 +973,13 @@ struct DepthBuffer
 private:
   DepthBuffer(const DepthBuffer& other) {}
 };
+
+void create2DTexture(
+    Texture& texture,
+    uint64_t width,
+    uint64_t height,
+    uint64_t numMips,
+    uint64_t arraySize,
+    DXGI_FORMAT format,
+    bool cubeMap,
+    const void* initData);

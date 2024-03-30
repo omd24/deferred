@@ -27,12 +27,6 @@ static_assert(arrayCount32(DefaultTextures) == uint32_t(MaterialTextures::Count)
 
 static constexpr float maxFloat = std::numeric_limits<float>::max();
 
-// Scale factor used for storing physical light units in fp16 floats (equal to 2^-10).
-// https://www.reedbeta.com/blog/artist-friendly-hdr-with-exposure-values/#fitting-into-half-float
-// We basically shift input light values by -10EV (i.e., 2^-10) here and reapply the scale factor
-// during exposure/tone-mapping to get back the real values.
-const float FP16Scale = 0.0009765625f;
-
 static glm::vec3 convertVector(const aiVector3D& vec) { return glm::vec3(vec.x, vec.y, vec.z); }
 
 static glm::vec3 convertColor(const aiColor3D& clr) { return glm::vec3(clr.r, clr.g, clr.b); }

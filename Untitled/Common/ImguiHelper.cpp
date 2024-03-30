@@ -96,7 +96,7 @@ static void renderInternal()
       ImGui::SliderFloat("Height Fog Density", &AppSettings::FOG_HeightFogDenisty, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Height Fog Falloff", &AppSettings::FOG_HeightFogFalloff, 0.0f, 1.0f, "%.2f");
       ImGui::SliderFloat("Phase Anisotropy", &AppSettings::FOG_PhaseAnisotropy, 0.0f, 1.0f, "%.2f");
-      ImGui::SliderInt("Depth Distribution Mode", &AppSettings::FOG_DepthMode, 0.0f, 1.0f, "%.2f");
+      ImGui::SliderInt("Depth Distribution Mode", &AppSettings::FOG_DepthMode, 0, 1, "%d");
       if (1 == AppSettings::FOG_DepthMode)
       {
         ImGui::SliderFloat("Depth Exponent Factor", &AppSettings::FOG_Exponent, 10.0f, 100.0f, "%.2f");

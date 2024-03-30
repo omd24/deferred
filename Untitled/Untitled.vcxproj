@@ -197,6 +197,7 @@
     <ClCompile Include="Common\ImguiHelper.cpp" />
     <ClCompile Include="Common\Model.cpp" />
     <ClCompile Include="Common\PostFxHelper.cpp" />
+    <ClCompile Include="Common\Sampling.cpp" />
     <ClCompile Include="Common\ShadowHelper.cpp" />
     <ClCompile Include="Common\Spectrum.cpp" />
     <ClCompile Include="Common\SphericalHarmonics.cpp" />
@@ -206,6 +207,8 @@
     <ClCompile Include="PostProcessor.cpp" />
     <ClCompile Include="RenderManager.cpp" />
     <ClCompile Include="SimpleParticle.cpp" />
+    <ClCompile Include="SkyModels\AnalyticalSkyModel.cpp" />
+    <ClCompile Include="SkyModels\HosekSky\ArHosekSkyModel.cpp" />
     <ClCompile Include="TAA.cpp" />
     <ClCompile Include="TestPass.cpp" />
     <ClCompile Include="VolumetricFog.cpp" />
@@ -226,6 +229,7 @@
     <ClInclude Include="Common\Input.hpp" />
     <ClInclude Include="Common\Model.hpp" />
     <ClInclude Include="Common\PostFxHelper.hpp" />
+    <ClInclude Include="Common\Sampling.hpp" />
     <ClInclude Include="Common\ShadowHelper.hpp" />
     <ClInclude Include="Common\Spectrum.hpp" />
     <ClInclude Include="Common\SphericalHarmonics.hpp" />
@@ -234,8 +238,14 @@
     <ClInclude Include="Common\Utility.hpp" />
     <ClInclude Include="MotionVector.hpp" />
     <ClInclude Include="PostProcessor.hpp" />
+    <ClInclude Include="Quaternion.hpp" />
     <ClInclude Include="RenderManager.hpp" />
     <ClInclude Include="SimpleParticle.hpp" />
+    <ClInclude Include="SkyModels\AnalyticalSkyModel.hpp" />
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModel.h" />
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_CIEXYZ.h" />
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_RGB.h" />
+    <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_Spectral.h" />
     <ClInclude Include="TAA.hpp" />
     <ClInclude Include="TestPass.hpp" />
     <ClInclude Include="VolumetricFog.hpp" />

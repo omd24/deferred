@@ -756,6 +756,10 @@ bool RenderManager::createPSOs()
     m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&clusterVisPSO));
   }
 
+  // create sky psos
+  skybox.CreatePSOs(
+      deferredTarget.m_Texture.Format, depthBuffer.DSVFormat, 1);
+
   return ret;
 }
 //---------------------------------------------------------------------------//
@@ -906,6 +910,9 @@ void RenderManager::loadAssets()
   // Load blue noise texture
   static const wchar_t* noiseTexPath = L"..\\Content\\Textures\\blueNoiseTex128.png"; 
   loadTexture(m_Dev, m_BlueNoiseTexture, noiseTexPath, false);
+
+  // Init analytical sky
+  skybox.Initialize();
 
   // Init post fx
   {
@@ -1428,7 +1435,9 @@ void RenderManager::renderDeferred()
     BindTempConstantBuffer(
         m_CmdList, deferredConstants, DeferredParams_DeferredCBuffer, CmdListMode::Compute);
 
+    uint32_t skyTargetSRV = NullTexture2DSRV;
     uint32_t srvIndices[] = {
+        //todo...meshRenderer.SunShadowMap().SRV(),
         spotLightShadowMap.getSrv(),
         materialTextureIndices.m_SrvIndex,
         spotLightClusterBuffer.SRV,
@@ -1437,18 +1446,25 @@ void RenderManager::renderDeferred()
         depthBuffer.getSrv(),
         tangentFrameTarget.srv(),
         m_Fog.m_FinalVolume.getSRV(),
-        m_BlueNoiseTexture.SRV};
+        m_BlueNoiseTexture.SRV,
+        skyTargetSRV
+    };
     BindTempConstantBuffer(m_CmdList, srvIndices, DeferredParams_SRVIndices, CmdListMode::Compute);
   }
 
   {
     ShadingConstants shadingConstants;
+    shadingConstants.SunDirectionWS = AppSettings::SunDirection;
+    shadingConstants.SunIrradiance = skyCache.SunIrradiance;
+    shadingConstants.CosSunAngularRadius = std::cos(degToRad(AppSettings::SunSize));
+    shadingConstants.SinSunAngularRadius = std::sin(degToRad(AppSettings::SunSize));
     shadingConstants.CameraPosWS = camera.Position();
     shadingConstants.NumXTiles = uint32_t(AppSettings::NumXTiles);
     shadingConstants.NumXYTiles = uint32_t(AppSettings::NumXTiles * AppSettings::NumYTiles);
     shadingConstants.NearClip = camera.NearClip();
     shadingConstants.FarClip = camera.FarClip();
     shadingConstants.NumFroxelGridSlices = m_Fog.m_Dimensions.z;
+    shadingConstants.SkySH = skyCache.sh;
 
     BindTempConstantBuffer(
         m_CmdList, shadingConstants, DeferredParams_PSCBuffer, CmdListMode::Compute);
@@ -1463,6 +1479,20 @@ void RenderManager::renderDeferred()
       m_CmdList, uavs, arrayCount(uavs), DeferredParams_UAVDescriptors, CmdListMode::Compute);
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
+
+  {
+    // Render the sky in the empty areas
+    deferredTarget.transition(
+        m_CmdList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[1] = {deferredTarget.m_RTV};
+    m_CmdList->OMSetRenderTargets(1, rtvHandles, false, &depthBuffer.DSV);
+
+    skybox.RenderSky(m_CmdList, camera.ViewMatrix(), camera.ProjectionMatrix(), skyCache, true);
+
+    deferredTarget.transition(
+        m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+  }
 
   // transition back shadow map
   {
@@ -1892,6 +1922,8 @@ void RenderManager::onDestroy()
   clusterIntersectingPSO->Release();
   clusterVisPSO->Release();
 
+  skybox.DestroyPSOs();
+
   // Release swc backbuffers
   for (UINT n = 0; n < FRAME_COUNT; n++)
   {
@@ -1904,6 +1936,9 @@ void RenderManager::onDestroy()
 #endif
 
   ShadowHelper::deinit();
+
+  skybox.Shutdown();
+  skyCache.Shutdown();
 
   m_PostFx.deinit();
   AppSettings::deinit();
@@ -2028,6 +2063,14 @@ void RenderManager::onUpdate()
 
   // update light bound buffer for clustering
   updateLights();
+
+  // update sky cache
+  skyCache.Init(
+      AppSettings::SunDirection,
+      AppSettings::SunSize,
+      AppSettings::GroundAlbedo,
+      AppSettings::Turbidity,
+      true);
 
   // Update light uniforms
   {

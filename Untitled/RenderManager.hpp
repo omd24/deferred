@@ -13,6 +13,7 @@
 #include "TestPass.hpp"
 #include "TAA.hpp"
 #include "MotionVector.hpp"
+#include "SkyModels/AnalyticalSkyModel.hpp" // Skybox
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -58,15 +59,23 @@ struct SpotLight
 };
 struct ShadingConstants
 {
-  Float4Align glm::vec3 CameraPosWS;
+  Float4Align glm::vec3 SunDirectionWS;
+  float CosSunAngularRadius = 0.0f;
+  Float4Align glm::vec3 SunIrradiance;
+  float SinSunAngularRadius = 0.0f;
 
+  Float4Align glm::vec3 CameraPosWS;
   uint32_t NumXTiles = 0;
+
   uint32_t NumXYTiles = 0;
   float NearClip = 0.0f;
   float FarClip = 0.0f;
   uint32_t NumFroxelGridSlices;
+
+  Float4Align ShaderSH9Color SkySH;
+  //float unused;
 };
-static_assert(sizeof(ShadingConstants) == 32);
+static_assert(sizeof(ShadingConstants) == 208);
 //---------------------------------------------------------------------------//
 // RenderManager Manager:
 //---------------------------------------------------------------------------//
@@ -191,6 +200,10 @@ private:
   PostProcessor m_PostFx;
   SimpleParticle m_Particle;
   Timer m_Timer;
+
+  
+  Skybox skybox;
+  SkyCache skyCache;
 
   // Synchronization objects.
   HANDLE m_SwapChainEvent;

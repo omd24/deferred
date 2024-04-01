@@ -6,18 +6,27 @@
 
 #include "VolumetricFogHelpers.hlsl"
 
-// Max value that we can store in an fp16 buffer (actually a little less so that we have room for
-// error, real max is 65504)
-static const float FP16Max = 65000.0f;
+struct SH9Color
+{
+	float3 c[9];
+};
 
 struct ShadingConstants
 {
+  float3 SunDirectionWS;
+  float CosSunAngularRadius;
+  float3 SunIrradiance;
+  float SinSunAngularRadius;
+
   float3 CameraPosWS;
   uint NumXTiles;
+
   uint NumXYTiles;
   float NearClip;
   float FarClip;
   uint NumFroxelGridSlices;
+
+  SH9Color SkySH;
 };
 
 struct ShadingInput

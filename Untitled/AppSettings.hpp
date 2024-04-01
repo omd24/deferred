@@ -14,6 +14,11 @@ static const uint64_t MaxSpotLights = 32;
 static const float SpotLightRange = 7.5000f;
 static const float SpotShadowNearClip = 0.1000f;
 
+extern glm::vec3 SunDirection;
+extern float SunSize;
+extern glm::vec3 GroundAlbedo;
+extern float Turbidity;
+
 extern bool32 EnableTAA;
 extern uint64_t MaxLightClamp;
 extern bool32 RenderLights;

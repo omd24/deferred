@@ -91,7 +91,7 @@ float4 SkyboxPS(in VSOutput input) : SV_Target
     }
 
     color *= PSCBuffer.Scale;
-    color = clamp(color, 0.0f, FP16Max);
+    color = clamp(color, (float3)0.0f, (float3)FP16Max);
 
     return float4(color, 1.0f);
 }

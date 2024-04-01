@@ -24,6 +24,7 @@ struct SRVIndexConstants
   uint TangentFrameMapIndex;
   uint FogVolumeIdx;
   uint BlueNoiseTexIdx;
+  uint SkyTargetIdx;
 };
 
 ConstantBuffer<ShadingConstants> PSCBuffer : register(b0);

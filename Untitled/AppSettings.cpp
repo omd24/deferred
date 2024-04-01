@@ -2,6 +2,11 @@
 
 namespace AppSettings
 {
+glm::vec3 SunDirection = glm::vec3(0.2600f, 0.9870f, -0.1600f);
+float SunSize = 1.0f;
+glm::vec3 GroundAlbedo = glm::vec3(0.25f, 0.25f, 0.25f);
+float Turbidity = 2.0f;
+
 bool32 EnableTAA = false;
 uint64_t MaxLightClamp = 32;
 bool32 RenderLights = true;

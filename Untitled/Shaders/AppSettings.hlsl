@@ -63,3 +63,8 @@ static const uint NumZTiles = 16;
 static const uint MaxSpotLights = 32;
 static const float SpotShadowNearClip = 0.1000f;
 static const uint SpotLightElementsPerCluster = 1;
+
+
+// Max value that we can store in an fp16 buffer (actually a little less so that we have room for
+// error, real max is 65504)
+static const float FP16Max = 65000.0f;

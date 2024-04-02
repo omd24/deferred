@@ -1491,7 +1491,7 @@ void RenderManager::renderDeferred()
     skybox.RenderSky(m_CmdList, camera.ViewMatrix(), camera.ProjectionMatrix(), skyCache, true);
 
     deferredTarget.transition(
-        m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   }
 
   // transition back shadow map

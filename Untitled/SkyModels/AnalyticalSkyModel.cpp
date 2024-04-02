@@ -317,7 +317,7 @@ void Skybox::Initialize()
     compileFlags,
     ShaderType::Pixel,
     "SkyboxPS",
-    vertexShader);
+    pixelShader);
 
   {
     // Make a root signature

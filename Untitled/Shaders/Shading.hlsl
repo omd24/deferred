@@ -142,11 +142,32 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
     // Add in the primary directional light
     float3 output = 0.0f;
   
-    // TODO:
-    // if(true) // enable sun
-    // {
-  
-    // }
+    // Add imgui support
+    if(true) // enable sun
+    {
+        float3 sunDirection = CBuffer.SunDirectionWS;
+
+        // float2 shadowMapSize;
+        // float numSlices;
+        // sunShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y, numSlices);
+        // const float3 shadowPosOffset = GetShadowPosOffset(saturate(dot(vtxNormalWS, sunDirection)), vtxNormalWS, shadowMapSize.x);
+
+        // todo
+        // float sunShadowVisibility = SunShadowVisibility(positionWS, positionNeighborX,  positionNeighborY, depthVS, shadowPosOffset, 0.0f, sunShadowMap, shadowSampler, ShadowCBuffer);
+        float sunShadowVisibility = 1.0f;
+
+        if(true)
+        {
+            float3 D = CBuffer.SunDirectionWS;
+            float3 R = reflect(-viewWS, normalWS);
+            float r = CBuffer.SinSunAngularRadius;
+            float d = CBuffer.CosSunAngularRadius;
+            float3 DDotR = dot(D, R);
+            float3 S = R - DDotR * D;
+            sunDirection = DDotR < d ? normalize(d * D + normalize(S) * r) : R;
+        }
+        output += CalcLighting(normalWS, sunDirection, CBuffer.SunIrradiance, diffuseAlbedo, specularAlbedo, roughness, positionWS, CBuffer.CameraPosWS) * sunShadowVisibility;
+    }
   
     // Apply the spot lights
     uint numLights = 0;

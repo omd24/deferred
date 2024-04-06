@@ -17,7 +17,6 @@ struct VSConstants
 {
     row_major float4x4 View;
     row_major float4x4 Projection;
-    float3 Bias;
 };
 
 struct PSConstants

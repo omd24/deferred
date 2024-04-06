@@ -1488,7 +1488,13 @@ void RenderManager::renderDeferred()
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[1] = {deferredTarget.m_RTV};
     m_CmdList->OMSetRenderTargets(1, rtvHandles, false, &depthBuffer.DSV);
 
-    skybox.RenderSky(m_CmdList, camera.ViewMatrix(), camera.ProjectionMatrix(), skyCache, true);
+    const bool enableSun = true;
+    skybox.RenderSky(
+        m_CmdList,
+        glm::transpose(camera.ViewMatrix()),
+        glm::transpose(camera.ProjectionMatrix()),
+        skyCache,
+        enableSun);
 
     deferredTarget.transition(
         m_CmdList, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

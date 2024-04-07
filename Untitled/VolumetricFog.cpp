@@ -29,6 +29,7 @@ static const uint32_t MaxInputs = 8;
 // - Investigate tricubic filter and compare with the other implementation:
 //   https://www.desmos.com/calculator/gy9chfclsv
 // - Investigate jitter and dither and alternative methods
+// - investigate the issue with gamepad and imgui
 
 namespace AppSettings
 {

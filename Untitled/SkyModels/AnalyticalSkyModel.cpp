@@ -15,6 +15,7 @@
 #include "Sampling.hpp"
 #include "pix3.h"
 #include "d3dx12.h"
+#include "../Common/Half.hpp"
 
 static const uint64_t NumIndices = 36;
 static const uint64_t NumVertices = 8;
@@ -119,6 +120,7 @@ void SkyCache::Init(
   glm::vec3 sunDirX = perpendicular(sunDirection);
   glm::vec3 sunDirY = glm::cross(sunDirection, sunDirX);
   glm::mat3 sunOrientation = glm::mat3(sunDirX, sunDirY, sunDirection);
+  sunOrientation = glm::transpose(sunOrientation);
 
   const uint64_t NumSamples = 8;
   for (uint64_t x = 0; x < NumSamples; ++x)
@@ -174,7 +176,7 @@ void SkyCache::Init(
     // Make a pre-computed cubemap with the sky radiance values, minus the sun.
     // For this we again pre-scale by our FP16 scale factor so that we can use an FP16 format.
     const uint64_t CubeMapRes = 128;
-    std::vector<glm::vec4> texels;
+    std::vector<Half4> texels;
     texels.resize(CubeMapRes * CubeMapRes * 6);
 
     // We'll also project the sky onto SH coefficients for use during rendering
@@ -191,7 +193,7 @@ void SkyCache::Init(
           glm::vec3 radiance = Sample(dir);
 
           uint64_t idx = (s * CubeMapRes * CubeMapRes) + (y * CubeMapRes) + x;
-          texels[idx] = glm::vec4(radiance, 1.0f);
+          texels[idx] = Half4(glm::vec4(radiance, 1.0f));
 
           float u = (x + 0.5f) / CubeMapRes;
           float v = (y + 0.5f) / CubeMapRes;

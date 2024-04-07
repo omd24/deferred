@@ -5,6 +5,7 @@
 #include "Common/Input.hpp"
 #include "ShadowHelper.hpp"
 #include "Common/Quaternion.hpp"
+#include "Common/Spectrum.hpp"
 
 #define ENABLE_PARTICLE_EXPERIMENTAL 0
 #define ENABLE_GPU_BASED_VALIDATION 0
@@ -1837,6 +1838,9 @@ void RenderManager::onLoad()
 
   // Load assets
   loadAssets();
+
+  // init sampled spectrum
+  SampledSpectrum::Init();
 
   // Init volumetric fog
   m_Fog.init(m_Dev);

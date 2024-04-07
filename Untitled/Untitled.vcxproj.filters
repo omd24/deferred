@@ -172,6 +172,9 @@
     <ClInclude Include="SkyModels\HosekSky\ArHosekSkyModelData_Spectral.h">
       <Filter>SkyModels\HosekSky</Filter>
     </ClInclude>
+    <ClInclude Include="Common\Half.hpp">
+      <Filter>Common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -1481,6 +1481,7 @@ void RenderManager::renderDeferred()
 
   m_CmdList->Dispatch(numComputeTilesX, numComputeTilesY, 1);
 
+  if (AppSettings::EnableSky)
   {
     // Render the sky in the empty areas
     deferredTarget.transition(

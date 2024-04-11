@@ -8,6 +8,7 @@ glm::vec3 GroundAlbedo = glm::vec3(0.25f, 0.25f, 0.25f);
 float Turbidity = 2.0f;
 
 bool32 EnableTAA = false;
+bool32 EnableSky = false;
 uint64_t MaxLightClamp = 32;
 bool32 RenderLights = true;
 bool32 ComputeUVGradients = true;
@@ -84,6 +85,8 @@ void updateCBuffer()
   cbData.ShowUVGradients = ShowUVGradients;
   cbData.AnimateLightIntensity = AnimateLightIntensity;
   cbData.CurrentFrame = CurrentFrame;
+
+  cbData.EnableSky = EnableSky;
 
   // Volumetric data
   cbData.FOG_UseLinearClamp = FOG_UseLinearClamp;

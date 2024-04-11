@@ -82,6 +82,8 @@ static void renderInternal()
 
     ImGui::Checkbox("Enable TAA", (bool*)&AppSettings::EnableTAA);
 
+    ImGui::Checkbox("Enable Sky", (bool*)&AppSettings::EnableSky);
+
     // Fog options:
     ImGui::Separator();
     if (ImGui::CollapsingHeader("Volumetric Fog", ImGuiTreeNodeFlags_DefaultOpen))

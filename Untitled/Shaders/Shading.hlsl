@@ -142,8 +142,8 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
     // Add in the primary directional light
     float3 output = 0.0f;
   
-    // Add imgui support
-    if(true) // enable sun
+    // Add sky light
+    if(AppSettings.EnableSky)
     {
         float3 sunDirection = CBuffer.SunDirectionWS;
 

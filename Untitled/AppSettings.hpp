@@ -20,6 +20,7 @@ extern glm::vec3 GroundAlbedo;
 extern float Turbidity;
 
 extern bool32 EnableTAA;
+extern bool32 EnableSky;
 extern uint64_t MaxLightClamp;
 extern bool32 RenderLights;
 extern bool32 ComputeUVGradients;
@@ -89,6 +90,9 @@ struct AppSettingsCBuffer
 
   float LightColor[3];
   uint32_t CurrentFrame;
+
+  bool32 EnableSky;
+  float unused[3];
 
   // Volumetric fog
   bool32 FOG_UseLinearClamp;

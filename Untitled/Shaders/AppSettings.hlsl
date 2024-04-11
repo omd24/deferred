@@ -18,6 +18,9 @@ struct AppSettingsCbuffer
   float3 LightColor;
   uint CurrentFrame;
 
+  bool EnableSky;
+  float3 unused;
+
   // Volumetric fog settings
   bool FOG_UseLinearClamp;
   bool FOG_SampleUsingTricubicFiltering;

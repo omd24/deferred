@@ -16,6 +16,7 @@
 static POINT prevMousePos = {};
 static const float SpotLightIntensityFactor = 25.0f;
 static const uint64_t SpotLightShadowMapSize = 1024;
+static const uint64_t SunShadowMapSize = 2048;
 static const uint64_t NumConeSides = 16;
 static glm::mat4 prevViewProj = glm::mat4();
 static glm::vec2 jitterOffsetXY = glm::vec2(0.0f, 0.0f);
@@ -941,6 +942,18 @@ void RenderManager::loadAssets()
 
   {
     DepthBufferInit dbInit;
+    dbInit.Width = SunShadowMapSize;
+    dbInit.Height = SunShadowMapSize;
+    dbInit.Format = DXGI_FORMAT_D32_FLOAT;
+    dbInit.MSAASamples = 1;
+    dbInit.ArraySize = NumCascades;
+    dbInit.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    dbInit.Name = L"Sun Shadow Map";
+    sunShadowMap.init(dbInit);
+  }
+
+  {
+    DepthBufferInit dbInit;
     dbInit.Width = SpotLightShadowMapSize;
     dbInit.Height = SpotLightShadowMapSize;
     dbInit.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -1645,6 +1658,13 @@ void RenderManager::renderSpotLightShadowMap(
   PIXEndEvent(p_CmdList); // End spotlight shadowmap
 }
 //---------------------------------------------------------------------------//
+void RenderManager::renderSunShadowMap (
+  ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
+{
+
+}
+//---------------------------------------------------------------------------//
+
 void RenderManager::populateCommandList()
 {
   SetDescriptorHeaps(m_CmdList);
@@ -1926,6 +1946,7 @@ void RenderManager::onDestroy()
   depthPSO->Release();
   spotLightShadowPSO->Release();
 
+  sunShadowMap.deinit();
   spotLightShadowMap.deinit();
 
   clusterFrontFacePSO->Release();

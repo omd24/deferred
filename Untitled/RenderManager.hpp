@@ -143,6 +143,8 @@ private:
   glm::mat4 spotLightShadowMatrices[AppSettings::MaxSpotLights];
   DepthBuffer spotLightShadowMap;
 
+  DepthBuffer sunShadowMap;
+
   // Clustering stuff
   StructuredBuffer spotLightBoundsBuffer;
   StructuredBuffer spotLightInstanceBuffer;
@@ -246,6 +248,8 @@ private:
 
   // Render shadows for all spot lights
   void renderSpotLightShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
+
+  void renderSunShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
 
   // Clustered rendering
   void updateLights();

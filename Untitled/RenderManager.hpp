@@ -14,6 +14,7 @@
 #include "TAA.hpp"
 #include "MotionVector.hpp"
 #include "SkyModels/AnalyticalSkyModel.hpp" // Skybox
+#include "ShadowHelper.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1
@@ -174,6 +175,9 @@ private:
   ID3D12PipelineState* depthPSO = nullptr;
   ID3D12RootSignature* depthRootSignature = nullptr;
   ID3D12PipelineState* spotLightShadowPSO = nullptr;
+  ID3D12PipelineState* sunShadowPSO = nullptr;
+
+  SunShadowConstantsDepthMap sunShadowConstants;
 
   // Deferred Stuff
   RenderTexture deferredTarget;
@@ -249,6 +253,7 @@ private:
   // Render shadows for all spot lights
   void renderSpotLightShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
 
+  void renderSunShadowDepth(ID3D12GraphicsCommandList* cmdList, const OrthographicCamera& camera);
   void renderSunShadowMap(ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera);
 
   // Clustered rendering

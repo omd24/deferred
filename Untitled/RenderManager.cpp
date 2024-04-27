@@ -3,7 +3,6 @@
 #include <pix3.h>
 #include <algorithm>
 #include "Common/Input.hpp"
-#include "ShadowHelper.hpp"
 #include "Common/Quaternion.hpp"
 #include "Common/Spectrum.hpp"
 
@@ -671,7 +670,7 @@ bool RenderManager::createPSOs()
       ret = false;
   }
 
-  // 3. depth only and spot light shadow depth psos
+  // 3. depth only psos
   {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
     psoDesc.pRootSignature = depthRootSignature;
@@ -696,6 +695,15 @@ bool RenderManager::createPSOs()
     psoDesc.DSVFormat = spotLightShadowMap.DSVFormat;
     hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&spotLightShadowPSO));
     spotLightShadowPSO->SetName(L"Spotlight shadow PSO");
+    if (FAILED(hr))
+      ret = false;
+
+    // sun shadow map pso
+    psoDesc.DSVFormat = sunShadowMap.DSVFormat;
+    psoDesc.SampleDesc.Count = sunShadowMap.MSAASamples;
+    psoDesc.SampleDesc.Quality = sunShadowMap.MSAASamples > 1 ? StandardMSAAPattern : 0;
+    psoDesc.RasterizerState = GetRasterizerState(RasterizerState::BackFaceCullNoZClip);
+    hr = m_Dev->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sunShadowPSO));
     if (FAILED(hr))
       ret = false;
   }
@@ -1275,7 +1283,7 @@ void RenderManager::renderDeferred()
 
   {
     // Transition our G-Buffer targets to a writable state and sync on shadowmap
-    D3D12_RESOURCE_BARRIER barriers[4] = {};
+    D3D12_RESOURCE_BARRIER barriers[5] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1305,6 +1313,13 @@ void RenderManager::renderDeferred()
     barriers[3].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[3].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[3].Transition.Subresource = 0;
+
+    barriers[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[4].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[4].Transition.pResource = sunShadowMap.getResource();
+    barriers[4].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[4].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -1517,14 +1532,21 @@ void RenderManager::renderDeferred()
 
   // transition back shadow map
   {
-    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
 
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[0].Transition.pResource = spotLightShadowMap.getResource();
+    barriers[0].Transition.pResource = sunShadowMap.getResource();
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = spotLightShadowMap.getResource();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     m_CmdList->ResourceBarrier(arrayCount32(barriers), barriers);
   }
@@ -1658,10 +1680,51 @@ void RenderManager::renderSpotLightShadowMap(
   PIXEndEvent(p_CmdList); // End spotlight shadowmap
 }
 //---------------------------------------------------------------------------//
+// Renders all meshes using depth-only rendering for a sun shadow map
+void RenderManager::renderSunShadowDepth(
+    ID3D12GraphicsCommandList* cmdList, const OrthographicCamera& camera)
+{
+  // TODO: Frustum culls meshes for an orthographic projection
+
+  const uint64_t numVisible = sceneModel.Meshes().size();
+  renderDepth(cmdList, camera, sunShadowPSO, numVisible);
+}
+//---------------------------------------------------------------------------//
 void RenderManager::renderSunShadowMap (
   ID3D12GraphicsCommandList* p_CmdList, const CameraBase& p_Camera)
 {
+  PIXBeginEvent(p_CmdList, 0, "Sun Shadow Map Rendering");
 
+  OrthographicCamera cascadeCameras[NumCascades];
+  ShadowHelper::prepareCascades(
+      AppSettings::SunDirection,
+      SunShadowMapSize,
+      true,
+      camera,
+      sunShadowConstants.Base,
+      cascadeCameras);
+
+  // Render the meshes to each cascade
+  for (uint64_t cascadeIdx = 0; cascadeIdx < NumCascades; ++cascadeIdx)
+  {
+    PIXBeginEvent(p_CmdList, 0, "Rendering Shadow Map Cascade %u", cascadeIdx);
+
+    // Set the viewport
+    SetViewport(p_CmdList, SunShadowMapSize, SunShadowMapSize);
+
+    // Set the shadow map as the depth target
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv = sunShadowMap.ArrayDSVs[cascadeIdx];
+    p_CmdList->OMSetRenderTargets(0, nullptr, false, &dsv);
+    p_CmdList->ClearDepthStencilView(
+        dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+
+    // Draw the mesh with depth only, using the new shadow camera
+    renderSunShadowDepth(p_CmdList, cascadeCameras[cascadeIdx]);
+
+    PIXEndEvent(p_CmdList); // End cascade shadowmap
+  }
+
+  PIXEndEvent(p_CmdList); // End sun shadowmap
 }
 //---------------------------------------------------------------------------//
 
@@ -1670,6 +1733,8 @@ void RenderManager::populateCommandList()
   SetDescriptorHeaps(m_CmdList);
 
   renderClusters();
+
+  renderSunShadowMap(m_CmdList, camera);
 
   renderSpotLightShadowMap(m_CmdList, camera);
 
@@ -1945,6 +2010,7 @@ void RenderManager::onDestroy()
   depthRootSignature->Release();
   depthPSO->Release();
   spotLightShadowPSO->Release();
+  sunShadowPSO->Release();
 
   sunShadowMap.deinit();
   spotLightShadowMap.deinit();

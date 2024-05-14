@@ -713,6 +713,7 @@ inline float randFloat()
 //---------------------------------------------------------------------------//
 // mimicking XMVector3TransofrmCoord
 // i.e., setting w = 1 for the input and forcing the result to have w = 1
+// The matrix should be col-major (we are using glm)
 // https://learn.microsoft.com/en-us/windows/win32/api/directxmath/nf-directxmath-xmvector3transformcoord
 inline glm::vec3 _transformVec3Mat4(const glm::vec3& v, const glm::mat4& m)
 {

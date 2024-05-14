@@ -874,6 +874,12 @@ void RenderManager::loadAssets()
    camera.SetPosition(glm::vec3(-5.25f, 4.31f, 0.2f));
    camera.SetXRotation(0.5f);
 
+  // test shadows
+   //camera.SetXRotation(0.0f);
+   //camera.SetYRotation(1.544f);
+
+   //camera.SetPosition(glm::vec3(-1.25f, 1.31f, 0.2f));
+
   // debugging the clustering bug
   /*
   {
@@ -1734,7 +1740,8 @@ void RenderManager::populateCommandList()
 
   renderClusters();
 
-  renderSunShadowMap(m_CmdList, camera);
+  if (AppSettings::EnableSky)
+    renderSunShadowMap(m_CmdList, camera);
 
   renderSpotLightShadowMap(m_CmdList, camera);
 

@@ -8,10 +8,10 @@ const float MaxShadowFilterSize = 9.0f;
 
 struct SunShadowConstantsBase
 {
-  glm::mat4 ShadowMatrix;
+  glm::mat4 ShadowMatrix = glm::identity<glm::mat4>();
   float CascadeSplits[NumCascades] = {};
-  glm::vec4 CascadeOffsets[NumCascades];
-  glm::vec4 CascadeScales[NumCascades];
+  glm::vec4 CascadeOffsets[NumCascades] = {glm::vec4(), glm::vec4(), glm::vec4(), glm::vec4()};
+  glm::vec4 CascadeScales[NumCascades] = {glm::vec4(), glm::vec4(), glm::vec4(), glm::vec4()};
 };
 
 struct SunShadowConstantsDepthMap

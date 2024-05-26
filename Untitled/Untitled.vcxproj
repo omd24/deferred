@@ -202,6 +202,7 @@
     <ClCompile Include="Common\Spectrum.cpp" />
     <ClCompile Include="Common\SphericalHarmonics.cpp" />
     <ClCompile Include="Common\Utility.cpp" />
+    <ClCompile Include="GpuDrivenRenderer.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MotionVector.cpp" />
     <ClCompile Include="PostProcessor.cpp" />
@@ -237,6 +238,7 @@
     <ClInclude Include="Common\Thread.hpp" />
     <ClInclude Include="Common\Timer.hpp" />
     <ClInclude Include="Common\Utility.hpp" />
+    <ClInclude Include="GpuDrivenRenderer.hpp" />
     <ClInclude Include="MotionVector.hpp" />
     <ClInclude Include="PostProcessor.hpp" />
     <ClInclude Include="Quaternion.hpp" />

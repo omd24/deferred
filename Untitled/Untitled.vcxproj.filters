@@ -81,6 +81,7 @@
     <ClCompile Include="SkyModels\HosekSky\ArHosekSkyModel.cpp">
       <Filter>SkyModels\HosekSky</Filter>
     </ClCompile>
+    <ClCompile Include="GpuDrivenRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -175,6 +176,7 @@
     <ClInclude Include="Common\Half.hpp">
       <Filter>Common</Filter>
     </ClInclude>
+    <ClInclude Include="GpuDrivenRenderer.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

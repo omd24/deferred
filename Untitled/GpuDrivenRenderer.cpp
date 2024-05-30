@@ -1,6 +1,10 @@
-
+#include "GpuDrivenRenderer.hpp"
+#include "meshoptimizer/meshoptimizer.h"
 
 /*
+1. first on cpu
+prepare the meshlets and their bounds and send them to gpu
+2. do gpu culling
 
 resources (create/destroy)
 
@@ -48,7 +52,19 @@ main gbuffer renderpass
 - draw_mesh_task_indirect_count
 
 
-*/
+gltf-scene
 
+Mesh optimizer:
+add/link the library
+
+when importing gltf, implement "add_mesh" using library "meshopt_buildMeshlets"
+
+fill the meshlet triangles, indices, vertices arrays
+
+compute meshlet bounds using meshopt_computeMeshletBounds
+
+store geometry_transform
+
+*/
 
 

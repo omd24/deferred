@@ -15,6 +15,7 @@
 #include "MotionVector.hpp"
 #include "SkyModels/AnalyticalSkyModel.hpp" // Skybox
 #include "ShadowHelper.hpp"
+#include "GpuDrivenRenderer.hpp"
 
 #define FRAME_COUNT 2
 #define THREAD_COUNT 1

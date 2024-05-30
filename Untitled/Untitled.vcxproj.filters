@@ -16,6 +16,9 @@
     <Filter Include="SkyModels\HosekSky">
       <UniqueIdentifier>{979d553c-5331-4e8b-9216-8ef3cf5a175d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Common\meshoptimizer">
+      <UniqueIdentifier>{97dba81c-4e29-4c38-a37a-1153d7403166}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
@@ -82,6 +85,54 @@
       <Filter>SkyModels\HosekSky</Filter>
     </ClCompile>
     <ClCompile Include="GpuDrivenRenderer.cpp" />
+    <ClCompile Include="..\Externals\meshoptimizer\allocator.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\clusterizer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\indexcodec.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\indexgenerator.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\overdrawanalyzer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\overdrawoptimizer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\quantization.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\simplifier.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\spatialorder.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\stripifier.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vcacheanalyzer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vcacheoptimizer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vertexcodec.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vertexfilter.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vfetchanalyzer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Externals\meshoptimizer\vfetchoptimizer.cpp">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RenderManager.hpp" />
@@ -177,6 +228,9 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="GpuDrivenRenderer.hpp" />
+    <ClInclude Include="..\Externals\meshoptimizer\meshoptimizer.h">
+      <Filter>Common\meshoptimizer</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

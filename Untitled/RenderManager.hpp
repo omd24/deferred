@@ -208,6 +208,7 @@ private:
   SimpleParticle m_Particle;
   Timer m_Timer;
 
+  GpuDrivenRenderer m_GpuDrivenRenderer;
   
   Skybox skybox;
   SkyCache skyCache;

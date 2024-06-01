@@ -67,4 +67,16 @@ store geometry_transform
 
 */
 
+void GpuDrivenRenderer::init(ID3D12Device* p_Device)
+{
 
+}
+
+void GpuDrivenRenderer::addMesh(int32_t p_IndexCount)
+{
+  // Generate the list of meshlets
+  const size_t maxVertices = 64;
+  const size_t maxTriangles = 124;
+  const size_t maxMeshlets = meshopt_buildMeshletsBound(p_IndexCount, maxVertices, maxTriangles);
+
+}

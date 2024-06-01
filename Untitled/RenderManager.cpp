@@ -1015,6 +1015,23 @@ void RenderManager::loadAssets()
   }
 #endif
 
+  // Gpu driven rendering:
+  const uint64_t numVisible = sceneModel.Meshes().size();
+  for (uint64_t meshIdx = 0; meshIdx < numVisible; ++meshIdx)
+  {
+    const Mesh& mesh = sceneModel.Meshes()[meshIdx];
+    m_GpuDrivenRenderer.addMesh(mesh.NumIndices());
+
+    for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
+    {
+      const MeshPart& part = mesh.MeshParts()[partIdx];
+      //m_GpuDrivenRenderer.addMesh(part.IndexCount);
+      // Just in case dealing with mesh parts shenanigan
+      assert(part.IndexCount == mesh.NumIndices());
+    }
+  }
+
+
   {
     // Spot light and shadow bounds buffer
     ConstantBufferInit cbInit;

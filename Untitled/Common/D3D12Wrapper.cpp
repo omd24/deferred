@@ -1914,29 +1914,29 @@ FormattedBuffer::~FormattedBuffer()
   // deinit();
 }
 
-void FormattedBuffer::init(const FormattedBufferInit& init)
+void FormattedBuffer::init(const FormattedBufferInit& p_Init)
 {
   DEBUG_BREAK(g_Device != nullptr);
 
   deinit();
 
-  assert(init.Format != DXGI_FORMAT_UNKNOWN);
-  assert(init.NumElements > 0);
-  Stride = bitsPerPixel(init.Format) / 8;
-  NumElements = init.NumElements;
-  Format = init.Format;
+  assert(p_Init.Format != DXGI_FORMAT_UNKNOWN);
+  assert(p_Init.NumElements > 0);
+  Stride = bitsPerPixel(p_Init.Format) / 8;
+  NumElements = p_Init.NumElements;
+  Format = p_Init.Format;
 
   InternalBuffer.init(
       Stride * NumElements,
       Stride,
-      init.Dynamic,
-      init.CPUAccessible,
-      init.CreateUAV,
-      init.InitData,
-      init.InitialState,
-      init.Heap,
-      init.HeapOffset,
-      init.Name);
+      p_Init.Dynamic,
+      p_Init.CPUAccessible,
+      p_Init.CreateUAV,
+      p_Init.InitData,
+      p_Init.InitialState,
+      p_Init.Heap,
+      p_Init.HeapOffset,
+      p_Init.Name);
   GPUAddress = InternalBuffer.m_GpuAddress;
 
   PersistentDescriptorAlloc srvAlloc = SRVDescriptorHeap.AllocatePersistent();
@@ -1947,9 +1947,9 @@ void FormattedBuffer::init(const FormattedBufferInit& init)
   for (uint32_t i = 0; i < arrayCount32(srvAlloc.Handles); ++i)
     g_Device->CreateShaderResourceView(InternalBuffer.m_Resource, &desc, srvAlloc.Handles[i]);
 
-  if (init.CreateUAV)
+  if (p_Init.CreateUAV)
   {
-    assert(init.Dynamic == false);
+    assert(p_Init.Dynamic == false);
 
     UAV = UAVDescriptorHeap.AllocatePersistent().Handles[0];
 

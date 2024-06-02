@@ -1405,6 +1405,9 @@ void RenderManager::renderDeferred()
     // Draw all parts
     for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
     {
+      // to be tested
+      assert(partIdx == 0);
+
       const MeshPart& part = mesh.MeshParts()[partIdx];
       if (part.MaterialIdx != currMaterial)
       {

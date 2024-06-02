@@ -238,6 +238,11 @@ public:
     return ElemStrings[uint64_t(elemType)];
   }
 
+  // Meshlet data
+  uint32_t m_MeshletOffset;
+  uint32_t m_MeshletCount;
+  uint32_t m_MeshletIndexCount; 
+
 protected:
   std::vector<MeshPart> meshParts;
 
@@ -296,7 +301,7 @@ public:
   void Shutdown();
 
   // Accessors
-  const std::vector<Mesh>& Meshes() const { return meshes; }
+  std::vector<Mesh>& Meshes() { return meshes; }
   uint64_t NumMeshes() const { return meshes.size(); }
 
   const glm::vec3& AABBMin() const { return aabbMin; }

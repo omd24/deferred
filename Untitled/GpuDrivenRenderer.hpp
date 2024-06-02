@@ -2,6 +2,7 @@
 
 #include "Common/D3D12Wrapper.hpp"
 #include <Camera.hpp>
+#include <Model.hpp>
 
 struct GpuDrivenRenderer
 {
@@ -10,7 +11,7 @@ struct GpuDrivenRenderer
 
   void render(ID3D12GraphicsCommandList* p_CmdList);
 
-  void addMesh(int32_t p_IndexCount);
+  void addMesh(Mesh& p_Mesh);
 
   ID3DBlobPtr m_DataShader = nullptr;
 

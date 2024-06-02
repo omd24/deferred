@@ -72,11 +72,53 @@ void GpuDrivenRenderer::init(ID3D12Device* p_Device)
 
 }
 
-void GpuDrivenRenderer::addMesh(int32_t p_IndexCount)
+void GpuDrivenRenderer::addMesh(Mesh& p_Mesh)
 {
-  // Generate the list of meshlets
+  // 1. Determine the maximum number of meshlets that could be generated for the mesh
   const size_t maxVertices = 64;
   const size_t maxTriangles = 124;
-  const size_t maxMeshlets = meshopt_buildMeshletsBound(p_IndexCount, maxVertices, maxTriangles);
+  const float coneWeight = 0.0f;
+  const size_t maxMeshlets = meshopt_buildMeshletsBound(p_Mesh.NumIndices(), maxVertices, maxTriangles);
 
+  // 2. Allocate memory for the vertices and indices arrays that describe the meshlets
+  std::vector<meshopt_Meshlet> localMeshlets;
+  localMeshlets.resize(maxMeshlets);
+
+  // list of vertex indices (4 bytes)
+  std::vector<uint32_t> meshletVertexIndices;
+  meshletVertexIndices.resize(maxMeshlets * maxVertices);
+
+  // list of triangle indices (1 byte)
+  std::vector<uint8_t> meshletTriangles;
+  meshletTriangles.resize(maxMeshlets * maxTriangles * 3);
+
+  // flatten vertex positions as a float array
+  const uint32_t numVertices = p_Mesh.NumVertices();
+  std::vector<float> flattenedVerts;
+  flattenedVerts.resize(numVertices * 3);
+  for (uint32_t i = 0; i < numVertices; ++i)
+  {
+    const MeshVertex* vertPtr = p_Mesh.Vertices();
+    flattenedVerts.at(i * 3) = vertPtr[i].Position.x;
+    flattenedVerts.at(i * 3 + 1) = vertPtr[i].Position.y;
+    flattenedVerts.at(i * 3 + 2) = vertPtr[i].Position.z;
+  }
+
+  // 3. Generate meshlets
+  const size_t indexCount = p_Mesh.NumIndices();
+  const uint16_t* indices = p_Mesh.Indices();
+  size_t meshletCount = meshopt_buildMeshlets(
+      localMeshlets.data(),
+      meshletVertexIndices.data(),
+      meshletTriangles.data(),
+      indices,
+      indexCount,
+      flattenedVerts.data(),
+      numVertices,
+      sizeof(glm::vec3),
+      maxVertices,
+      maxTriangles,
+      coneWeight);
+
+  p_Mesh.m_MeshletCount = static_cast<uint32_t>(meshletCount);
 }

@@ -1019,8 +1019,8 @@ void RenderManager::loadAssets()
   const uint64_t numVisible = sceneModel.Meshes().size();
   for (uint64_t meshIdx = 0; meshIdx < numVisible; ++meshIdx)
   {
-    const Mesh& mesh = sceneModel.Meshes()[meshIdx];
-    m_GpuDrivenRenderer.addMesh(mesh.NumIndices());
+    Mesh& mesh = sceneModel.Meshes()[meshIdx];
+    m_GpuDrivenRenderer.addMesh(mesh);
 
     for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
     {

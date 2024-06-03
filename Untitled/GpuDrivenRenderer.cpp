@@ -121,4 +121,50 @@ void GpuDrivenRenderer::addMesh(Mesh& p_Mesh)
       coneWeight);
 
   p_Mesh.m_MeshletCount = static_cast<uint32_t>(meshletCount);
+
+  // Extract data
+  uint32_t meshletVertexOffset = static_cast<uint32_t>(m_MeshletsVertexPositions.size());
+  for (uint32_t v = 0; v < numVertices; ++v)
+  {
+    GpuMeshletVertexPosition meshletVertexPos{};
+
+    float x = flattenedVerts[v * 3 + 0];
+    float y = flattenedVerts[v * 3 + 1];
+    float z = flattenedVerts[v * 3 + 2];
+
+    meshletVertexPos.position[0] = x;
+    meshletVertexPos.position[1] = y;
+    meshletVertexPos.position[2] = z;
+
+    m_MeshletsVertexPositions.push_back(meshletVertexPos);
+
+    GpuMeshletVertexData meshletVertexData{};
+
+    const MeshVertex* vertPtr = p_Mesh.Vertices();
+    // Normals
+    {
+      meshletVertexData.normal[0] = (vertPtr[v].Normal.x + 1.0f) * 127.0f;
+      meshletVertexData.normal[1] = (vertPtr[v].Normal.y + 1.0f) * 127.0f;
+      meshletVertexData.normal[2] = (vertPtr[v].Normal.z + 1.0f) * 127.0f;
+    }
+
+    // Tangents
+    {
+      meshletVertexData.tangent[0] = (vertPtr[v].Tangent.x + 1.0f) * 127.0f;
+      meshletVertexData.tangent[1] = (vertPtr[v].Tangent.y + 1.0f) * 127.0f;
+      meshletVertexData.tangent[2] = (vertPtr[v].Tangent.z + 1.0f) * 127.0f;
+      meshletVertexData.tangent[3] = 0;
+      //meshletVertexData.tangent[3] = (vertPtr[v].Tangent.w + 1.0f) * 127.0f;
+    }
+
+    meshletVertexData.uvCoords[0] = meshopt_quantizeHalf(vertPtr[v].UV.x);
+    meshletVertexData.uvCoords[1] = meshopt_quantizeHalf(vertPtr[v].UV.y);
+
+    m_MeshletsVertexData.push_back(meshletVertexData);
+  }
+
+  // 5. Extract additional data (bounding sphere and cone) for each meshlet:
+
+
+
 }

@@ -4,6 +4,36 @@
 #include <Camera.hpp>
 #include <Model.hpp>
 
+struct alignas(16) GpuMeshlet
+{
+  glm::vec3 center;
+  float radius;
+
+  int8_t coneAxis[3];
+  int8_t coneCutoff;
+
+  uint32_t dataOffset;
+  uint32_t meshIndex;
+  uint8_t vertexCount;
+  uint8_t triangleCount;
+};
+//---------------------------------------------------------------------------//
+struct GpuMeshletVertexPosition
+{
+
+  float position[3];
+  float padding;
+};
+//---------------------------------------------------------------------------//
+struct GpuMeshletVertexData
+{
+
+  uint8_t normal[4];
+  uint8_t tangent[4];
+  uint16_t uvCoords[2];
+  float padding;
+};
+//---------------------------------------------------------------------------//
 struct GpuDrivenRenderer
 {
   void init(ID3D12Device* p_Device);
@@ -17,6 +47,10 @@ struct GpuDrivenRenderer
 
   std::vector<ID3D12PipelineState*> m_PSOs;
   ID3D12RootSignature* m_RootSig = nullptr;
+
+  std::vector<GpuMeshlet> m_Meshlets;
+  std::vector<GpuMeshletVertexPosition> m_MeshletsVertexPositions;
+  std::vector<GpuMeshletVertexData> m_MeshletsVertexData;
 };
 
 

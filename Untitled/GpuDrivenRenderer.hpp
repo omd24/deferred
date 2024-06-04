@@ -48,9 +48,14 @@ struct GpuDrivenRenderer
   std::vector<ID3D12PipelineState*> m_PSOs;
   ID3D12RootSignature* m_RootSig = nullptr;
 
-  std::vector<GpuMeshlet> m_Meshlets;
-  std::vector<GpuMeshletVertexPosition> m_MeshletsVertexPositions;
-  std::vector<GpuMeshletVertexData> m_MeshletsVertexData;
+  std::vector<GpuMeshlet> m_Meshlets{};
+  std::vector<GpuMeshletVertexPosition> m_MeshletsVertexPositions{};
+  std::vector<GpuMeshletVertexData> m_MeshletsVertexData{};
+  std::vector<uint32_t> m_MeshletsData;
+  uint32_t m_MeshletsIndexCount;
+  
+  // copy of meshes for gpu driven rendering
+  std::vector<Mesh> m_Meshes{};
 };
 
 

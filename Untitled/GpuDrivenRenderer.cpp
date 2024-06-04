@@ -163,8 +163,98 @@ void GpuDrivenRenderer::addMesh(Mesh& p_Mesh)
     m_MeshletsVertexData.push_back(meshletVertexData);
   }
 
+  // Cache meshlet offset
+  p_Mesh.m_MeshletOffset = m_Meshlets.size();
+  p_Mesh.m_MeshletCount = meshletCount;
+  p_Mesh.m_MeshletIndexCount = 0;
+
   // 5. Extract additional data (bounding sphere and cone) for each meshlet:
+  // Append meshlet data
+  for (uint32_t m = 0; m < meshletCount; ++m)
+  {
+    meshopt_Meshlet& localMeshlet = localMeshlets[m];
 
+    meshopt_Bounds meshlet_bounds = meshopt_computeMeshletBounds(
+        meshletVertexIndices.data() + localMeshlet.vertex_offset,
+        meshletTriangles.data() + localMeshlet.triangle_offset,
+        localMeshlet.triangle_count,
+        flattenedVerts.data(),
+        numVertices,
+        sizeof(glm::vec3));
 
+    GpuMeshlet meshlet{};
+    meshlet.dataOffset = m_MeshletsData.size();
+    meshlet.vertexCount = localMeshlet.vertex_count;
+    meshlet.triangleCount = localMeshlet.triangle_count;
 
+    meshlet.center =
+        glm::vec3{meshlet_bounds.center[0], meshlet_bounds.center[1], meshlet_bounds.center[2]};
+    meshlet.radius = meshlet_bounds.radius;
+
+    meshlet.coneAxis[0] = meshlet_bounds.cone_axis_s8[0];
+    meshlet.coneAxis[1] = meshlet_bounds.cone_axis_s8[1];
+    meshlet.coneAxis[2] = meshlet_bounds.cone_axis_s8[2];
+
+    meshlet.coneCutoff = meshlet_bounds.cone_cutoff_s8;
+    meshlet.meshIndex = m_Meshes.size();
+
+    // Resize data array
+    const uint32_t indexGroupCount = (localMeshlet.triangle_count * 3 + 3) / 4;
+    m_MeshletsData.reserve(m_MeshletsData.size() + localMeshlet.vertex_count + indexGroupCount);
+
+    for (uint32_t i = 0; i < meshlet.vertexCount; ++i)
+    {
+      const uint32_t vertexIndex =
+          meshletVertexOffset + meshletVertexIndices[localMeshlet.vertex_offset + i];
+      m_MeshletsData.push_back(vertexIndex);
+    }
+
+    // Store indices as uint32
+    // NOTE(marco): we write 4 indices at at time, it will come in handy in the mesh shader
+    const uint32_t* indexGroups =
+        reinterpret_cast<const uint32_t*>(meshletTriangles.data() + localMeshlet.triangle_offset);
+    for (uint32_t i = 0; i < indexGroupCount; ++i)
+    {
+      const uint32_t index_group = indexGroups[i];
+      m_MeshletsData.push_back(index_group);
+    }
+
+    // Writing in group of fours can be problematic, if there are non multiple of 3
+    // indices a triangle can be shared between meshlets.
+    // We need to add some padding for that.
+    // This is visible only when emulating meshlets, so probably there are controls
+    // at driver level that avoid this problems when using mesh shaders.
+    // Check for the last 3 indices: if last one are two are zero, then add one or two
+    // groups of empty triangles.
+    uint32_t lastIndexGroup = indexGroups[indexGroupCount - 1];
+    uint32_t lastIndex = (lastIndexGroup >> 8) & 0xff;
+    uint32_t secondLastIndex = (lastIndexGroup >> 16) & 0xff;
+    uint32_t thirdLastIndex = (lastIndexGroup >> 24) & 0xff;
+    if (lastIndex != 0 && thirdLastIndex == 0)
+    {
+
+      if (secondLastIndex != 0)
+      {
+        // Add a single index group of zeroes
+        m_MeshletsData.push_back(0);
+        meshlet.triangleCount++;
+      }
+
+      meshlet.triangleCount++;
+      // Add another index group of zeroes
+      m_MeshletsData.push_back(0);
+    }
+
+    p_Mesh.m_MeshletIndexCount += meshlet.triangleCount * 3;
+
+    m_Meshlets.push_back(meshlet);
+
+    m_MeshletsIndexCount += indexGroupCount;
+  }
+
+  // Add mesh with all data
+  m_Meshes.push_back(p_Mesh);
+
+  while (m_Meshlets.size() % 32)
+    m_Meshlets.push_back(GpuMeshlet());
 }

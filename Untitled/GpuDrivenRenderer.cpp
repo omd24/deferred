@@ -258,3 +258,53 @@ void GpuDrivenRenderer::addMesh(Mesh& p_Mesh)
   while (m_Meshlets.size() % 32)
     m_Meshlets.push_back(GpuMeshlet());
 }
+
+void GpuDrivenRenderer::createResources()
+{
+  // meshlets_data_sb
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(uint32_t);
+    sbInit.NumElements = m_MeshletsData.size();
+    sbInit.Dynamic = false;
+    sbInit.CPUAccessible = false;
+    sbInit.InitData = m_MeshletsData.data();
+    m_MeshletsDataBuffer.init(sbInit);
+    m_MeshletsDataBuffer.resource()->SetName(L"meshlets_data_sb");
+  }
+
+  // meshlets_vertex_pos_sb
+
+  // meshlets_vertex_data_sb
+
+  // meshlets buffer
+
+  // meshes buffer
+
+  // mesh instances buffer ?
+
+  // per frame resource
+
+    // early_draw_commands_sb
+
+    // culled_draw_commands_sb
+
+    // late_draw_commands_sb
+
+    // meshlets_instances_buffer
+
+    // meshlets_index_buffer
+
+    // mesh_task_indirect_late_commands_sb
+
+    // mesh_task_indirect_early_commands_sb
+
+  // debug draw buffers
+
+  // material buffer ?
+
+  // 
+
+  // 
+}
+

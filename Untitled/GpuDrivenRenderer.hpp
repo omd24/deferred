@@ -42,6 +42,7 @@ struct GpuDrivenRenderer
   void render(ID3D12GraphicsCommandList* p_CmdList);
 
   void addMesh(Mesh& p_Mesh);
+  void createResources();
 
   ID3DBlobPtr m_DataShader = nullptr;
 
@@ -53,9 +54,30 @@ struct GpuDrivenRenderer
   std::vector<GpuMeshletVertexData> m_MeshletsVertexData{};
   std::vector<uint32_t> m_MeshletsData;
   uint32_t m_MeshletsIndexCount;
-  
+
   // copy of meshes for gpu driven rendering
   std::vector<Mesh> m_Meshes{};
+
+  // Gpu resources
+  StructuredBuffer m_MeshletsDataBuffer;
+  StructuredBuffer m_MeshletsVertexPosBuffer;
+  StructuredBuffer m_MeshletsVertexDataBuffer;
+  StructuredBuffer m_MeshletsBuffer;
+  StructuredBuffer m_MeshesBuffer;
+  StructuredBuffer m_MeshInstancesBuffer;
+
+  // command args buffers
+  StructuredBuffer m_EarlyDrawCommands;
+  StructuredBuffer m_CulledDrawCommands;
+  StructuredBuffer m_LateDrawCommands;
+  StructuredBuffer m_LateDrawCommands;
+  StructuredBuffer m_MeshTaskIndirectLateCommands;
+  StructuredBuffer m_MeshTaskIndirectEarlyCommands;
+
+
+  // meshlets_instances_buffer
+  // meshlets_index_buffer
+
 };
 
 

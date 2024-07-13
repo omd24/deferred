@@ -1,4 +1,4 @@
-
+﻿
 #include "VolumetricFog.hpp"
 #include "d3dx12.h"
 #include "pix3.h"
@@ -7,6 +7,8 @@
 static const uint32_t MaxInputs = 8;
 
 // TODOs:
+// - Fix jitter code to properly address artifacts (maybe try Halton instead of blue noise for z-jitter ¯\_(ツ)_/¯)
+// 
 // - Add spatial filter
 // - Add 3D noise baking pass
 // - Add 3D noise for froxelization

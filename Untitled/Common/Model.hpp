@@ -167,7 +167,10 @@ class Mesh
   friend class Model;
 
 public:
-  ~Mesh() { assert(numVertices == 0); }
+  ~Mesh()
+  {
+    //assert(numVertices == 0);
+  }
 
   // Init from loaded files
   void InitFromAssimpMesh(
@@ -242,6 +245,8 @@ public:
   uint32_t m_MeshletOffset;
   uint32_t m_MeshletCount;
   uint32_t m_MeshletIndexCount; 
+
+  glm::vec4 m_BoundingSphere;
 
 protected:
   std::vector<MeshPart> meshParts;

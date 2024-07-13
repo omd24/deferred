@@ -34,6 +34,52 @@ struct GpuMeshletVertexData
   float padding;
 };
 //---------------------------------------------------------------------------//
+struct alignas(16) GpuMaterialData
+{
+  uint32_t textures[4]; // diffuse, roughness, normal, occlusion
+  // PBR
+  glm::vec4 emissive; // emissive_color_factor + emissive texture index
+  glm::vec4 baseColorFactor;
+  glm::vec4 metallicRoughnessOcclusionFactor; // metallic, roughness, occlusion
+
+  uint32_t flags;
+  float alphaCutoff;
+  uint32_t vertexOffset;
+  uint32_t meshIndex;
+
+  uint32_t meshletOffset;
+  uint32_t meshletCount;
+  uint32_t meshletIndexCount;
+  uint32_t padding1_;
+
+  // Gpu addresses (unused ?)
+  uint64_t positionBuffer; 
+  uint64_t uvBuffer;
+  uint64_t indexBuffer;
+  uint64_t normalsBuffer;
+
+}; // struct GpuMaterialData
+
+struct alignas(16) GpuMeshInstanceData
+{
+  glm::mat4 world;
+  glm::mat4 inverseWorld;
+
+  uint32_t meshIndex;
+  uint32_t pad000;
+  uint32_t pad001;
+  uint32_t pad002;
+};
+
+struct MeshInstance
+{
+  Mesh* mesh;
+
+  uint32_t gpuMeshInstanceIndex = UINT32_MAX;
+  uint32_t sceneGraphNodeIndex = UINT32_MAX;
+};
+
+//---------------------------------------------------------------------------//
 struct GpuDrivenRenderer
 {
   void init(ID3D12Device* p_Device);
@@ -41,7 +87,7 @@ struct GpuDrivenRenderer
 
   void render(ID3D12GraphicsCommandList* p_CmdList);
 
-  void addMesh(Mesh& p_Mesh);
+  void addMeshes(std::vector<Mesh>&);
   void createResources();
 
   ID3DBlobPtr m_DataShader = nullptr;
@@ -57,6 +103,8 @@ struct GpuDrivenRenderer
 
   // copy of meshes for gpu driven rendering
   std::vector<Mesh> m_Meshes{};
+  std::vector<MeshInstance> m_MeshInstances{};
+  std::vector<uint32_t> m_GltfMeshToMeshOffset;
 
   // Gpu resources
   StructuredBuffer m_MeshletsDataBuffer;
@@ -64,13 +112,14 @@ struct GpuDrivenRenderer
   StructuredBuffer m_MeshletsVertexDataBuffer;
   StructuredBuffer m_MeshletsBuffer;
   StructuredBuffer m_MeshesBuffer;
+  StructuredBuffer m_MeshBoundsBuffer;
   StructuredBuffer m_MeshInstancesBuffer;
 
   // command args buffers
   StructuredBuffer m_EarlyDrawCommands;
   StructuredBuffer m_CulledDrawCommands;
   StructuredBuffer m_LateDrawCommands;
-  StructuredBuffer m_LateDrawCommands;
+  //StructuredBuffer m_LateDrawCommands;
   StructuredBuffer m_MeshTaskIndirectLateCommands;
   StructuredBuffer m_MeshTaskIndirectEarlyCommands;
 

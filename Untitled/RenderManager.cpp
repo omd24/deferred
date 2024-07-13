@@ -1020,8 +1020,6 @@ void RenderManager::loadAssets()
   for (uint64_t meshIdx = 0; meshIdx < numVisible; ++meshIdx)
   {
     Mesh& mesh = sceneModel.Meshes()[meshIdx];
-    m_GpuDrivenRenderer.addMesh(mesh);
-
     for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
     {
       const MeshPart& part = mesh.MeshParts()[partIdx];
@@ -1030,6 +1028,11 @@ void RenderManager::loadAssets()
       assert(part.IndexCount == mesh.NumIndices());
     }
   }
+
+  // Add meshes for gpu driven rendering
+  m_GpuDrivenRenderer.addMeshes(sceneModel.Meshes());
+
+
 
 
   {
@@ -1414,6 +1417,7 @@ void RenderManager::renderDeferred()
         m_CmdList->SetGraphicsRoot32BitConstant(1, part.MaterialIdx, 0);
         currMaterial = part.MaterialIdx;
       }
+      assert(part.IndexStart == 0); // just testing
       m_CmdList->DrawIndexedInstanced(
           part.IndexCount, 1, mesh.IndexOffset() + part.IndexStart, mesh.VertexOffset(), 0);
     }

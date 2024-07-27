@@ -84,6 +84,14 @@ void GpuDrivenRenderer::deinit()
 
 void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
 {
+  assert(0 == m_MeshletsVertexPositions.size());
+  assert(0 == m_MeshletsVertexData.size());
+  assert(0 == m_MeshletsData.size());
+  assert(0 == m_Meshlets.size());
+  assert(0 == m_Meshes.size());
+  assert(0 == m_MeshInstances.size());
+  
+  uint32_t totalMeshlets = 0;
   for (uint32_t p = 0; p < meshes.size(); ++p)
   {
     Mesh mesh_ = meshes[p];
@@ -282,6 +290,31 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
     while (m_Meshlets.size() % 32)
       m_Meshlets.push_back(GpuMeshlet());
 
+
+    // mesh instances
+    {
+      MeshInstance meshInstance{};
+      // Assign scene graph node index
+      meshInstance.sceneGraphNodeIndex = 0;
+
+      //glTF::MeshPrimitive& mesh_primitive = gltf_mesh.primitives[primitive_index];
+
+      // Cache parent mesh
+      meshInstance.mesh = &meshes[p];
+
+      // TODO(OM): Handle material per instance
+
+      // Cache gpu mesh instance index, used to retrieve data on gpu.
+      meshInstance.gpuMeshInstanceIndex = m_MeshInstances.size();
+
+      // TODO(OM): Skinning
+
+      totalMeshlets += meshInstance.mesh->m_MeshletCount;
+
+      printf("Current total meshlet instances %u\n", totalMeshlets);
+
+      m_MeshInstances.push_back(meshInstance);
+    }
   }
 }
 
@@ -356,6 +389,18 @@ void GpuDrivenRenderer::createResources()
     m_MeshBoundsBuffer.init(sbInit);
     m_MeshBoundsBuffer.resource()->SetName(L"mesh_bound_sb");
   }
+
+  // mesh instance
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(GpuMeshInstanceData);
+    sbInit.NumElements = m_MeshInstances.size();
+    sbInit.Dynamic = true; // should be this dynamic
+    sbInit.CPUAccessible = true;
+    m_MeshBoundsBuffer.init(sbInit);
+    m_MeshBoundsBuffer.resource()->SetName(L"mesh_instances_sb");
+  }
+
 
   continuehere
   ...

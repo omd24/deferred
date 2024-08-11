@@ -248,6 +248,8 @@ public:
 
   glm::vec4 m_BoundingSphere;
 
+  StructuredBuffer m_MaterialBuffer;
+
 protected:
   std::vector<MeshPart> meshParts;
 

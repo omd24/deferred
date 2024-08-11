@@ -1,5 +1,8 @@
 #include "GpuDrivenRenderer.hpp"
 #include "meshoptimizer/meshoptimizer.h"
+#include "d3dx12.h"
+#include "pix3.h"
+#include "../AppSettings.hpp"
 
 /*
 1. first on cpu
@@ -70,15 +73,127 @@ store geometry_transform
 // Important NOTE: the scale of positions and Z direction is different from vulkan!
 // compare the first boundign sphere for an example
 
+enum RootParams : uint32_t
+{
+  RootParam_StandardDescriptors,
+  RootParam_Cbuffer,
+  RootParam_UAVDescriptors,
+  RootParam_AppSettings,
+
+  NumRootParams,
+};
+
+enum RenderPass : uint32_t
+{
+  RenderPass_GpuCulling,
+  RenderPass_GbufferEarly,
+  
+  NumRenderPasses,
+};
+
+namespace AppSettings
+{
+const extern uint32_t CBufferRegister;
+void bindCBufferCompute(ID3D12GraphicsCommandList* cmdList, uint32_t rootParameter);
+} // namespace AppSettings
+
+struct Uniforms
+{
+  float NearClip = 0.0f;
+  float FarClip = 0.0f;
+};
 
 void GpuDrivenRenderer::init(ID3D12Device* p_Device)
 {
+  // Create root signature:
+  {
+    D3D12_DESCRIPTOR_RANGE1 uavRanges[1] = {};
+    uavRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    uavRanges[0].NumDescriptors = 1;
+    uavRanges[0].BaseShaderRegister = 0;
+    uavRanges[0].RegisterSpace = 0;
+    uavRanges[0].OffsetInDescriptorsFromTableStart = 0;
 
+    D3D12_ROOT_PARAMETER1 rootParameters[NumRootParams] = {};
+
+    rootParameters[RootParam_StandardDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[RootParam_StandardDescriptors].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_StandardDescriptors].DescriptorTable.pDescriptorRanges =
+        StandardDescriptorRanges();
+    rootParameters[RootParam_StandardDescriptors].DescriptorTable.NumDescriptorRanges =
+        NumStandardDescriptorRanges;
+
+    // UAV's
+    rootParameters[RootParam_UAVDescriptors].ParameterType =
+        D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[RootParam_UAVDescriptors].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_UAVDescriptors].DescriptorTable.pDescriptorRanges = uavRanges;
+    rootParameters[RootParam_UAVDescriptors].DescriptorTable.NumDescriptorRanges =
+        arrayCount32(uavRanges);
+
+    // Uniforms
+    rootParameters[RootParam_Cbuffer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[RootParam_Cbuffer].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_Cbuffer].Descriptor.RegisterSpace = 0;
+    rootParameters[RootParam_Cbuffer].Descriptor.ShaderRegister = 0;
+    rootParameters[RootParam_Cbuffer].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // AppSettings
+    rootParameters[RootParam_AppSettings].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameters[RootParam_AppSettings].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[RootParam_AppSettings].Descriptor.RegisterSpace = 0;
+    rootParameters[RootParam_AppSettings].Descriptor.ShaderRegister = AppSettings::CBufferRegister;
+
+    D3D12_STATIC_SAMPLER_DESC staticSamplers[5] = {};
+    staticSamplers[0] =
+        GetStaticSamplerState(SamplerState::Point, 0, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[1] =
+        GetStaticSamplerState(SamplerState::LinearClamp, 1, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[2] =
+        GetStaticSamplerState(SamplerState::Linear, 2, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[3] =
+        GetStaticSamplerState(SamplerState::LinearBorder, 3, 0, D3D12_SHADER_VISIBILITY_ALL);
+    staticSamplers[4] =
+        GetStaticSamplerState(SamplerState::ShadowMapPCF, 4, 0, D3D12_SHADER_VISIBILITY_ALL);
+
+    D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
+    rootSignatureDesc.NumParameters = arrayCount32(rootParameters);
+    rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = arrayCount32(staticSamplers);
+    rootSignatureDesc.pStaticSamplers = staticSamplers;
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+
+    CreateRootSignature(&m_RootSig, rootSignatureDesc);
+    m_RootSig->SetName(L"GpuDrivenRenderer-RootSig");
+  }
+
+  // Create the command signature used for indirect drawing.
+  {
+    // Each command consists of an amplification/mesh shader call.
+    D3D12_INDIRECT_ARGUMENT_DESC argumentDescs[1] = {};
+    argumentDescs[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+
+    D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
+    commandSignatureDesc.pArgumentDescs = argumentDescs;
+    commandSignatureDesc.NumArgumentDescs = _countof(argumentDescs);
+    commandSignatureDesc.ByteStride = sizeof(IndirectCommand);
+
+#if 0 // if changing the root signature
+    p_Device->CreateCommandSignature(
+        &commandSignatureDesc, m_RootSig, IID_PPV_ARGS(&m_CommandSignature));
+    m_CommandSignature->SetName(L"GpuDrivenRenderer-CommandSignature");
+#endif
+    p_Device->CreateCommandSignature(
+        &commandSignatureDesc, nullptr, IID_PPV_ARGS(&m_CommandSignature));
+    m_CommandSignature->SetName(L"GpuDrivenRenderer-CommandSignature");
+  }
 }
 
 void GpuDrivenRenderer::deinit()
 {
-  // Release all created resources
+  // TODO:
+  // Release all created resources and whatnot
   //
 }
 
@@ -318,8 +433,66 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
   }
 }
 
-void GpuDrivenRenderer::createResources()
+void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
 {
+#if defined(_DEBUG)
+  UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+  UINT compileFlags = 0;
+#endif
+  // Unbounded size descriptor tables
+  compileFlags |= D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+  WCHAR assetsPath[512];
+  getAssetsPath(assetsPath, _countof(assetsPath));
+  const std::wstring ShaderPath = assetsPath;
+
+  // Gpu culling shader
+  {
+    std::wstring cullingShaderPath = ShaderPath + L"Shaders\\Culling.hlsl";
+    const D3D_SHADER_MACRO defines[] = {{"GPU_CULLING", "1"}, {NULL, NULL}};
+    compileShader(
+        "gpu culling",
+        cullingShaderPath.c_str(),
+        defines,
+        compileFlags,
+        ShaderType::Compute,
+        "CullingCS",
+        m_CullingShader);
+  }
+
+  // Gbuffer shader
+  {
+    std::wstring meshletShaderPath = ShaderPath + L"Shaders\\Meshlet.hlsl";
+    const D3D_SHADER_MACRO defines[] = {{"Gbuffer_Meshlet", "1"}, {NULL, NULL}};
+    compileShader(
+        "gbuffer meshlet",
+        meshletShaderPath.c_str(),
+        defines,
+        compileFlags,
+        ShaderType::Compute,
+        "MeshletCS",
+        m_GbufferShader);
+  }
+
+  assert(m_CullingShader && m_GbufferShader);
+
+  // Create psos
+  {
+    m_PSOs.resize(NumRenderPasses);
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = m_RootSig;
+
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_CullingShader.GetInterfacePtr());
+    p_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GpuCulling]));
+    m_PSOs[RenderPass_GpuCulling]->SetName(L"Gpu Culling PSO");
+
+    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_GbufferShader.GetInterfacePtr());
+    p_Device->CreateComputePipelineState(
+        &psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GbufferEarly]));
+    m_PSOs[RenderPass_GbufferEarly]->SetName(L"Gbuffer Meshlet PSO");
+  }
+
   // meshlets_data_sb
   {
     StructuredBufferInit sbInit;
@@ -373,8 +546,8 @@ void GpuDrivenRenderer::createResources()
     StructuredBufferInit sbInit;
     sbInit.Stride = sizeof(GpuMaterialData);
     sbInit.NumElements = m_Meshes.size();
-    sbInit.Dynamic = true; // should be this dynamic
-    sbInit.CPUAccessible = true;
+    sbInit.Dynamic = false;
+    sbInit.CPUAccessible = false; // does it need to be host visible ?
     m_MeshletsBuffer.init(sbInit);
     m_MeshletsBuffer.resource()->SetName(L"meshes_sb");
   }
@@ -384,8 +557,8 @@ void GpuDrivenRenderer::createResources()
     StructuredBufferInit sbInit;
     sbInit.Stride = sizeof(glm::vec4);
     sbInit.NumElements = m_Meshes.size();
-    sbInit.Dynamic = true; // should be this dynamic
-    sbInit.CPUAccessible = true;
+    sbInit.Dynamic = false;
+    sbInit.CPUAccessible = false; // does it need to be host visible ?
     m_MeshBoundsBuffer.init(sbInit);
     m_MeshBoundsBuffer.resource()->SetName(L"mesh_bound_sb");
   }
@@ -395,43 +568,369 @@ void GpuDrivenRenderer::createResources()
     StructuredBufferInit sbInit;
     sbInit.Stride = sizeof(GpuMeshInstanceData);
     sbInit.NumElements = m_MeshInstances.size();
-    sbInit.Dynamic = true; // should be this dynamic
-    sbInit.CPUAccessible = true;
+    sbInit.Dynamic = false;
+    sbInit.CPUAccessible = false; // does it need to be host visible ?
     m_MeshBoundsBuffer.init(sbInit);
     m_MeshBoundsBuffer.resource()->SetName(L"mesh_instances_sb");
   }
 
+  // Create indirect buffers, dynamic (i.e., need multiple buffering)
+  {
+   //{
+   //   RenderTextureInit rtInit;
+   //   rtInit.Width = m_Info.m_Width;
+   //   rtInit.Height = m_Info.m_Height;
+   //   rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+   //   rtInit.MSAASamples = 1;
+   //   rtInit.ArraySize = 1;
+   //   rtInit.CreateUAV = true;
+   //   rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+   //   rtInit.Name = L"Main Target";
+   //   m_MeshTaskIndirectEarlyCommands.init(rtInit);
+   // }
 
-  continuehere
-  ...
 
-      
+    // This buffer contains both opaque and transparent commands, thus is multiplied by two. 
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCommand);
+      sbInit.NumElements = m_MeshInstances.size() * 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_MeshTaskIndirectEarlyCommands.init(sbInit);
+      m_MeshTaskIndirectEarlyCommands.resource()->SetName(L"early_draw_commands_sb");
+    }
 
-  // mesh instances buffer ?
-  // n.b., this is meshlet instances so use meshlets to fill it 
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCommand);
+      sbInit.NumElements = m_MeshInstances.size() * 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_MeshTaskIndirectCulledCommands.init(sbInit);
+      m_MeshTaskIndirectCulledCommands.resource()->SetName(L"culled_draw_commands_sb");
+    }
 
-  // per frame resource
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCommand);
+      sbInit.NumElements = m_MeshInstances.size() * 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_MeshTaskIndirectLateCommands.init(sbInit);
+      m_MeshTaskIndirectLateCommands.resource()->SetName(L"late_draw_commands_sb");
+    }
 
-    // early_draw_commands_sb
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCounts);
+      sbInit.NumElements = m_MeshInstances.size() * 2;
+      sbInit.Dynamic = false;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+      sbInit.CPUAccessible = false;
+      sbInit.CreateUAV = true;
+      m_MeshTaskIndirectCountEarly.init(sbInit);
+      m_MeshTaskIndirectCountEarly.resource()->SetName(L"early_mesh_count_sb");
+    }
 
-    // culled_draw_commands_sb
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCounts);
+      sbInit.NumElements = m_MeshInstances.size() * 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+      sbInit.CPUAccessible = true;
+      sbInit.CreateUAV = false;
+      m_MeshTaskIndirectCountCpuVisible.init(sbInit);
+      m_MeshTaskIndirectCountCpuVisible.resource()->SetName(L"mesh_count_cpu_visible");
+    }
 
-    // late_draw_commands_sb
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCounts);
+      sbInit.NumElements = 1;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_MeshTaskIndirectCountLate.init(sbInit);
+      m_MeshTaskIndirectCountLate.resource()->SetName(L"late_mesh_count_sb");
+    }
 
-    // meshlets_instances_buffer
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(uint32_t);
+      sbInit.NumElements = 4;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_MeshletInstancesIndirectCount.init(sbInit);
+      m_MeshletInstancesIndirectCount.resource()->SetName(L"meshlet_instances_indirect_sb");
+    }
+  }
 
-    // meshlets_index_buffer
 
-    // mesh_task_indirect_late_commands_sb
+  // Debug draw buffers
+  {
+    static constexpr uint32_t MaxLines = 64000 + 64000; // 3D + 2D lines in the same buffer
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(glm::vec4);
+      sbInit.NumElements = MaxLines * 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_DebugLineStructureBuffer.init(sbInit);
+      m_DebugLineStructureBuffer.resource()->SetName(L"debug_line_sb");
+    }
 
-    // mesh_task_indirect_early_commands_sb
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(glm::vec4);
+      sbInit.NumElements = 1;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_DebugLineCount.init(sbInit);
+      m_DebugLineCount.resource()->SetName(L"debug_line_count_sb");
+    }
 
-  // debug draw buffers
+    // Gather 3D and 2D gpu drawing commands
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(D3D12_DRAW_ARGUMENTS);
+      sbInit.NumElements = 2;
+      sbInit.Dynamic = true;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+      sbInit.CPUAccessible = false;
+      m_DebugLineCommands.init(sbInit);
+      m_DebugLineCommands.resource()->SetName(L"debug_line_commands_sb");
+    }
+  }
 
-  // material buffer ?
 
-  // 
+  // Create per mesh material buffer
+  for(Mesh & mesh : m_Meshes)
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(GpuMaterialData);
+    sbInit.NumElements = 1;
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = false;
+    mesh.m_MaterialBuffer.init(sbInit);
+    mesh.m_MaterialBuffer.resource()->SetName(L"material_buffer_");
+  }
 
-  // 
+  // meshlets_index_buffer (only needed if mesh shader is not supported)
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(uint32_t) * 8;
+    sbInit.NumElements = m_MeshletsIndexCount;
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = false;
+    m_MeshletsIndexBuffer.init(sbInit);
+    m_MeshletsIndexBuffer.resource()->SetName(L"meshlets_index_buffer");
+  }
+  
+  // meshlets_instances_buffer
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(uint32_t) * 2;
+    sbInit.NumElements = m_Meshlets.size();
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = false;
+    m_MeshletsInstances.init(sbInit);
+    m_MeshletsInstances.resource()->SetName(L"meshlets_instances_buffer");
+  }
+  
+  // meshlets_visible_instances_sb
+  {
+    StructuredBufferInit sbInit;
+    sbInit.Stride = sizeof(uint32_t) * 2;
+    sbInit.NumElements = m_Meshlets.size();
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = false;
+    m_MeshletsVisibleInstances.init(sbInit);
+    m_MeshletsVisibleInstances.resource()->SetName(L"meshlets_visible_instances_sb");
+  }
 }
 
+void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc)
+{
+
+  // TODOS:
+  /*
+  * 
+  * CullingEarlyPass 
+  * for now just pass through
+  * 
+  * GBufferPass::prepare_draws aka gbuffer_pass_early
+  * GBufferPass::render
+  * LateGBufferPass::prepare_draws aka gbuffer_pass_late
+  * LateGBufferPass::render
+  * 
+  * 
+  * both use: draw_mesh_task_indirect_count
+  * 
+  * 
+  * 
+  * 
+  * 
+  * CullingEarlyPass
+  * CullingEarlyPass::prepare_draws aka mesh_occlusion_early_pass
+  * CullingEarlyPass::render and frustum culling
+  * 
+  * CullingLatePass
+  * CullingLatePass::prepare_draws aka mesh_occlusion_late_pass
+  * CullingLatePass::render
+  * 
+  * 
+  * meshlet_pointshadows_
+  * PointlightShadowPass::prepare_draws
+  * PointlightShadowPass::render
+  * 
+  * 
+  * handle resize
+  * RenderScene::on_resize
+  * 
+  * 
+  */
+
+
+  // first gpu culling pass
+  // Frustum cull meshes
+  GpuMeshDrawCounts& meshDrawCounts = m_MeshDrawCounts;
+  meshDrawCounts.opaqueMeshVisibleCount = 0;
+  meshDrawCounts.opaqueMeshCulledCount = 0;
+  meshDrawCounts.transparentMeshVisibleCount = 0;
+  meshDrawCounts.transparentMeshCulledCount = 0;
+
+  meshDrawCounts.totalCount = m_MeshInstances.size();
+
+  // TODO: pass HiZ level aka depth_pyramid_texture_index, 
+  meshDrawCounts.depthPyramidTextureIndex = p_RenderDesc.DepthBufferSrv;
+  meshDrawCounts.lateFlag = 0;
+  meshDrawCounts.meshletIndexCount = 0;
+  meshDrawCounts.dispatchTaskX = 0;
+  meshDrawCounts.dispatchTaskY = 1;
+  meshDrawCounts.dispatchTaskZ = 1;
+
+  // Reset mesh draw counts
+  m_MeshTaskIndirectCountCpuVisible.mapAndSetData(&meshDrawCounts, m_MeshInstances.size() * 2);
+
+  // Prepare count buffer for copy
+  {
+    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = m_MeshTaskIndirectCountEarly.resource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[0].Transition.Subresource = 0;
+
+    p_CmdList->ResourceBarrier(_countof(barriers), barriers);
+  }
+
+  p_CmdList->CopyBufferRegion(
+      m_MeshTaskIndirectCountEarly.resource(),
+      0,
+      m_MeshTaskIndirectCountCpuVisible.resource(),
+      0,
+      m_MeshInstances.size() * 2 * sizeof(GpuMeshDrawCounts));
+
+  // Prepare count and command buffer for write
+  {
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = m_MeshTaskIndirectCountEarly.resource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    barriers[0].Transition.Subresource = 0;
+
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = m_MeshTaskIndirectEarlyCommands.resource();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.Subresource = 0;
+
+    p_CmdList->ResourceBarrier(_countof(barriers), barriers);
+  }
+
+  p_CmdList->SetComputeRootSignature(m_RootSig);
+  p_CmdList->SetPipelineState(m_PSOs[RenderPass_GpuCulling]);
+
+  BindStandardDescriptorTable(p_CmdList, RootParam_StandardDescriptors, CmdListMode::Compute);
+
+  // Set constant buffers
+  Uniforms cdata = {};
+  BindTempConstantBuffer(p_CmdList, cdata, RootParam_Cbuffer, CmdListMode::Compute);
+
+  AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
+
+  D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
+      m_MeshTaskIndirectCountEarly.m_Uav, };
+  BindTempDescriptorTable(
+      p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
+
+  uint32_t groupX = static_cast<uint32_t>(ceil(m_MeshInstances.size() / 64.0f));
+  p_CmdList->Dispatch(groupX, 1, 1);
+
+  // Sync back command buffer
+  {
+    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    //barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    //barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    //barriers[0].Transition.pResource = m_MeshTaskIndirectCountEarly.resource();
+    //barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    //barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    //barriers[0].Transition.Subresource = 0;
+
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource = m_MeshTaskIndirectEarlyCommands.resource();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    barriers[0].Transition.Subresource = 0;
+
+    p_CmdList->ResourceBarrier(_countof(barriers), barriers);
+  }
+
+//... continue culling shader (a pass through for now)
+
+#if 0
+  // Then main draw call
+  if (true)
+  {
+    PIXBeginEvent(p_CmdList, 0, "gbuffer_pass_early");
+
+    p_CmdList->ExecuteIndirect(
+        m_CommandSignature,
+        int worstCaseScenarioTotalTriangleOrMeshCount,
+        ID3D12Resource * someBuffer,
+        0 or ifDoubleBuffer_FrameIndexByTotalSizeOfIndirectCommand,
+        nullptr or ID3D12Resource * sameOrSomeOtherBuffer,
+        0 or ifSameBuffer_Offset);
+
+    PIXEndEvent(p_CmdList);
+  }
+  else
+  {
+    PIXBeginEvent(p_CmdList, 0, "Draw all triangles");
+
+    int maxCount = 1;
+    p_CmdList->ExecuteIndirect(
+        m_CommandSignature,
+        maxCount,
+        m_EarlyDrawCommands.resource(),
+        0,
+        nullptr,
+        0);
+
+    PIXEndEvent(p_CmdList);
+  }
+  #endif
+}

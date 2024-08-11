@@ -1015,7 +1015,6 @@ void RenderManager::loadAssets()
   }
 #endif
 
-  // Gpu driven rendering:
   const uint64_t numVisible = sceneModel.Meshes().size();
   for (uint64_t meshIdx = 0; meshIdx < numVisible; ++meshIdx)
   {
@@ -1029,11 +1028,17 @@ void RenderManager::loadAssets()
     }
   }
 
-  // Add meshes for gpu driven rendering
-  m_GpuDrivenRenderer.addMeshes(sceneModel.Meshes());
+  // Gpu Driven Renderer
+  {
+    // Initialize gpu driven renderer
+    m_GpuDrivenRenderer.init(m_Dev);
 
+    // Add meshes for gpu driven rendering
+    m_GpuDrivenRenderer.addMeshes(sceneModel.Meshes());
 
-
+    // Create resources
+    m_GpuDrivenRenderer.createResources(m_Dev);
+  }
 
   {
     // Spot light and shadow bounds buffer
@@ -1303,6 +1308,14 @@ void RenderManager::renderForward()
 }
 void RenderManager::renderDeferred()
 {
+#if 1
+  // Gpu driven renderer
+  GpuDrivenRenderer::RenderDesc desc = {
+      .DepthBufferSrv = depthBuffer.getSrv(),
+  };
+  m_GpuDrivenRenderer.render(m_CmdList, desc);
+#endif
+
   // Draw to Gbuffers
 #pragma region Gbuffer pass
   PIXBeginEvent(m_CmdList.GetInterfacePtr(), 0, "Render Gbuffers");

@@ -1072,7 +1072,8 @@ void DescriptorHeap::Init(
 
 void DescriptorHeap::Shutdown()
 {
-  DEBUG_BREAK(PersistentAllocated == 0);
+  // TODO(OM): Release resources
+  //DEBUG_BREAK(PersistentAllocated == 0);
   for (uint64_t i = 0; i < arrayCount(Heaps); ++i)
   {
     if (Heaps[i] != nullptr)
@@ -2150,7 +2151,7 @@ void ConstantBuffer::multiUpdateData(
 //---------------------------------------------------------------------------//
 void StructuredBuffer::init(const StructuredBufferInit& p_Init)
 {
-  deinit();
+  //deinit(); TODO(OM)
 
   m_Stride = p_Init.Stride;
   m_NumElements = p_Init.NumElements;

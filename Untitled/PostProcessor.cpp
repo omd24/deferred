@@ -77,7 +77,7 @@ void PostProcessor::init()
       compileShader(
           "tone mapping",
           shaderPath.c_str(),
-          nullptr,
+          0, nullptr,
           compileFlags,
           ShaderType::Pixel,
           "ToneMap",
@@ -89,7 +89,7 @@ void PostProcessor::init()
       compileShader(
           "scale fragment",
           shaderPath.c_str(),
-          nullptr,
+          0, nullptr,
           compileFlags,
           ShaderType::Pixel,
           "Scale",
@@ -101,7 +101,7 @@ void PostProcessor::init()
       compileShader(
           "horizontal blur",
           shaderPath.c_str(),
-          nullptr,
+          0, nullptr,
           compileFlags,
           ShaderType::Pixel,
           "BlurH",
@@ -113,7 +113,7 @@ void PostProcessor::init()
       compileShader(
           "vertical blur",
           shaderPath.c_str(),
-          nullptr,
+          0, nullptr,
           compileFlags,
           ShaderType::Pixel,
           "BlurV",
@@ -125,7 +125,7 @@ void PostProcessor::init()
       compileShader(
           "bloom pixel",
           shaderPath.c_str(),
-          nullptr,
+          0, nullptr,
           compileFlags,
           ShaderType::Pixel,
           "Bloom",

@@ -140,6 +140,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
       compileShader(
         "data injection",
         shaderPath.c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Compute,
@@ -154,6 +155,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
       compileShader(
           "light contribution",
           shaderPath.c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Compute,
@@ -167,6 +169,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
       compileShader(
           "temporal filter",
           shaderPath.c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Compute,
@@ -180,6 +183,7 @@ void VolumetricFog::init(ID3D12Device * p_Device)
       compileShader(
           "final integration",
           shaderPath.c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Compute,

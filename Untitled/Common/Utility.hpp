@@ -46,6 +46,9 @@
 #include <thread>
 #include <mutex>
 
+//#include <string>
+//#include <locale>
+
 #ifndef GLM_FORCE_RADIANS
 #  define GLM_FORCE_RADIANS
 #endif
@@ -61,6 +64,7 @@
 #define MAKE_SMART_COM_PTR(_a) _COM_SMARTPTR_TYPEDEF(_a, __uuidof(_a))
 MAKE_SMART_COM_PTR(ID3D12Device5);
 MAKE_SMART_COM_PTR(ID3D12Device);
+MAKE_SMART_COM_PTR(ID3D12Device2);
 MAKE_SMART_COM_PTR(ID3D12GraphicsCommandList4);
 MAKE_SMART_COM_PTR(ID3D12GraphicsCommandList);
 MAKE_SMART_COM_PTR(ID3D12CommandQueue);
@@ -317,6 +321,7 @@ template <typename BlobType> std::string convertBlobToString(BlobType* p_Blob)
 template <typename T, size_t N> constexpr size_t arrayCount(T (&)[N]) { return N; }
 //---------------------------------------------------------------------------//
 template <typename T, U32 N> constexpr U32 arrayCount32(T (&)[N]) { return N; }
+template <typename T, uint8_t N> constexpr uint8_t arrayCountU8(T (&)[N]) { return N; }
 //---------------------------------------------------------------------------//
 template <typename T, U32 N> constexpr void setArrayToZero(T (&p_Array)[N])
 {
@@ -473,6 +478,8 @@ enum class ShaderType : uint8_t
   Vertex = 0,
   Pixel,
   Compute,
+  Task,
+  Mesh,
 
   NumTypes
 };
@@ -482,6 +489,17 @@ static const char* ShaderTypeStringsFXC[] = {
     "vs_5_1",
     "ps_5_1",
     "cs_5_1",
+    "Not Supported",
+    "Not Supported",
+};
+//---------------------------------------------------------------------------//
+static const char* ShaderTypeStringsDXC[] = {
+
+    "vs_6_5",
+    "ps_6_5",
+    "cs_6_5",
+    "as_6_5",
+    "ms_6_5",
 };
 //---------------------------------------------------------------------------//
 #ifdef D3D_COMPILE_STANDARD_FILE_INCLUDE
@@ -534,6 +552,7 @@ bool compileShaderFXC (
 bool compileShader(
     const char* p_DbgName,
     const wchar_t* p_ShaderPath,
+    const uint8_t p_NumDefines,
     const D3D_SHADER_MACRO* p_Defines,
     unsigned int p_CompileFlags,
     ShaderType p_ShaderType,

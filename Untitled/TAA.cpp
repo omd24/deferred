@@ -71,6 +71,7 @@ void TAARenderPass::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
       compileShader(
           "taa main",
           shaderPath.c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Compute,

@@ -164,7 +164,11 @@ float3 ShadePixel(in ShadingInput input, in Texture2DArray spotLightShadowMap, i
             float d = CBuffer.CosSunAngularRadius;
             float3 DDotR = dot(D, R);
             float3 S = R - DDotR * D;
+#if (USE_DXC > 0)
+            sunDirection = select(DDotR < d, normalize(d * D + normalize(S) * r), R);
+#else
             sunDirection = DDotR < d ? normalize(d * D + normalize(S) * r) : R;
+#endif
         }
         output += CalcLighting(normalWS, sunDirection, CBuffer.SunIrradiance, diffuseAlbedo, specularAlbedo, roughness, positionWS, CBuffer.CameraPosWS) * sunShadowVisibility;
     }

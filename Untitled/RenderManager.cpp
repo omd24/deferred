@@ -283,6 +283,7 @@ bool RenderManager::compileShaders()
     compileShader(
         "gbuffer vertex",
         getShaderPath(L"Mesh.hlsl").c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Vertex,
@@ -295,6 +296,7 @@ bool RenderManager::compileShaders()
     compileShader(
         "gbuffer fragment",
         getShaderPath(L"Mesh.hlsl").c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Pixel,
@@ -308,6 +310,7 @@ bool RenderManager::compileShaders()
     compileShader(
         "deferred compute",
         getShaderPath(L"Deferred.hlsl").c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Compute,
@@ -323,6 +326,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster vertex",
           getShaderPath(L"Clusters.hlsl").c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Vertex,
@@ -336,6 +340,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster frontface",
           getShaderPath(L"Clusters.hlsl").c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Pixel,
@@ -349,6 +354,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster backface",
           getShaderPath(L"Clusters.hlsl").c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Pixel,
@@ -362,6 +368,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster intersecting",
           getShaderPath(L"Clusters.hlsl").c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Pixel,
@@ -373,6 +380,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster visualizer",
           getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
+          0,
           nullptr,
           compileFlags,
           ShaderType::Pixel,
@@ -384,6 +392,7 @@ bool RenderManager::compileShaders()
       compileShader(
           "cluster visualizer",
           getShaderPath(L"ClusterVisualizer.hlsl").c_str(),
+          0,
           nullptr,
           compileFlags,
           ShaderType::Pixel,
@@ -397,6 +406,7 @@ bool RenderManager::compileShaders()
     compileShader(
         "fullscreen triangle",
         getShaderPath(L"FullScreenTriangle.hlsl").c_str(),
+        0,
         nullptr,
         compileFlags,
         ShaderType::Vertex,
@@ -1031,7 +1041,7 @@ void RenderManager::loadAssets()
   // Gpu Driven Renderer
   {
     // Initialize gpu driven renderer
-    m_GpuDrivenRenderer.init(m_Dev);
+    m_GpuDrivenRenderer.init(m_Dev, m_Info.m_Width, m_Info.m_Height);
 
     // Add meshes for gpu driven rendering
     m_GpuDrivenRenderer.addMeshes(sceneModel.Meshes());
@@ -1311,7 +1321,7 @@ void RenderManager::renderDeferred()
 #if 1
   // Gpu driven renderer
   GpuDrivenRenderer::RenderDesc desc = {
-      .DepthBufferSrv = depthBuffer.getSrv(),
+      //
   };
   m_GpuDrivenRenderer.render(m_CmdList, desc);
 #endif
@@ -2222,6 +2232,9 @@ void RenderManager::onUpdate()
     uint64_t offsets[2] = {0, AppSettings::MaxSpotLights * sizeof(SpotLight)};
     spotLightBuffer.multiUpdateData(srcData, sizes, offsets, arrayCount(srcData));
   }
+
+  // Update gpu mesh data
+  m_GpuDrivenRenderer.uploadGpuData();
 
   // Update application settings
   AppSettings::CurrentFrame = static_cast<uint32_t>(g_CurrentCPUFrame);

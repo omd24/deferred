@@ -83,7 +83,7 @@ static_assert(sizeof(ShadingConstants) == 208);
 //---------------------------------------------------------------------------//
 struct RenderManager
 {
-  ID3D12DevicePtr m_Dev;
+  ID3D12Device2Ptr m_Dev; // Need device2 for amp/mesh shader pso
 
   RenderManager()
   {

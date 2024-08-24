@@ -250,6 +250,7 @@ public:
 
   StructuredBuffer m_MaterialBuffer;
 
+  uint32_t m_GpuMeshIndex;
 protected:
   std::vector<MeshPart> meshParts;
 
@@ -268,6 +269,7 @@ protected:
 
   glm::vec3 aabbMin;
   glm::vec3 aabbMax;
+
 };
 
 struct ModelLoadSettings

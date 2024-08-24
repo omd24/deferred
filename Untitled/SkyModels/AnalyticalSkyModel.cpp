@@ -306,6 +306,7 @@ void Skybox::Initialize()
   compileShader(
     "skybox vs",
     shaderPath.c_str(),
+    0,
     nullptr,
     compileFlags,
     ShaderType::Vertex,
@@ -315,6 +316,7 @@ void Skybox::Initialize()
   compileShader(
     "skybox ps",
     shaderPath.c_str(),
+    0,
     nullptr,
     compileFlags,
     ShaderType::Pixel,

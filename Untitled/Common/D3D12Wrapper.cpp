@@ -1401,6 +1401,7 @@ void initializeUpload(ID3D12Device* dev)
     compileShader(
         "decode texture",
         shaderPath.c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Compute,
@@ -1409,6 +1410,7 @@ void initializeUpload(ID3D12Device* dev)
     compileShader(
         "decode texture array",
         shaderPath.c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Compute,

@@ -62,6 +62,7 @@ void MotionVector::init(ID3D12Device* p_Device, uint32_t w, uint32_t h)
       compileShader(
           "motion vectors",
           shaderPath.c_str(),
+          arrayCountU8(defines),
           defines,
           compileFlags,
           ShaderType::Compute,

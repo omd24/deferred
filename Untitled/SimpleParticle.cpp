@@ -283,6 +283,9 @@ void SimpleParticle::render(
 //---------------------------------------------------------------------------//
 void SimpleParticle::compileShaders()
 {
+  // TODO: Use the global shader compiler!
+  // This is using FXC which should be replaced with DXC!
+
   // Load and compile shaders:
   {
     bool res = true;

@@ -43,6 +43,7 @@ void PostFxHelper::init()
     compileShader(
         "fullscreen triangle",
         shaderPath.c_str(),
+        0,
         nullptr,
         compileFlags,
         ShaderType::Vertex,

@@ -22,6 +22,24 @@ ConstantBuffer<UniformConstants> CBuffer : register(b0);
 // Shader Types
 //=================================================================================================
 
+struct GpuMeshDrawCounts
+{
+  uint opaqueMeshVisibleCount;
+  uint opaqueMeshCulledCount;
+  uint transparentMeshVisibleCount;
+  uint transparentMeshCulledCount;
+
+  uint totalCount;
+  uint depthPyramidTextureIndex;
+  uint lateFlag;
+  uint meshletIndexCount;
+
+  uint dispatchTaskX;
+  uint dispatchTaskY;
+  uint dispatchTaskZ;
+  uint pad001;
+};
+
 struct GpuMeshDrawCommand
 {
     uint drawId;
@@ -33,7 +51,6 @@ struct GpuMeshDrawCommand
 // Resources
 //=================================================================================================
 
-Texture2D<uint> MaterialIDMaps[] : register(t0, space104);
 
 // Samplers:
 SamplerState PointSampler : register(s0);
@@ -42,9 +59,12 @@ SamplerState LinearWrapSampler : register(s2);
 SamplerState LinearBorderSampler : register(s3);
 SamplerComparisonState ShadowMapSampler : register(s4);
 
-// Render targets / UAVs
 #if (Gbuffer_Meshlet > 0)
-  RWStructuredBuffer<GpuMeshDrawCommand> m_MeshTaskIndirectEarlyCommands : register(u0);
+  Texture2D<uint> MaterialIDMaps[] : register(t0, space100);
+  StructuredBuffer<MeshDraw> MeshBuffers[] : register(t0, space101);
+  StructuredBuffer<GpuMeshDrawCounts> MeshCountBuffer : register(t0, space102);
+
+  RWStructuredBuffer<MeshDrawCommand> MeshTaskIndirectCountEarly : register(u1);
 #endif
 
 //=================================================================================================

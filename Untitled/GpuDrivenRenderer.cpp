@@ -5,6 +5,11 @@
 #include "../AppSettings.hpp"
 
 /*
+* TODOS:
+* 1. Add actual instancing
+* 2. Add support for skinning
+* 
+* 
 1. first on cpu
 prepare the meshlets and their bounds and send them to gpu
 2. do gpu culling
@@ -86,7 +91,7 @@ enum RootParams : uint32_t
 enum RenderPass : uint32_t
 {
   RenderPass_GpuCulling,
-  RenderPass_GbufferEarly,
+  RenderPass_GbufferMeshlet,
   
   NumRenderPasses,
 };
@@ -101,18 +106,31 @@ struct Uniforms
 {
   float NearClip = 0.0f;
   float FarClip = 0.0f;
+  float Unused0;
+  float Unused1;
+
+  uint32_t meshBufferSrv = uint32_t(-1);
 };
 
-void GpuDrivenRenderer::init(ID3D12Device* p_Device)
+void GpuDrivenRenderer::init(ID3D12Device* p_Device, uint32_t p_Width, uint32_t p_Height)
 {
+  if (!m_Enabled)
+    return;
+
   // Create root signature:
   {
     D3D12_DESCRIPTOR_RANGE1 uavRanges[1] = {};
     uavRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-    uavRanges[0].NumDescriptors = 1;
+    uavRanges[0].NumDescriptors = 2;
     uavRanges[0].BaseShaderRegister = 0;
     uavRanges[0].RegisterSpace = 0;
     uavRanges[0].OffsetInDescriptorsFromTableStart = 0;
+
+    //uavRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    //uavRanges[1].NumDescriptors = 1;
+    //uavRanges[1].BaseShaderRegister = 1;
+    //uavRanges[1].RegisterSpace = 0;
+    //uavRanges[1].OffsetInDescriptorsFromTableStart = 0;
 
     D3D12_ROOT_PARAMETER1 rootParameters[NumRootParams] = {};
 
@@ -177,7 +195,7 @@ void GpuDrivenRenderer::init(ID3D12Device* p_Device)
     D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
     commandSignatureDesc.pArgumentDescs = argumentDescs;
     commandSignatureDesc.NumArgumentDescs = _countof(argumentDescs);
-    commandSignatureDesc.ByteStride = sizeof(IndirectCommand);
+    commandSignatureDesc.ByteStride = sizeof(GpuMeshDrawCommand);
 
 #if 0 // if changing the root signature
     p_Device->CreateCommandSignature(
@@ -188,10 +206,64 @@ void GpuDrivenRenderer::init(ID3D12Device* p_Device)
         &commandSignatureDesc, nullptr, IID_PPV_ARGS(&m_CommandSignature));
     m_CommandSignature->SetName(L"GpuDrivenRenderer-CommandSignature");
   }
+
+  // Create depth buffer
+  {
+    DepthBufferInit dbInit;
+    dbInit.Width = p_Width;
+    dbInit.Height = p_Height;
+    dbInit.Format = DXGI_FORMAT_D32_FLOAT;
+    dbInit.MSAASamples = 1;
+    dbInit.InitialState =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_DEPTH_READ;
+    dbInit.Name = L"GDR Depth Buffer";
+    m_DepthBuffer.init(dbInit);
+  }
+
+  // Create gbuffers:
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = p_Width;
+    rtInit.Height = p_Height;
+    rtInit.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"GDR Tangent Frame Target";
+    m_TangentFrameTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = p_Width;
+    rtInit.Height = p_Height;
+    rtInit.Format = DXGI_FORMAT_R16G16B16A16_SNORM;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"GDR UV Target";
+    m_UVTarget.init(rtInit);
+  }
+  {
+    RenderTextureInit rtInit;
+    rtInit.Width = p_Width;
+    rtInit.Height = p_Height;
+    rtInit.Format = DXGI_FORMAT_R8_UINT;
+    rtInit.MSAASamples = 1;
+    rtInit.ArraySize = 1;
+    rtInit.CreateUAV = false;
+    rtInit.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    rtInit.Name = L"GDR Material ID Target";
+    m_MaterialIDTarget.init(rtInit);
+  }
 }
 
 void GpuDrivenRenderer::deinit()
 {
+  if (!m_Enabled)
+    return;
+
   // TODO:
   // Release all created resources and whatnot
   //
@@ -199,13 +271,16 @@ void GpuDrivenRenderer::deinit()
 
 void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
 {
+  if (!m_Enabled)
+    return;
+
   assert(0 == m_MeshletsVertexPositions.size());
   assert(0 == m_MeshletsVertexData.size());
   assert(0 == m_MeshletsData.size());
   assert(0 == m_Meshlets.size());
   assert(0 == m_Meshes.size());
   assert(0 == m_MeshInstances.size());
-  
+
   uint32_t totalMeshlets = 0;
   for (uint32_t p = 0; p < meshes.size(); ++p)
   {
@@ -220,7 +295,7 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
       mesh_.m_BoundingSphere = glm::vec4(center, radius);
     }
 
-  // 1. Determine the maximum number of meshlets that could be generated for the mesh
+    // 1. Determine the maximum number of meshlets that could be generated for the mesh
     const size_t maxVertices = 64;
     const size_t maxTriangles = 124;
     const float coneWeight = 0.0f;
@@ -399,12 +474,13 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
       m_MeshletsIndexCount += indexGroupCount;
     }
 
+    mesh_.m_GpuMeshIndex = m_Meshes.size();
+
     // Add mesh with all data
     m_Meshes.push_back(mesh_);
 
     while (m_Meshlets.size() % 32)
       m_Meshlets.push_back(GpuMeshlet());
-
 
     // mesh instances
     {
@@ -412,7 +488,7 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
       // Assign scene graph node index
       meshInstance.sceneGraphNodeIndex = 0;
 
-      //glTF::MeshPrimitive& mesh_primitive = gltf_mesh.primitives[primitive_index];
+      // glTF::MeshPrimitive& mesh_primitive = gltf_mesh.primitives[primitive_index];
 
       // Cache parent mesh
       meshInstance.mesh = &meshes[p];
@@ -433,8 +509,11 @@ void GpuDrivenRenderer::addMeshes(std::vector<Mesh>& meshes)
   }
 }
 
-void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
+void GpuDrivenRenderer::createResources(ID3D12Device2* p_Device)
 {
+  if (!m_Enabled)
+    return;
+
 #if defined(_DEBUG)
   UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
@@ -453,6 +532,7 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
     compileShader(
         "gpu culling",
         cullingShaderPath.c_str(),
+        arrayCountU8(defines),
         defines,
         compileFlags,
         ShaderType::Compute,
@@ -460,37 +540,103 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
         m_CullingShader);
   }
 
-  // Gbuffer shader
+  // Gbuffer shaders
+
+  //... add compiler support for mesh and task (just add DXC once and for all)
+  //... also don't forget the shader body
+
   {
     std::wstring meshletShaderPath = ShaderPath + L"Shaders\\Meshlet.hlsl";
-    const D3D_SHADER_MACRO defines[] = {{"Gbuffer_Meshlet", "1"}, {NULL, NULL}};
+    const D3D_SHADER_MACRO definesTS[] = {{"Gbuffer_Meshlet_TASK", "1"}, {NULL, NULL}};
     compileShader(
-        "gbuffer meshlet",
+        "gbuffer meshlet task shader",
         meshletShaderPath.c_str(),
-        defines,
+        arrayCountU8(definesTS),
+        definesTS,
         compileFlags,
-        ShaderType::Compute,
-        "MeshletCS",
-        m_GbufferShader);
+        ShaderType::Task,
+        "GbufferMeshletTS",
+        m_GbufferTaskShader);
+
+    const D3D_SHADER_MACRO definesMS[] = {{"Gbuffer_Meshlet_MESH", "1"}, {NULL, NULL}};
+    compileShader(
+        "gbuffer meshlet mesh shader",
+        meshletShaderPath.c_str(),
+        arrayCountU8(definesMS),
+        definesMS,
+        compileFlags,
+        ShaderType::Mesh,
+        "GbufferMeshletMS",
+        m_GbufferMeshShader);
+
+    const D3D_SHADER_MACRO definesPS[] = {{"Gbuffer_Meshlet_FRAGMENT", "1"}, {NULL, NULL}};
+    compileShader(
+        "gbuffer meshlet pixel shader",
+        meshletShaderPath.c_str(),
+        arrayCountU8(definesPS),
+        definesPS,
+        compileFlags,
+        ShaderType::Pixel,
+        "GbufferMeshletPS",
+        m_GbufferPixelShader);
   }
 
-  assert(m_CullingShader && m_GbufferShader);
+  assert(m_CullingShader && m_GbufferTaskShader && m_GbufferMeshShader && m_GbufferPixelShader);
 
   // Create psos
+  m_PSOs.resize(NumRenderPasses);
   {
-    m_PSOs.resize(NumRenderPasses);
+    // Culling PSO
+    {
+      D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+      psoDesc.pRootSignature = m_RootSig;
 
-    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.pRootSignature = m_RootSig;
+      psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_CullingShader.GetInterfacePtr());
+      p_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GpuCulling]));
+      m_PSOs[RenderPass_GpuCulling]->SetName(L"Gpu Culling PSO");
+    }
 
-    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_CullingShader.GetInterfacePtr());
-    p_Device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GpuCulling]));
-    m_PSOs[RenderPass_GpuCulling]->SetName(L"Gpu Culling PSO");
+    // Amplification/Mesh/Pixel shader PSO for gbuffer pass:
+    {
+      // TODO: Centralize this to match traditional renderer
+      DXGI_FORMAT gbufferFormats[] = {
+          m_TangentFrameTarget.format(),
+          m_UVTarget.format(),
+          m_MaterialIDTarget.format(),
+      };
 
-    psoDesc.CS = CD3DX12_SHADER_BYTECODE(m_GbufferShader.GetInterfacePtr());
-    p_Device->CreateComputePipelineState(
-        &psoDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GbufferEarly]));
-    m_PSOs[RenderPass_GbufferEarly]->SetName(L"Gbuffer Meshlet PSO");
+      // Disable culling so we can see the backside of geometry through the culled mesh.
+      CD3DX12_RASTERIZER_DESC rasterDesc = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+      rasterDesc.CullMode = D3D12_CULL_MODE_NONE; // Or should we do backface cull
+
+      D3DX12_MESH_SHADER_PIPELINE_STATE_DESC psoDesc = {};
+      psoDesc.pRootSignature = m_RootSig;
+      psoDesc.AS = CD3DX12_SHADER_BYTECODE(m_GbufferTaskShader.GetInterfacePtr());
+      psoDesc.MS = CD3DX12_SHADER_BYTECODE(m_GbufferMeshShader.GetInterfacePtr());
+      psoDesc.PS = CD3DX12_SHADER_BYTECODE(m_GbufferPixelShader.GetInterfacePtr());
+
+      psoDesc.NumRenderTargets = arrayCount32(gbufferFormats);
+      for (uint64_t i = 0; i < arrayCount32(gbufferFormats); ++i)
+        psoDesc.RTVFormats[i] = gbufferFormats[i];
+
+      psoDesc.DSVFormat = m_DepthBuffer.DSVFormat;
+      psoDesc.RasterizerState = rasterDesc;
+      psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT); // Opaque
+      psoDesc.DepthStencilState =
+          CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT); // Less-equal depth test w/ writes; no stencil
+      psoDesc.SampleMask = UINT_MAX;
+      psoDesc.SampleDesc = DefaultSampleDesc();
+
+      CD3DX12_PIPELINE_MESH_STATE_STREAM psoStream = CD3DX12_PIPELINE_MESH_STATE_STREAM(psoDesc);
+
+      D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+      streamDesc.SizeInBytes = sizeof(psoStream);
+      streamDesc.pPipelineStateSubobjectStream = &psoStream;
+
+      D3D_EXEC_CHECKED(p_Device->CreatePipelineState(
+          &streamDesc, IID_PPV_ARGS(&m_PSOs[RenderPass_GbufferMeshlet])));
+      m_PSOs[RenderPass_GbufferMeshlet]->SetName(L"Gbuffer Meshlet PSO");
+    }
   }
 
   // meshlets_data_sb
@@ -546,10 +692,10 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
     StructuredBufferInit sbInit;
     sbInit.Stride = sizeof(GpuMaterialData);
     sbInit.NumElements = m_Meshes.size();
-    sbInit.Dynamic = false;
-    sbInit.CPUAccessible = false; // does it need to be host visible ?
-    m_MeshletsBuffer.init(sbInit);
-    m_MeshletsBuffer.resource()->SetName(L"meshes_sb");
+    sbInit.Dynamic = true;
+    sbInit.CPUAccessible = true; // Need to update data from cpu
+    m_MeshesBuffer.init(sbInit);
+    m_MeshesBuffer.resource()->SetName(L"meshes_sb");
   }
 
   // mesh bound
@@ -575,11 +721,10 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
   }
 
   // Create indirect buffers, dynamic (i.e., need multiple buffering)
-  {
-   //{
+  {//{
    //   RenderTextureInit rtInit;
-   //   rtInit.Width = m_Info.m_Width;
-   //   rtInit.Height = m_Info.m_Height;
+   //   rtInit.Width = p_Width;
+   //   rtInit.Height = p_Height;
    //   rtInit.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
    //   rtInit.MSAASamples = 1;
    //   rtInit.ArraySize = 1;
@@ -627,6 +772,30 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
     {
       StructuredBufferInit sbInit;
       sbInit.Stride = sizeof(GpuMeshDrawCounts);
+      sbInit.NumElements = 1;
+      sbInit.Dynamic = false;
+      sbInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+      sbInit.CPUAccessible = false;
+      sbInit.CreateUAV = true;
+      m_MeshCountBuffer.init(sbInit);
+      m_MeshCountBuffer.resource()->SetName(L"mesh_count_buffer");
+    }
+
+    //{
+    //  StructuredBufferInit sbInit;
+    //  sbInit.Stride = sizeof(GpuMeshDrawCounts);
+    //  sbInit.NumElements = 1;
+    //  sbInit.Dynamic = true;
+    //  sbInit.InitialState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    //  sbInit.CPUAccessible = true;
+    //  sbInit.CreateUAV = false;
+    //  m_MeshCountBufferCpuVisible.init(sbInit);
+    //  m_MeshCountBufferCpuVisible.resource()->SetName(L"mesh_count_cpu_visible");
+    //}
+
+    {
+      StructuredBufferInit sbInit;
+      sbInit.Stride = sizeof(GpuMeshDrawCounts);
       sbInit.NumElements = m_MeshInstances.size() * 2;
       sbInit.Dynamic = false;
       sbInit.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -644,8 +813,8 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
       sbInit.InitialState = D3D12_RESOURCE_STATE_COPY_SOURCE;
       sbInit.CPUAccessible = true;
       sbInit.CreateUAV = false;
-      m_MeshTaskIndirectCountCpuVisible.init(sbInit);
-      m_MeshTaskIndirectCountCpuVisible.resource()->SetName(L"mesh_count_cpu_visible");
+      m_MeshCountBufferCpuVisible.init(sbInit);
+      m_MeshCountBufferCpuVisible.resource()->SetName(L"mesh_count_cpu_visible");
     }
 
     {
@@ -757,8 +926,114 @@ void GpuDrivenRenderer::createResources(ID3D12Device* p_Device)
   }
 }
 
+void GpuDrivenRenderer::uploadGpuData()
+{
+  if (!m_Enabled)
+    return;
+
+  // upload mesh data to mesh_sb buffer
+
+  GpuMaterialData* gpuMeshData = m_MeshesBuffer.map<GpuMaterialData>();
+  for (uint32_t meshIndex = 0; meshIndex < m_Meshes.size(); ++meshIndex)
+  {
+    // Draw all parts
+    Mesh mesh = m_Meshes[meshIndex];
+    for (uint64_t partIdx = 0; partIdx < mesh.NumMeshParts(); ++partIdx)
+    {
+      // to be tested
+      assert(partIdx == 0);
+
+      const MeshPart& part = mesh.MeshParts()[partIdx];
+      assert(part.IndexStart == 0); // just testing
+
+      gpuMeshData[meshIndex].materialIndex = part.MaterialIdx;
+      gpuMeshData[meshIndex].meshIndex = mesh.m_GpuMeshIndex;
+      gpuMeshData[meshIndex].meshletOffset = mesh.m_MeshletOffset;
+      gpuMeshData[meshIndex].meshletCount = mesh.m_MeshletCount;
+      gpuMeshData[meshIndex].meshletIndexCount = mesh.m_MeshletIndexCount;
+
+      gpuMeshData[meshIndex].vertexBufferOffset = mesh.VertexOffset();
+      gpuMeshData[meshIndex].indexBufferOffset = mesh.IndexOffset() + part.IndexStart;
+      gpuMeshData[meshIndex].indexCount = part.IndexCount;
+    }
+
+
+  }
+
+
+    /*
+  struct alignas(16) GpuMaterialData
+  {
+    uint32_t textures[4]; // diffuse, roughness, normal, occlusion
+    // PBR
+    glm::vec4 emissive; // emissiveColorFactor + emissive texture index
+    glm::vec4 baseColorFactor;
+    glm::vec4 metallicRoughnessOcclusionFactor; // metallic, roughness, occlusion
+
+    uint32_t flags;
+    float alphaCutoff;
+    uint32_t vertexOffset;
+    uint32_t meshIndex;
+
+    uint32_t meshletOffset;
+    uint32_t meshletCount;
+    uint32_t meshletIndexCount;
+    uint32_t padding1_;
+
+    // Gpu addresses (unused ?)
+    uint64_t positionBuffer;
+    uint64_t uvBuffer;
+    uint64_t indexBuffer;
+    uint64_t normalsBuffer;
+
+  }; // struct GpuMaterialData
+
+
+  data like this
+
+     gpu_mesh_data.textures[ 0 ] = mesh.pbr_material.diffuse_texture_index;
+      gpu_mesh_data.textures[ 1 ] = mesh.pbr_material.roughness_texture_index;
+      gpu_mesh_data.textures[ 2 ] = mesh.pbr_material.normal_texture_index;
+      gpu_mesh_data.textures[ 3 ] = mesh.pbr_material.occlusion_texture_index;
+
+      gpu_mesh_data.emissive = { mesh.pbr_material.emissive_factor.x,
+    mesh.pbr_material.emissive_factor.y, mesh.pbr_material.emissive_factor.z, ( float
+    )mesh.pbr_material.emissive_texture_index };
+
+      gpu_mesh_data.base_color_factor = mesh.pbr_material.base_color_factor;
+      gpu_mesh_data.metallic_roughness_occlusion_factor.x = mesh.pbr_material.metallic;
+      gpu_mesh_data.metallic_roughness_occlusion_factor.y = mesh.pbr_material.roughness;
+      gpu_mesh_data.metallic_roughness_occlusion_factor.z = mesh.pbr_material.occlusion;
+      gpu_mesh_data.alpha_cutoff = mesh.pbr_material.alpha_cutoff;
+
+      gpu_mesh_data.flags = mesh.pbr_material.flags;
+
+      gpu_mesh_data.mesh_index = mesh.gpu_mesh_index;
+      gpu_mesh_data.meshlet_offset = mesh.meshlet_offset;
+      gpu_mesh_data.meshlet_count = mesh.meshlet_count;
+      gpu_mesh_data.meshlet_index_count = mesh.meshlet_index_count;
+
+      gpu_mesh_data.position_buffer = gpu.get_buffer_device_address( mesh.position_buffer ) +
+    mesh.position_offset; gpu_mesh_data.uv_buffer = gpu.get_buffer_device_address(
+    mesh.texcoord_buffer ) + mesh.texcoord_offset; gpu_mesh_data.index_buffer =
+    gpu.get_buffer_device_address( mesh.index_buffer ) + mesh.index_offset;
+      gpu_mesh_data.normals_buffer = gpu.get_buffer_device_address( mesh.normal_buffer ) +
+    mesh.normal_offset;
+
+    */
+
+
+  // TODO: Upload gpu bound and instance data as well
+
+}
+
 void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc)
 {
+  if (!m_Enabled)
+    return;
+
+  PIXBeginEvent(p_CmdList, 0, "Gpu Driven Rendering");
+
 
   // TODOS:
   /*
@@ -799,8 +1074,12 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
   */
 
 
-  // first gpu culling pass
-  // Frustum cull meshes
+  // =========================================================================================
+  // Gpu Culling
+  // =========================================================================================
+
+  PIXBeginEvent(p_CmdList, 0, "Gpu Culling");
+
   GpuMeshDrawCounts& meshDrawCounts = m_MeshDrawCounts;
   meshDrawCounts.opaqueMeshVisibleCount = 0;
   meshDrawCounts.opaqueMeshCulledCount = 0;
@@ -810,7 +1089,7 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
   meshDrawCounts.totalCount = m_MeshInstances.size();
 
   // TODO: pass HiZ level aka depth_pyramid_texture_index, 
-  meshDrawCounts.depthPyramidTextureIndex = p_RenderDesc.DepthBufferSrv;
+  meshDrawCounts.depthPyramidTextureIndex = m_DepthBuffer.getSrv();
   meshDrawCounts.lateFlag = 0;
   meshDrawCounts.meshletIndexCount = 0;
   meshDrawCounts.dispatchTaskX = 0;
@@ -818,11 +1097,15 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
   meshDrawCounts.dispatchTaskZ = 1;
 
   // Reset mesh draw counts
-  m_MeshTaskIndirectCountCpuVisible.mapAndSetData(&meshDrawCounts, m_MeshInstances.size() * 2);
+  m_MeshCountBufferCpuVisible.mapAndSetData(&meshDrawCounts, m_MeshInstances.size() * 2);
 
-  // Prepare count buffer for copy
+  //use a cbuffer to pass totalCount and depthMap id to gpu
+  //in vk sample, "mesh_task_indirect_count_early_sb" bound at slot "11" and "13" is a cbuffer
+  //update other resources accordingly
+
+  // Prepare count buffers for copy
   {
-    D3D12_RESOURCE_BARRIER barriers[1] = {};
+    D3D12_RESOURCE_BARRIER barriers[2] = {};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[0].Transition.pResource = m_MeshTaskIndirectCountEarly.resource();
@@ -830,13 +1113,33 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[0].Transition.Subresource = 0;
 
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource = m_MeshCountBuffer.resource();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.Subresource = 0;
+
     p_CmdList->ResourceBarrier(_countof(barriers), barriers);
   }
+
+  // TODO: Maybe try clear UAV uint method ?
+  // Though it has some edge cases
+  // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-clearunorderedaccessviewuint
+
+  // p_CmdList->ClearUnorderedAccessViewUint(
+
+  p_CmdList->CopyBufferRegion(
+      m_MeshCountBuffer.resource(),
+      0,
+      m_MeshCountBufferCpuVisible.resource(),
+      0,
+      sizeof(GpuMeshDrawCounts));
 
   p_CmdList->CopyBufferRegion(
       m_MeshTaskIndirectCountEarly.resource(),
       0,
-      m_MeshTaskIndirectCountCpuVisible.resource(),
+      m_MeshCountBufferCpuVisible.resource(),
       0,
       m_MeshInstances.size() * 2 * sizeof(GpuMeshDrawCounts));
 
@@ -852,10 +1155,17 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
 
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-    barriers[1].Transition.pResource = m_MeshTaskIndirectEarlyCommands.resource();
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.pResource = m_MeshCountBuffer.resource();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     barriers[1].Transition.Subresource = 0;
+
+    //barriers[2].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    //barriers[2].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    //barriers[2].Transition.pResource = m_MeshTaskIndirectEarlyCommands.resource();
+    //barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    //barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    //barriers[2].Transition.Subresource = 0;
 
     p_CmdList->ResourceBarrier(_countof(barriers), barriers);
   }
@@ -867,18 +1177,22 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
 
   // Set constant buffers
   Uniforms cdata = {};
+  cdata.meshBufferSrv = m_MeshesBuffer.m_SrvIndex;
   BindTempConstantBuffer(p_CmdList, cdata, RootParam_Cbuffer, CmdListMode::Compute);
 
   AppSettings::bindCBufferCompute(p_CmdList, RootParam_AppSettings);
 
   D3D12_CPU_DESCRIPTOR_HANDLE uavs[] = {
-      m_MeshTaskIndirectCountEarly.m_Uav, };
+      m_MeshCountBuffer.m_Uav,
+      m_MeshTaskIndirectCountEarly.m_Uav,
+  };
   BindTempDescriptorTable(
       p_CmdList, uavs, arrayCount(uavs), RootParam_UAVDescriptors, CmdListMode::Compute);
 
   uint32_t groupX = static_cast<uint32_t>(ceil(m_MeshInstances.size() / 64.0f));
   p_CmdList->Dispatch(groupX, 1, 1);
 
+#if 0
   // Sync back command buffer
   {
     D3D12_RESOURCE_BARRIER barriers[1] = {};
@@ -898,8 +1212,47 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
 
     p_CmdList->ResourceBarrier(_countof(barriers), barriers);
   }
+#endif
 
-//... continue culling shader (a pass through for now)
+  PIXEndEvent(p_CmdList);
+
+  // =========================================================================================
+  // Meshlet Gbuffer Pass
+  // =========================================================================================
+
+  /*
+        gpu_commands->bind_pipeline( meshlet_draw_pipeline );
+
+        gpu_commands->bind_descriptor_set( &render_scene->mesh_shader_early_descriptor_set[ current_frame_index ], 1, nullptr, 0 );
+
+        gpu_commands->draw_mesh_task_indirect_count( render_scene->mesh_task_indirect_early_commands_sb[ current_frame_index ], offsetof( GpuMeshDrawCommand, indirectMS ), render_scene->mesh_task_indirect_count_early_sb[ current_frame_index ], 0, render_scene->mesh_instances.size, sizeof( GpuMeshDrawCommand ) );
+
+        // TODO: Remember to put barriers for the gbuffers
+
+        // Don't forget to use the depthbuffer either as the depth render target in gbuffer pass or a prepass altogether
+  */
+
+  PIXBeginEvent(p_CmdList, 0, "Meshlet Gbuffer");
+
+  //continue here...
+  /*
+    apparantly for task-mesh shader we need a fragment shader as well and create graphics pipeline
+    (see vkSample and nsight capture of it)
+
+    the meshlet.hlsl shader currently is empty
+    need to figure out the meshlet.glsl shader to see what part of it gets exectuted in the gbuffer pass
+
+    meshlet.json contains different flavours of this shader. maybe narrow it down to the specific shader
+
+    specially since most of them are used in "PointlightShadowPass::prepare_draws" I wonder what happens if we disable pointlight shadows
+    can we remove the unneeded parts easily (volFog style) ?
+  */
+
+  p_CmdList->SetComputeRootSignature(m_RootSig);
+  p_CmdList->SetPipelineState(m_PSOs[RenderPass_GbufferMeshlet]);
+
+  PIXEndEvent(p_CmdList);
+
 
 #if 0
   // Then main draw call
@@ -933,4 +1286,6 @@ void GpuDrivenRenderer::render(ID3D12GraphicsCommandList* p_CmdList, const Rende
     PIXEndEvent(p_CmdList);
   }
   #endif
+
+  PIXEndEvent(p_CmdList);
 }

@@ -44,7 +44,8 @@ struct alignas(16) GpuMaterialData
 
   uint32_t flags;
   float alphaCutoff;
-  uint32_t vertexOffset;
+  //uint32_t vertexOffset;
+  uint32_t unused;
   uint32_t meshIndex;
 
   uint32_t meshletOffset;
@@ -53,10 +54,16 @@ struct alignas(16) GpuMaterialData
   uint32_t padding1_;
 
   // Gpu addresses (unused ?)
-  uint64_t positionBuffer; 
-  uint64_t uvBuffer;
-  uint64_t indexBuffer;
-  uint64_t normalsBuffer;
+  //uint64_t positionBuffer; 
+  //uint64_t uvBuffer;
+  //uint64_t indexBuffer;
+  //uint64_t normalsBuffer;
+
+  uint32_t materialIndex;
+  uint32_t indexCount;
+  uint32_t vertexBufferOffset;
+  uint32_t indexBufferOffset;
+
 
 }; // struct GpuMaterialData
 
@@ -72,16 +79,41 @@ struct alignas(16) GpuMeshInstanceData
 };
 
 // Data structure to match the command signature used for ExecuteIndirect.
-struct IndirectCommand
-{
-  D3D12_GPU_VIRTUAL_ADDRESS cbv; // Needed?
-  D3D12_DISPATCH_ARGUMENTS drawArguments;
-};
+//struct IndirectCommand
+//{
+//  D3D12_GPU_VIRTUAL_ADDRESS cbv; // Needed?
+//  D3D12_DISPATCH_ARGUMENTS drawArguments;
+//};
 
 struct alignas(16) GpuMeshDrawCommand
 {
   uint32_t drawId;
-  IndirectCommand indirect;
+  uint32_t firstTask;
+  D3D12_DRAW_INDEXED_ARGUMENTS drawArguments;
+  D3D12_DISPATCH_MESH_ARGUMENTS taskMeshArguments;
+
+  //check vk sample mesh.h shader to add other stuff like mesh / task draw cmds
+  //also check dx12 execIndirect to see if need more draw paramteres
+    /*
+    
+  struct MeshDrawCommand
+{
+  uint        drawId;
+
+  // VkDrawIndexedIndirectCommand
+  uint        indexCount;
+  uint        instanceCount;
+  uint        firstIndex;
+  uint        vertexOffset;
+  uint        firstInstance;
+
+  // VkDrawMeshTasksIndirectCommandNV
+  uint        taskCount;
+  uint        firstTask;
+};
+
+    
+    */
 };
 
 struct alignas(16) GpuMeshDrawCounts
@@ -116,16 +148,18 @@ struct GpuDrivenRenderer
   // Helper wrapper for rendering parameters
   struct RenderDesc
   {
-    uint32_t DepthBufferSrv = UINT32_MAX;
+    //uint32_t DepthBufferSrv = UINT32_MAX;
   };
 
-  void init(ID3D12Device* p_Device);
+  void init(ID3D12Device* p_Device, uint32_t p_Width, uint32_t p_Height);
   void deinit();
 
+  void uploadGpuData();
   void render(ID3D12GraphicsCommandList* p_CmdList, const RenderDesc& p_RenderDesc);
 
   void addMeshes(std::vector<Mesh>&);
-  void createResources(ID3D12Device* p_Device);
+  void createResources(ID3D12Device2* p_Device);
+
 
   ID3DBlobPtr m_DataShader = nullptr;
 
@@ -134,7 +168,9 @@ struct GpuDrivenRenderer
   ID3D12CommandSignature* m_CommandSignature = nullptr;
 
   ID3DBlobPtr m_CullingShader = nullptr;
-  ID3DBlobPtr m_GbufferShader = nullptr;
+  ID3DBlobPtr m_GbufferTaskShader = nullptr;
+  ID3DBlobPtr m_GbufferMeshShader = nullptr;
+  ID3DBlobPtr m_GbufferPixelShader = nullptr;
 
   std::vector<GpuMeshlet> m_Meshlets{};
   std::vector<GpuMeshletVertexPosition> m_MeshletsVertexPositions{};
@@ -160,8 +196,10 @@ struct GpuDrivenRenderer
   StructuredBuffer m_MeshTaskIndirectEarlyCommands;
   StructuredBuffer m_MeshTaskIndirectCulledCommands;
   StructuredBuffer m_MeshTaskIndirectLateCommands;
+  StructuredBuffer m_MeshCountBuffer;
+  //StructuredBuffer m_MeshCountBufferCpuVisible;
   StructuredBuffer m_MeshTaskIndirectCountEarly;
-  StructuredBuffer m_MeshTaskIndirectCountCpuVisible;
+  StructuredBuffer m_MeshCountBufferCpuVisible;
   StructuredBuffer m_MeshTaskIndirectCountLate;
   StructuredBuffer m_MeshletInstancesIndirectCount;
   
@@ -184,6 +222,15 @@ struct GpuDrivenRenderer
 
   // meshletsInstances_buffer
   // meshletsIndex_buffer
+
+  // Gbuffers
+  RenderTexture m_TangentFrameTarget;
+  RenderTexture m_UVTarget;
+  RenderTexture m_MaterialIDTarget;
+
+  DepthBuffer m_DepthBuffer;
+
+  static constexpr bool m_Enabled = false;
 };
 
 

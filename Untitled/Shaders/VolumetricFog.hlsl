@@ -160,6 +160,7 @@ float2 uvFromFroxels (float2 froxelPosition, uint width, uint height)
 // ==========================================================================
 float4 worldFromFroxel(uint3 froxelCoord, bool jitter)
 {
+    int x;
     float2 uv = 0;
     if (jitter)
     {

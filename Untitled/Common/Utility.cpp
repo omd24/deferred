@@ -76,6 +76,8 @@ static bool compileShaderDXC(
   uint8_t typeIdx = static_cast<uint8_t>(p_ShaderType);
   const char* profileString = ShaderTypeStringsDXC[typeIdx];
 
+  bool ret = false;
+
   IDxcLibrary* library = nullptr;
   D3D_EXEC_CHECKED(DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&library)));
 
@@ -155,10 +157,11 @@ static bool compileShaderDXC(
       includeHandler,
       &operationResult));
 
+  ID3DBlobPtr tempShader = nullptr;
   HRESULT hr = S_OK;
   operationResult->GetStatus(&hr);
   if (SUCCEEDED(hr))
-    D3D_EXEC_CHECKED(operationResult->GetResult(reinterpret_cast<IDxcBlob**>(&p_OutShader)));
+    D3D_EXEC_CHECKED(operationResult->GetResult(reinterpret_cast<IDxcBlob**>(&tempShader)));
 
   ID3DBlobPtr errorMessages = nullptr;
   operationResult->GetErrorBuffer(reinterpret_cast<IDxcBlobEncoding**>(&errorMessages));
@@ -171,7 +174,7 @@ static bool compileShaderDXC(
 
   // Process errors
 
-  if (FAILED(hr))
+  if (nullptr == tempShader || FAILED(hr))
   {
     if (errorMessages != nullptr)
     {
@@ -184,12 +187,17 @@ static bool compileShaderDXC(
       fullMessage += p_ShaderPath;
       fullMessage += L"\" - ";
       fullMessage += message;
+      fullMessage += L"\n";
 
+      /*
       // Pop up a message box allowing user to retry compilation
       int retVal =
           MessageBoxW(nullptr, fullMessage.c_str(), L"Shader Compilation Error", MB_RETRYCANCEL);
       if (retVal != IDRETRY)
         assert(false);
+      */
+
+      OutputDebugStringW(fullMessage.c_str());
     }
     else
     {
@@ -198,21 +206,18 @@ static bool compileShaderDXC(
   }
   else
   {
-    char text[256]{};
-    sprintf_s(
-        text,
-        "[INFO] Compiled %s shader.\n",
-        p_DbgName);
-    OutputDebugStringA(text);
-
-    if (errorMessages != nullptr)
-      OutputDebugStringA((char*)errorMessages->GetBufferPointer());
-
-    //::MessageBoxA(g_WinHandle, text, caption, MB_OK | MB_SETFOREGROUND);
-    OutputDebugStringA("\n");
+    ret = true;
   }
 
-  return hr == S_OK;
+  if (errorMessages != nullptr)
+    OutputDebugStringA((char*)errorMessages->GetBufferPointer());
+
+  if (ret)
+  {
+    p_OutShader = std::move(tempShader);
+  }
+
+  return ret;
 }
 //---------------------------------------------------------------------------//
 bool compileShader(

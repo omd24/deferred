@@ -264,6 +264,8 @@ void GpuDrivenRenderer::deinit()
   if (!m_Enabled)
     return;
 
+  m_DepthBuffer.deinit();
+
   // TODO:
   // Release all created resources and whatnot
   //

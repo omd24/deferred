@@ -2103,6 +2103,8 @@ void RenderManager::onDestroy()
 
   m_BlueNoiseTexture.Shutdown();
 
+  m_GpuDrivenRenderer.deinit();
+
   // Shutdown uploads and other helpers
   shutdownHelpers();
   shutdownUpload();

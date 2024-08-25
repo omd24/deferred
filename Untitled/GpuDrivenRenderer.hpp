@@ -230,7 +230,7 @@ struct GpuDrivenRenderer
 
   DepthBuffer m_DepthBuffer;
 
-  static constexpr bool m_Enabled = false;
+  static constexpr bool m_Enabled = true;
 };
 
 
